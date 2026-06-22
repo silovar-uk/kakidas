@@ -30,6 +30,7 @@ export function MemoListPage() {
   const navigate = useNavigate();
   const importInputRef = useRef<HTMLInputElement | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [isCreating, setIsCreating] = useState(false);
   const [isCloudDialogOpen, setIsCloudDialogOpen] = useState(false);
   const [isUploadMode, setIsUploadMode] = useState(false);
   const [selectedMemoIds, setSelectedMemoIds] = useState<Set<string>>(new Set());
@@ -63,15 +64,24 @@ export function MemoListPage() {
   );
 
   const handleCreate = async () => {
+    if (isCreating) return;
+
+    setIsCreating(true);
+    setNotice(null);
+
     try {
       const memo = await createMemo();
-      navigate(`/memos/${memo.id}`);
+      navigate(`/memos/${memo.id}`, {
+        state: { focusComposer: true },
+      });
     } catch (createError) {
       setNotice(
         createError instanceof Error
           ? createError.message
           : "新しいメモを作れませんでした。",
       );
+    } finally {
+      setIsCreating(false);
     }
   };
 
@@ -237,8 +247,9 @@ export function MemoListPage() {
           type="button"
           className="primary-button"
           onClick={() => void handleCreate()}
+          disabled={isCreating}
         >
-          ＋ 新しいメモ
+          {isCreating ? "作成中…" : "＋ 新しいメモ"}
         </button>
       </section>
 

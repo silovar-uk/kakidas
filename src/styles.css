@@ -2033,3 +2033,111 @@ a:focus-visible {
     height: 33px;
   }
 }
+
+
+/* --------------------------------------------------------------------------
+   v0.4.3 — reliable new-note focus and reversible individual deletion
+   -------------------------------------------------------------------------- */
+.primary-button:disabled {
+  cursor: wait;
+  opacity: 0.62;
+  transform: none;
+}
+
+.undo-toast {
+  position: fixed;
+  z-index: 52;
+  right: 24px;
+  bottom: 24px;
+  display: flex;
+  max-width: min(430px, calc(100vw - 48px));
+  align-items: center;
+  gap: 12px;
+  padding: 10px 10px 10px 14px;
+  border: 1px solid #d3b39e;
+  border-radius: 14px;
+  color: #44372e;
+  background: rgba(255, 254, 250, 0.98);
+  box-shadow: 0 14px 34px rgba(67, 48, 35, 0.22);
+  font-size: 13px;
+  line-height: 1.45;
+  animation: undo-toast-in 180ms ease-out both;
+}
+
+.undo-toast > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.undo-toast__actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 3px;
+}
+
+.undo-toast__undo {
+  min-height: 34px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 9px;
+  color: #fff;
+  background: #a94c29;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.undo-toast__undo:disabled,
+.undo-toast__close:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+
+.undo-toast__close {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border: 0;
+  border-radius: 9px;
+  color: #77675a;
+  background: transparent;
+  font-size: 20px;
+}
+
+.undo-toast__close:hover:not(:disabled) {
+  background: #f1e9e1;
+}
+
+@keyframes undo-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 920px) {
+  .undo-toast {
+    right: max(14px, env(safe-area-inset-right));
+    bottom: calc(86px + env(safe-area-inset-bottom));
+    left: max(14px, env(safe-area-inset-left));
+    max-width: none;
+    justify-content: space-between;
+  }
+
+  .entry-column--paragraph .undo-toast {
+    bottom: calc(192px + env(safe-area-inset-bottom));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .undo-toast {
+    animation: none;
+  }
+}

@@ -90,16 +90,8 @@ export function MobileEntryActionSheet({
   };
 
   const requestDelete = async () => {
-    const descendantNotice = entry.child_count
-      ? `\n子項目 ${entry.child_count}件も一緒に削除されます。`
-      : "";
-
-    const confirmed = window.confirm(
-      `「${entry.content}」を削除しますか？${descendantNotice}`,
-    );
-
-    if (!confirmed) return;
-
+    // 子を持つ親だけ、EntryColumn側で確認する。
+    // それ以外は即時削除してUndoトーストを表示する。
     await run(() => onDelete(entry.id));
   };
 

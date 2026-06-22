@@ -1,5 +1,6 @@
 import {
   type BackupPayload,
+  type EntryDeletionResult,
   type EntryInsert,
   type EntryKind,
   type EntryMoveDirection,
@@ -45,7 +46,10 @@ export interface MemoRepository {
     input: Omit<EntryInsert, "id" | "created_at" | "updated_at">,
   ): Promise<EntryRow>;
   updateEntry(entryId: string, patch: EntryUpdate): Promise<EntryRow>;
-  deleteEntry(entryId: string): Promise<void>;
+  /** 個別削除。親の場合は子孫もまとめてソフト削除し、Undo用の情報を返す。 */
+  deleteEntry(entryId: string): Promise<EntryDeletionResult>;
+  /** 直前の個別削除を元に戻す。 */
+  restoreEntries(entryIds: string[]): Promise<void>;
   /** 指定したWord / Sentence / Paragraphの内容をまとめてソフト削除する。 */
   deleteEntriesByKind(memoId: string, kind: EntryKind): Promise<number>;
 
@@ -405,7 +409,7 @@ class IndexedDbMemoRepository implements MemoRepository {
     return next;
   }
 
-  async deleteEntry(entryId: string): Promise<void> {
+  async deleteEntry(entryId: string): Promise<EntryDeletionResult> {
     const db = await getDatabase();
 
     const transaction = db.transaction(
@@ -437,6 +441,69 @@ class IndexedDbMemoRepository implements MemoRepository {
       syncMetaStore,
       current.memo_id,
       deletedAt,
+    );
+
+    await transactionToPromise(transaction);
+
+    return {
+      memo_id: current.memo_id,
+      root_entry_id: current.id,
+      entry_ids: [...targetIds],
+      deleted_count: targetIds.size,
+      child_count: Math.max(0, targetIds.size - 1),
+      content: current.content,
+      kind: current.kind,
+    };
+  }
+
+  async restoreEntries(entryIds: string[]): Promise<void> {
+    const uniqueIds = [...new Set(entryIds)].filter(Boolean);
+
+    if (uniqueIds.length === 0) return;
+
+    const db = await getDatabase();
+    const transaction = db.transaction(
+      [STORE_NAMES.memos, STORE_NAMES.entries, STORE_NAMES.memoSyncMeta],
+      "readwrite",
+    );
+
+    const memoStore = transaction.objectStore(STORE_NAMES.memos);
+    const entryStore = transaction.objectStore(STORE_NAMES.entries);
+    const syncMetaStore = transaction.objectStore(STORE_NAMES.memoSyncMeta);
+    const entries = await Promise.all(
+      uniqueIds.map(async (id) => {
+        const raw = await requestToPromise(
+          entryStore.get(id) as IDBRequest<LegacyEntryRow | undefined>,
+        );
+        return raw ? normalizeEntryRow(raw) : null;
+      }),
+    );
+
+    const targets = entries.filter((entry): entry is EntryRow => entry !== null);
+
+    if (targets.length === 0) {
+      transaction.abort();
+      throw new Error("元に戻す対象が見つかりません。");
+    }
+
+    const memoId = targets[0].memo_id;
+    const timestamp = nowIso();
+
+    for (const entry of targets) {
+      if (entry.memo_id !== memoId) continue;
+
+      entryStore.put({
+        ...entry,
+        updated_at: timestamp,
+        deleted_at: null,
+      } satisfies EntryRow);
+    }
+
+    await this.touchMemoWithinTransaction(memoStore, memoId, timestamp);
+    await this.markMemoChangedWithinTransaction(
+      syncMetaStore,
+      memoId,
+      timestamp,
     );
 
     await transactionToPromise(transaction);

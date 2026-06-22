@@ -129,6 +129,20 @@ export type EntryTreeNode = EntryRow & {
 };
 
 /**
+ * 個別削除のUndoに必要な、削除済み項目の情報。
+ * 親を削除した場合は、子孫のIDも entry_ids に含める。
+ */
+export type EntryDeletionResult = {
+  memo_id: string;
+  root_entry_id: string;
+  entry_ids: string[];
+  deleted_count: number;
+  child_count: number;
+  content: string;
+  kind: EntryKind;
+};
+
+/**
  * Supabaseの `Database` 型と同じ形。
  * 将来 `supabase gen types typescript` の生成物へ置き換えても、
  * Repositoryの呼び出し側を変えずに済むようにしている。

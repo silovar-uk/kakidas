@@ -10,7 +10,7 @@ import {
 import { type EntryKind, ENTRY_KIND_GUIDE } from "../types/memo";
 
 export type EntryComposerHandle = {
-  focus: () => void;
+  focus: (options?: { scroll?: boolean; delay?: number }) => void;
 };
 
 type EntryComposerProps = {
@@ -45,12 +45,15 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
     const canSubmit = value.trim().length > 0 && !disabled && !isSubmitting;
 
     useImperativeHandle(ref, () => ({
-      focus: () => {
-        inputRef.current?.scrollIntoView({
-          behavior: "smooth",
-          block: "center",
-        });
-        window.setTimeout(() => inputRef.current?.focus(), 180);
+      focus: ({ scroll = true, delay = 160 } = {}) => {
+        if (scroll) {
+          inputRef.current?.scrollIntoView({
+            behavior: "smooth",
+            block: "center",
+          });
+        }
+
+        window.setTimeout(() => inputRef.current?.focus(), delay);
       },
     }));
 

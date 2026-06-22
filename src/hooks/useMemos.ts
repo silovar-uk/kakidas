@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   type BackupPayload,
+  type EntryDeletionResult,
   type EntryKind,
   type EntryMoveDirection,
   type EntryRow,
@@ -9,6 +10,7 @@ import {
   type MemoRow,
   type MemoUpdate,
   type MemoWithEntries,
+  createLocalSyncMeta,
 } from "../types/memo";
 import { memoRepository } from "../repositories/memoRepository";
 
@@ -59,9 +61,20 @@ export function useMemos() {
 
   const createMemo = useCallback(async (): Promise<MemoRow> => {
     const memo = await memoRepository.createMemo();
-    await refresh();
+
+    // 新規作成直後は再読み込みを待たず、すぐ編集画面へ進める。
+    // iPhone Safariでも入力欄へのフォーカスを失いにくくするための最短経路。
+    setMemos((current) => [
+      {
+        ...memo,
+        sync_meta: createLocalSyncMeta(memo.id),
+        entry_counts: { word: 0, sentence: 0, paragraph: 0 },
+      },
+      ...current.filter((item) => item.id !== memo.id),
+    ]);
+
     return memo;
-  }, [refresh]);
+  }, []);
 
   const deleteMemo = useCallback(async (memoId: string): Promise<void> => {
     await memoRepository.deleteMemo(memoId);
@@ -232,9 +245,20 @@ export function useMemoDetail(memoId: string | undefined) {
   );
 
   const deleteEntry = useCallback(
-    async (entryId: string): Promise<void> => {
+    async (entryId: string): Promise<EntryDeletionResult> => {
       return runWrite(async () => {
-        await memoRepository.deleteEntry(entryId);
+        const deletion = await memoRepository.deleteEntry(entryId);
+        await refreshAfterWrite();
+        return deletion;
+      });
+    },
+    [refreshAfterWrite, runWrite],
+  );
+
+  const restoreEntries = useCallback(
+    async (entryIds: string[]): Promise<void> => {
+      return runWrite(async () => {
+        await memoRepository.restoreEntries(entryIds);
         await refreshAfterWrite();
       });
     },
@@ -307,6 +331,7 @@ export function useMemoDetail(memoId: string | undefined) {
     createEntry,
     updateEntry,
     deleteEntry,
+    restoreEntries,
     deleteEntriesByKind,
     indentEntry,
     outdentEntry,

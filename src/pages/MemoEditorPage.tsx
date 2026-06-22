@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../auth/AuthProvider";
 import { CloudAccountDialog } from "../components/CloudAccountDialog";
 import {
@@ -87,10 +87,18 @@ function downloadText(filename: string, content: string) {
   URL.revokeObjectURL(url);
 }
 
+type EditorNavigationState = {
+  focusComposer?: boolean;
+};
+
 export function MemoEditorPage() {
   const { memoId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const { user } = useAuth();
+  const [shouldFocusNewMemoComposer, setShouldFocusNewMemoComposer] = useState(
+    () => Boolean((location.state as EditorNavigationState | null)?.focusComposer),
+  );
 
   const {
     memo,
@@ -102,6 +110,7 @@ export function MemoEditorPage() {
     createEntry,
     updateEntry,
     deleteEntry,
+    restoreEntries,
     deleteEntriesByKind,
     indentEntry,
     outdentEntry,
@@ -121,6 +130,12 @@ export function MemoEditorPage() {
       setTitle(memo.title);
     }
   }, [memo?.id, memo?.title]);
+
+  useEffect(() => {
+    if (shouldFocusNewMemoComposer) {
+      setActiveKind("word");
+    }
+  }, [shouldFocusNewMemoComposer]);
 
   const saveTitle = useCallback(
     async (rawTitle: string) => {
@@ -229,6 +244,10 @@ export function MemoEditorPage() {
 
     setIsUploadDialogOpen(true);
   };
+
+  const handleComposerAutoFocusHandled = useCallback(() => {
+    setShouldFocusNewMemoComposer(false);
+  }, []);
 
   const handleUploadConfirm = async () => {
     if (!memo || !user) {
@@ -380,9 +399,14 @@ export function MemoEditorPage() {
             entries={entriesByKind[kind]}
             isActiveOnMobile={activeKind === kind}
             disabled={isSaving || isUploading}
+            autoFocusComposer={
+              kind === "word" && shouldFocusNewMemoComposer
+            }
+            onAutoFocusHandled={handleComposerAutoFocusHandled}
             onCreate={createEntry}
             onUpdate={(entryId, content) => updateEntry(entryId, { content })}
             onDelete={deleteEntry}
+            onRestore={restoreEntries}
             onDeleteAll={deleteEntriesByKind}
             onIndent={indentEntry}
             onOutdent={outdentEntry}

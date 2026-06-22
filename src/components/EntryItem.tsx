@@ -355,16 +355,8 @@ export function EntryItem({
   };
 
   const remove = async () => {
-    const descendantNotice = entry.child_count
-      ? `\n子項目 ${entry.child_count}件も一緒に削除されます。`
-      : "";
-
-    const confirmed = window.confirm(
-      `この項目を削除しますか？${descendantNotice}`,
-    );
-
-    if (!confirmed) return;
-
+    // 子を持つ親だけ、EntryColumn側で確認する。
+    // 子を持たない項目は即時削除し、Undoトーストで戻せる。
     await onDelete(entry.id);
   };
 
