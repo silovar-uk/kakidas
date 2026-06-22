@@ -1,0 +1,313 @@
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Link, useNavigate, useParams } from "react-router-dom";
+import { EntryColumn } from "../components/EntryColumn";
+import { useMemoDetail } from "../hooks/useMemos";
+import {
+  type EntryKind,
+  type MemoWithEntries,
+  ENTRY_KINDS,
+  ENTRY_KIND_LABEL,
+  formatDefaultMemoTitle,
+  getActiveEntries,
+} from "../types/memo";
+
+function buildMarkdown(memo: MemoWithEntries, onlyKind?: EntryKind): string {
+  const kinds = onlyKind ? [onlyKind] : ENTRY_KINDS;
+  const parts = [`# ${memo.title}`];
+
+  for (const kind of kinds) {
+    const entries = getActiveEntries(memo.entries, kind);
+    const heading = ENTRY_KIND_LABEL[kind];
+
+    parts.push(`\n## ${heading}`);
+
+    if (entries.length === 0) {
+      parts.push("- ");
+      continue;
+    }
+
+    for (const entry of entries) {
+      if (kind === "paragraph") {
+        parts.push(`\n${entry.content}`);
+      } else {
+        parts.push(`- ${entry.content}`);
+      }
+    }
+  }
+
+  return parts.join("\n").replace(/\n{3,}/g, "\n\n").trimEnd() + "\n";
+}
+
+async function copyText(text: string): Promise<void> {
+  if (navigator.clipboard?.writeText && window.isSecureContext) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  textarea.style.position = "fixed";
+  textarea.style.opacity = "0";
+
+  document.body.appendChild(textarea);
+  textarea.select();
+  document.execCommand("copy");
+  textarea.remove();
+}
+
+function downloadText(filename: string, content: string) {
+  const blob = new Blob([content], {
+    type: "text/plain;charset=utf-8",
+  });
+
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+
+  anchor.href = url;
+  anchor.download = filename;
+
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+
+  URL.revokeObjectURL(url);
+}
+
+export function MemoEditorPage() {
+  const { memoId } = useParams();
+  const navigate = useNavigate();
+
+  const {
+    memo,
+    isLoading,
+    isSaving,
+    error,
+    updateTitle,
+    createEntry,
+    updateEntry,
+    deleteEntry,
+    deleteMemo,
+  } = useMemoDetail(memoId);
+
+  const [title, setTitle] = useState("");
+  const [activeKind, setActiveKind] = useState<EntryKind>("word");
+  const [notice, setNotice] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (memo) {
+      setTitle(memo.title);
+    }
+  }, [memo?.id, memo?.title]);
+
+  const saveTitle = useCallback(
+    async (rawTitle: string) => {
+      if (!memo) return;
+
+      const nextTitle =
+        rawTitle.trim() || formatDefaultMemoTitle(new Date(memo.created_at));
+
+      if (nextTitle === memo.title) {
+        if (nextTitle !== rawTitle) {
+          setTitle(nextTitle);
+        }
+
+        return;
+      }
+
+      await updateTitle({ title: nextTitle });
+      setTitle(nextTitle);
+    },
+    [memo, updateTitle],
+  );
+
+  useEffect(() => {
+    if (!memo || title === memo.title) return;
+
+    const timer = window.setTimeout(() => {
+      void saveTitle(title);
+    }, 600);
+
+    return () => window.clearTimeout(timer);
+  }, [memo, saveTitle, title]);
+
+  const handleCopy = async (kind?: EntryKind) => {
+    if (!memo) return;
+
+    try {
+      await copyText(buildMarkdown(memo, kind));
+
+      setNotice(
+        `${kind ? ENTRY_KIND_LABEL[kind] : "すべて"}をコピーしました。`,
+      );
+    } catch {
+      setNotice(
+        "コピーできませんでした。ブラウザの権限を確認してください。",
+      );
+    }
+  };
+
+  const handleDownload = () => {
+    if (!memo) return;
+
+    const safeTitle = memo.title.replace(/[\\/:*?"<>|]/g, "_");
+
+    downloadText(`${safeTitle}.txt`, buildMarkdown(memo));
+
+    setNotice("テキストを書き出しました。");
+  };
+
+  const handleDeleteMemo = async () => {
+    const confirmed = window.confirm(
+      "このメモを削除しますか？\n削除後はバックアップ以外から復元できません。",
+    );
+
+    if (!confirmed) return;
+
+    try {
+      await deleteMemo();
+      navigate("/");
+    } catch {
+      setNotice("メモを削除できませんでした。");
+    }
+  };
+
+  const entriesByKind = useMemo(() => {
+    const entries = memo?.entries ?? [];
+
+    return {
+      word: getActiveEntries(entries, "word"),
+      sentence: getActiveEntries(entries, "sentence"),
+      paragraph: getActiveEntries(entries, "paragraph"),
+    };
+  }, [memo?.entries]);
+
+  if (isLoading) {
+    return (
+      <main className="app-shell editor-page">
+        <p className="loading-copy">メモを開いています。</p>
+      </main>
+    );
+  }
+
+  if (!memo) {
+    return (
+      <main className="app-shell editor-page">
+        <section className="empty-state">
+          <p>{error ?? "メモが見つかりません。"}</p>
+          <Link to="/" className="primary-button">
+            メモ一覧へ戻る
+          </Link>
+        </section>
+      </main>
+    );
+  }
+
+  return (
+    <main className="app-shell editor-page">
+      <header className="editor-header">
+        <Link to="/" className="back-link">
+          ← メモ一覧
+        </Link>
+
+        <p className="save-status" aria-live="polite">
+          {isSaving ? "保存中…" : "保存済み"}
+        </p>
+      </header>
+
+      <section className="editor-title-row" aria-label="メモのタイトル">
+        <input
+          className="memo-title-input"
+          value={title}
+          onChange={(event) => setTitle(event.target.value)}
+          onBlur={() => void saveTitle(title)}
+          aria-label="メモのタイトル"
+        />
+
+        <div className="editor-title-row__actions">
+          <button
+            type="button"
+            className="secondary-button"
+            onClick={() => void handleCopy()}
+          >
+            すべてコピー
+          </button>
+
+          <button
+            type="button"
+            className="secondary-button"
+            onClick={handleDownload}
+          >
+            .txt出力
+          </button>
+
+          <button
+            type="button"
+            className="danger-button"
+            onClick={() => void handleDeleteMemo()}
+          >
+            削除
+          </button>
+        </div>
+      </section>
+
+      <section className="copy-actions" aria-label="パートごとのコピー">
+        {ENTRY_KINDS.map((kind) => (
+          <button
+            key={kind}
+            type="button"
+            className="text-button"
+            onClick={() => void handleCopy(kind)}
+          >
+            {ENTRY_KIND_LABEL[kind]}をコピー
+          </button>
+        ))}
+      </section>
+
+      <div className="editor-tabs" role="tablist" aria-label="入力する粒度">
+        {ENTRY_KINDS.map((kind) => (
+          <button
+            key={kind}
+            type="button"
+            role="tab"
+            aria-selected={activeKind === kind}
+            className={
+              activeKind === kind
+                ? "editor-tab editor-tab--active"
+                : "editor-tab"
+            }
+            onClick={() => setActiveKind(kind)}
+          >
+            {ENTRY_KIND_LABEL[kind]}
+          </button>
+        ))}
+      </div>
+
+      {notice ? (
+        <p className="notice" role="status">
+          {notice}
+        </p>
+      ) : null}
+
+      {error ? (
+        <p className="error-message" role="alert">
+          {error}
+        </p>
+      ) : null}
+
+      <section className="editor-grid" aria-label="書き出しスペース">
+        {ENTRY_KINDS.map((kind) => (
+          <EntryColumn
+            key={kind}
+            kind={kind}
+            entries={entriesByKind[kind]}
+            isActiveOnMobile={activeKind === kind}
+            disabled={isSaving}
+            onCreate={createEntry}
+            onUpdate={(entryId, content) => updateEntry(entryId, { content })}
+            onDelete={deleteEntry}
+          />
+        ))}
+      </section>
+    </main>
+  );
+}
