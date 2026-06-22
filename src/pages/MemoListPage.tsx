@@ -52,7 +52,7 @@ export function MemoListPage() {
       const day = new Date().toISOString().slice(0, 10);
 
       downloadFile(
-        `kakidasu-backup-${day}.json`,
+        `kakidas-backup-${day}.json`,
         JSON.stringify(backup, null, 2),
         "application/json",
       );
@@ -113,8 +113,14 @@ export function MemoListPage() {
     <main className="app-shell memo-list-page">
       <header className="app-header">
         <Link to="/" className="brand" aria-label="メモ一覧へ">
-          <span className="brand__mark">●</span>
-          <span>かきだす</span>
+          <img
+            className="brand__icon"
+            src="/android-chrome-192x192.png"
+            alt=""
+            width="28"
+            height="28"
+          />
+          <span>kakidas</span>
         </Link>
 
         <p className="app-header__message">整える前に、まず置く。</p>
@@ -123,7 +129,10 @@ export function MemoListPage() {
       <section className="memo-list-hero" aria-labelledby="memo-list-title">
         <div>
           <p className="eyebrow">WORD / SENTENCE / PARAGRAPH</p>
-          <h1 id="memo-list-title">書き始めのための、3つの入口。</h1>
+          <h1 id="memo-list-title">
+            <span>書き始めのための、</span>
+            <span>3つの入口。</span>
+          </h1>
           <p className="memo-list-hero__description">
             どこから書いてもいい。直すのは、出し切ってから。
           </p>

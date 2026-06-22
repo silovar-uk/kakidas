@@ -1,5 +1,5 @@
 const DB_NAME = "kakidasu-db";
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 export const STORE_NAMES = {
   memos: "memos",
@@ -24,8 +24,10 @@ function openDatabase(): Promise<IDBDatabase> {
       reject(request.error ?? new Error("IndexedDBを開けませんでした。"));
     };
 
-    request.onupgradeneeded = () => {
+    request.onupgradeneeded = (event) => {
       const db = request.result;
+      const transaction = request.transaction;
+      const oldVersion = (event as IDBVersionChangeEvent).oldVersion;
 
       if (!db.objectStoreNames.contains(STORE_NAMES.memos)) {
         const memoStore = db.createObjectStore(STORE_NAMES.memos, {
@@ -36,14 +38,44 @@ function openDatabase(): Promise<IDBDatabase> {
         memoStore.createIndex("by_deleted_at", "deleted_at");
       }
 
+      let entryStore: IDBObjectStore;
+
       if (!db.objectStoreNames.contains(STORE_NAMES.entries)) {
-        const entryStore = db.createObjectStore(STORE_NAMES.entries, {
+        entryStore = db.createObjectStore(STORE_NAMES.entries, {
           keyPath: "id",
         });
 
         entryStore.createIndex("by_memo_id", "memo_id");
         entryStore.createIndex("by_memo_id_and_kind", ["memo_id", "kind"]);
         entryStore.createIndex("by_deleted_at", "deleted_at");
+      } else {
+        entryStore = transaction!.objectStore(STORE_NAMES.entries);
+      }
+
+      if (!entryStore.indexNames.contains("by_memo_kind_parent")) {
+        entryStore.createIndex("by_memo_kind_parent", [
+          "memo_id",
+          "kind",
+          "parent_id",
+        ]);
+      }
+
+      // v1で作られたentryには parent_id がないため、nullで補完する。
+      if (oldVersion < 2) {
+        const cursorRequest = entryStore.openCursor();
+
+        cursorRequest.onsuccess = () => {
+          const cursor = cursorRequest.result;
+          if (!cursor) return;
+
+          const value = cursor.value as Record<string, unknown>;
+
+          if (!("parent_id" in value)) {
+            cursor.update({ ...value, parent_id: null });
+          }
+
+          cursor.continue();
+        };
       }
     };
 

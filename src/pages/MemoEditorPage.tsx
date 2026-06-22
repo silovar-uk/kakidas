@@ -8,7 +8,8 @@ import {
   ENTRY_KINDS,
   ENTRY_KIND_LABEL,
   formatDefaultMemoTitle,
-  getActiveEntries,
+  getEntryTree,
+  supportsHierarchy,
 } from "../types/memo";
 
 function buildMarkdown(memo: MemoWithEntries, onlyKind?: EntryKind): string {
@@ -16,7 +17,7 @@ function buildMarkdown(memo: MemoWithEntries, onlyKind?: EntryKind): string {
   const parts = [`# ${memo.title}`];
 
   for (const kind of kinds) {
-    const entries = getActiveEntries(memo.entries, kind);
+    const entries = getEntryTree(memo.entries, kind);
     const heading = ENTRY_KIND_LABEL[kind];
 
     parts.push(`\n## ${heading}`);
@@ -29,9 +30,14 @@ function buildMarkdown(memo: MemoWithEntries, onlyKind?: EntryKind): string {
     for (const entry of entries) {
       if (kind === "paragraph") {
         parts.push(`\n${entry.content}`);
-      } else {
-        parts.push(`- ${entry.content}`);
+        continue;
       }
+
+      const indentation = supportsHierarchy(kind)
+        ? "  ".repeat(entry.depth)
+        : "";
+
+      parts.push(`${indentation}- ${entry.content}`);
     }
   }
 
@@ -86,6 +92,9 @@ export function MemoEditorPage() {
     createEntry,
     updateEntry,
     deleteEntry,
+    indentEntry,
+    outdentEntry,
+    moveEntry,
     deleteMemo,
   } = useMemoDetail(memoId);
 
@@ -153,7 +162,7 @@ export function MemoEditorPage() {
 
     downloadText(`${safeTitle}.txt`, buildMarkdown(memo));
 
-    setNotice("テキストを書き出しました。");
+    setNotice("テキストを書き出しました。階層もインデントで反映されています。");
   };
 
   const handleDeleteMemo = async () => {
@@ -175,9 +184,9 @@ export function MemoEditorPage() {
     const entries = memo?.entries ?? [];
 
     return {
-      word: getActiveEntries(entries, "word"),
-      sentence: getActiveEntries(entries, "sentence"),
-      paragraph: getActiveEntries(entries, "paragraph"),
+      word: getEntryTree(entries, "word"),
+      sentence: getEntryTree(entries, "sentence"),
+      paragraph: getEntryTree(entries, "paragraph"),
     };
   }, [memo?.entries]);
 
@@ -305,6 +314,9 @@ export function MemoEditorPage() {
             onCreate={createEntry}
             onUpdate={(entryId, content) => updateEntry(entryId, { content })}
             onDelete={deleteEntry}
+            onIndent={indentEntry}
+            onOutdent={outdentEntry}
+            onMove={moveEntry}
           />
         ))}
       </section>

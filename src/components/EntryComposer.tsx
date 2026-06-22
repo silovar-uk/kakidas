@@ -2,124 +2,172 @@ import {
   type ChangeEvent,
   type FormEvent,
   type KeyboardEvent,
+  forwardRef,
+  useImperativeHandle,
   useRef,
   useState,
 } from "react";
 import { type EntryKind, ENTRY_KIND_GUIDE } from "../types/memo";
 
+export type EntryComposerHandle = {
+  focus: () => void;
+};
+
 type EntryComposerProps = {
   kind: EntryKind;
   disabled?: boolean;
+  targetLabel?: string | null;
+  onClearTarget?: () => void;
   onSubmit: (content: string) => Promise<unknown> | unknown;
 };
 
-export function EntryComposer({
-  kind,
-  disabled = false,
-  onSubmit,
-}: EntryComposerProps) {
-  const [value, setValue] = useState("");
-  const [isComposing, setIsComposing] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>(
+  function EntryComposer(
+    {
+      kind,
+      disabled = false,
+      targetLabel = null,
+      onClearTarget,
+      onSubmit,
+    },
+    ref,
+  ) {
+    const [value, setValue] = useState("");
+    const [isComposing, setIsComposing] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
-  const isParagraph = kind === "paragraph";
+    const inputRef = useRef<HTMLInputElement | HTMLTextAreaElement | null>(null);
+    const isParagraph = kind === "paragraph";
 
-  const adjustTextareaHeight = () => {
-    const textarea = textareaRef.current;
+    useImperativeHandle(ref, () => ({
+      focus: () => {
+        inputRef.current?.scrollIntoView({
+          behavior: "smooth",
+          block: "center",
+        });
+        window.setTimeout(() => inputRef.current?.focus(), 180);
+      },
+    }));
 
-    if (!textarea) return;
+    const adjustTextareaHeight = () => {
+      const textarea = inputRef.current;
 
-    textarea.style.height = "0px";
-    textarea.style.height = `${Math.max(textarea.scrollHeight, 132)}px`;
-  };
+      if (!(textarea instanceof HTMLTextAreaElement)) return;
 
-  const submit = async () => {
-    const content = value.trim();
+      textarea.style.height = "0px";
+      textarea.style.height = `${Math.max(textarea.scrollHeight, 132)}px`;
+    };
 
-    if (!content || isSubmitting || disabled) return;
+    const submit = async () => {
+      const content = value.trim();
 
-    setIsSubmitting(true);
+      if (!content || isSubmitting || disabled) return;
 
-    try {
-      await onSubmit(content);
-      setValue("");
-      window.requestAnimationFrame(adjustTextareaHeight);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
+      setIsSubmitting(true);
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    void submit();
-  };
+      try {
+        await onSubmit(content);
+        setValue("");
+        window.requestAnimationFrame(adjustTextareaHeight);
+      } finally {
+        setIsSubmitting(false);
+      }
+    };
 
-  const handleKeyDown = (
-    event: KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>,
-  ) => {
-    if (event.key !== "Enter") return;
+    const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+      event.preventDefault();
+      void submit();
+    };
 
-    // 日本語IMEの変換確定Enterを「保存」に使わない。
-    if (isComposing || event.nativeEvent.isComposing) return;
+    const handleKeyDown = (
+      event: KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>,
+    ) => {
+      if (event.key !== "Enter") return;
 
-    if (isParagraph) {
-      // Paragraphだけは Shift + Enter で改行。Enterは「置く」。
-      if (event.shiftKey) return;
+      // 日本語IMEの変換確定Enterを「保存」に使わない。
+      if (isComposing || event.nativeEvent.isComposing) return;
+
+      if (isParagraph) {
+        // Paragraphだけは Shift + Enter で改行。Enterは「置く」。
+        if (event.shiftKey) return;
+
+        event.preventDefault();
+        void submit();
+        return;
+      }
 
       event.preventDefault();
       void submit();
-      return;
-    }
+    };
 
-    event.preventDefault();
-    void submit();
-  };
+    const handleChange = (
+      event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
+    ) => {
+      setValue(event.target.value);
 
-  const handleChange = (
-    event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
-  ) => {
-    setValue(event.target.value);
+      if (isParagraph) {
+        window.requestAnimationFrame(adjustTextareaHeight);
+      }
+    };
 
-    if (isParagraph) {
-      window.requestAnimationFrame(adjustTextareaHeight);
-    }
-  };
+    const commonProps = {
+      value,
+      disabled: disabled || isSubmitting,
+      placeholder: targetLabel
+        ? `「${targetLabel}」の下に追加`
+        : ENTRY_KIND_GUIDE[kind],
+      onChange: handleChange,
+      onKeyDown: handleKeyDown,
+      onCompositionStart: () => setIsComposing(true),
+      onCompositionEnd: () => setIsComposing(false),
+    };
 
-  const commonProps = {
-    value,
-    disabled: disabled || isSubmitting,
-    placeholder: ENTRY_KIND_GUIDE[kind],
-    onChange: handleChange,
-    onKeyDown: handleKeyDown,
-    onCompositionStart: () => setIsComposing(true),
-    onCompositionEnd: () => setIsComposing(false),
-  };
+    return (
+      <form className="entry-composer" onSubmit={handleSubmit}>
+        {targetLabel ? (
+          <div className="entry-composer__target" role="status">
+            <span>
+              <strong>子として追加</strong>
+              <span>「{targetLabel}」の下</span>
+            </span>
+            <button
+              type="button"
+              className="entry-composer__target-clear"
+              onClick={onClearTarget}
+              aria-label="親の指定を解除して、最上位に戻す"
+              title="最上位に戻す"
+            >
+              ×
+            </button>
+          </div>
+        ) : null}
 
-  return (
-    <form className="entry-composer" onSubmit={handleSubmit}>
-      {isParagraph ? (
-        <textarea
-          {...commonProps}
-          ref={textareaRef}
-          className="entry-composer__textarea"
-          rows={4}
-          aria-label="Paragraphを入力"
-        />
-      ) : (
-        <input
-          {...commonProps}
-          className="entry-composer__input"
-          type="text"
-          aria-label={`${kind}を入力`}
-        />
-      )}
+        {isParagraph ? (
+          <textarea
+            {...commonProps}
+            ref={(element) => { inputRef.current = element; }}
+            className="entry-composer__textarea"
+            rows={4}
+            aria-label="Paragraphを入力"
+          />
+        ) : (
+          <input
+            {...commonProps}
+            ref={(element) => { inputRef.current = element; }}
+            className="entry-composer__input"
+            type="text"
+            aria-label={`${kind}を入力`}
+          />
+        )}
 
-      <p className="entry-composer__hint">
-        {isParagraph
-          ? "Enterで置く ／ Shift + Enterで改行"
-          : "Enterで置く"}
-      </p>
-    </form>
-  );
-}
+        <p className="entry-composer__hint">
+          {isParagraph
+            ? "Enterで置く ／ Shift + Enterで改行"
+            : targetLabel
+              ? "Enterで、この項目の子として置く"
+              : "Enterで置く"}
+        </p>
+      </form>
+    );
+  },
+);

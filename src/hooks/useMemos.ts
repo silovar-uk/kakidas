@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import {
   type BackupPayload,
   type EntryKind,
+  type EntryMoveDirection,
   type EntryRow,
   type EntryUpdate,
   type MemoRow,
@@ -92,53 +93,63 @@ export function useMemos() {
 
 export function useMemoDetail(memoId: string | undefined) {
   const [memo, setMemo] = useState<MemoWithEntries | null>(null);
-
   const [status, setStatus] = useState<AsyncStatus>({
     isLoading: true,
     error: null,
   });
-
   const [pendingWrites, setPendingWrites] = useState(0);
 
-  const reload = useCallback(async () => {
-    if (!memoId) {
-      setMemo(null);
-      setStatus({
-        isLoading: false,
-        error: "メモIDがありません。",
-      });
-      return;
-    }
+  const loadMemo = useCallback(
+    async (showLoading: boolean): Promise<MemoWithEntries | null> => {
+      if (!memoId) {
+        setMemo(null);
+        setStatus({
+          isLoading: false,
+          error: "メモIDがありません。",
+        });
+        return null;
+      }
 
-    setStatus((current) => ({
-      ...current,
-      isLoading: true,
-      error: null,
-    }));
-
-    try {
-      const nextMemo = await memoRepository.getMemo(memoId);
-
-      setMemo(nextMemo);
-
-      if (!nextMemo) {
+      if (showLoading) {
         setStatus((current) => ({
           ...current,
-          error: "このメモは見つからないか、削除されています。",
+          isLoading: true,
+          error: null,
         }));
       }
-    } catch (error) {
-      setStatus((current) => ({
-        ...current,
-        error: toErrorMessage(error),
-      }));
-    } finally {
-      setStatus((current) => ({
-        ...current,
-        isLoading: false,
-      }));
-    }
-  }, [memoId]);
+
+      try {
+        const nextMemo = await memoRepository.getMemo(memoId);
+        setMemo(nextMemo);
+
+        if (!nextMemo) {
+          setStatus((current) => ({
+            ...current,
+            error: "このメモは見つからないか、削除されています。",
+          }));
+        }
+
+        return nextMemo;
+      } catch (error) {
+        setStatus((current) => ({
+          ...current,
+          error: toErrorMessage(error),
+        }));
+        return null;
+      } finally {
+        if (showLoading) {
+          setStatus((current) => ({
+            ...current,
+            isLoading: false,
+          }));
+        }
+      }
+    },
+    [memoId],
+  );
+
+  const reload = useCallback(() => loadMemo(true), [loadMemo]);
+  const refreshAfterWrite = useCallback(() => loadMemo(false), [loadMemo]);
 
   useEffect(() => {
     void reload();
@@ -147,7 +158,6 @@ export function useMemoDetail(memoId: string | undefined) {
   const runWrite = useCallback(
     async <T,>(operation: () => Promise<T>): Promise<T> => {
       setPendingWrites((count) => count + 1);
-
       setStatus((current) => ({
         ...current,
         error: null,
@@ -157,12 +167,10 @@ export function useMemoDetail(memoId: string | undefined) {
         return await operation();
       } catch (error) {
         const message = toErrorMessage(error);
-
         setStatus((current) => ({
           ...current,
           error: message,
         }));
-
         throw error;
       } finally {
         setPendingWrites((count) => Math.max(0, count - 1));
@@ -179,11 +187,7 @@ export function useMemoDetail(memoId: string | undefined) {
 
       return runWrite(async () => {
         const updated = await memoRepository.updateMemo(memoId, patch);
-
-        setMemo((current) =>
-          current ? { ...current, ...updated } : current,
-        );
-
+        setMemo((current) => (current ? { ...current, ...updated } : current));
         return updated;
       });
     },
@@ -191,7 +195,11 @@ export function useMemoDetail(memoId: string | undefined) {
   );
 
   const createEntry = useCallback(
-    async (kind: EntryKind, content: string): Promise<EntryRow> => {
+    async (
+      kind: EntryKind,
+      content: string,
+      parentId: string | null = null,
+    ): Promise<EntryRow> => {
       if (!memoId) {
         throw new Error("メモIDがありません。");
       }
@@ -200,30 +208,21 @@ export function useMemoDetail(memoId: string | undefined) {
         const entry = await memoRepository.createEntry({
           memo_id: memoId,
           kind,
+          parent_id: parentId,
           content,
         });
 
-        setMemo((current) =>
-          current
-            ? {
-                ...current,
-                updated_at: entry.updated_at,
-                entries: [...current.entries, entry],
-              }
-            : current,
-        );
-
+        await refreshAfterWrite();
         return entry;
       });
     },
-    [memoId, runWrite],
+    [memoId, refreshAfterWrite, runWrite],
   );
 
   const updateEntry = useCallback(
     async (entryId: string, patch: EntryUpdate): Promise<EntryRow> => {
       return runWrite(async () => {
         const updated = await memoRepository.updateEntry(entryId, patch);
-
         setMemo((current) =>
           current
             ? {
@@ -235,7 +234,6 @@ export function useMemoDetail(memoId: string | undefined) {
               }
             : current,
         );
-
         return updated;
       });
     },
@@ -246,19 +244,40 @@ export function useMemoDetail(memoId: string | undefined) {
     async (entryId: string): Promise<void> => {
       return runWrite(async () => {
         await memoRepository.deleteEntry(entryId);
-
-        setMemo((current) =>
-          current
-            ? {
-                ...current,
-                updated_at: new Date().toISOString(),
-                entries: current.entries.filter((entry) => entry.id !== entryId),
-              }
-            : current,
-        );
+        await refreshAfterWrite();
       });
     },
-    [runWrite],
+    [refreshAfterWrite, runWrite],
+  );
+
+  const indentEntry = useCallback(
+    async (entryId: string): Promise<void> => {
+      return runWrite(async () => {
+        await memoRepository.indentEntry(entryId);
+        await refreshAfterWrite();
+      });
+    },
+    [refreshAfterWrite, runWrite],
+  );
+
+  const outdentEntry = useCallback(
+    async (entryId: string): Promise<void> => {
+      return runWrite(async () => {
+        await memoRepository.outdentEntry(entryId);
+        await refreshAfterWrite();
+      });
+    },
+    [refreshAfterWrite, runWrite],
+  );
+
+  const moveEntry = useCallback(
+    async (entryId: string, direction: EntryMoveDirection): Promise<void> => {
+      return runWrite(async () => {
+        await memoRepository.moveEntry(entryId, direction);
+        await refreshAfterWrite();
+      });
+    },
+    [refreshAfterWrite, runWrite],
   );
 
   const deleteMemo = useCallback(async (): Promise<void> => {
@@ -282,6 +301,9 @@ export function useMemoDetail(memoId: string | undefined) {
     createEntry,
     updateEntry,
     deleteEntry,
+    indentEntry,
+    outdentEntry,
+    moveEntry,
     deleteMemo,
   };
 }

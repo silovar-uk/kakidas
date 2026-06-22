@@ -1,14 +1,18 @@
 import {
   type BackupPayload,
   type EntryInsert,
+  type EntryKind,
+  type EntryMoveDirection,
   type EntryRow,
   type EntryUpdate,
+  type LegacyEntryRow,
   type MemoInsert,
   type MemoRow,
   type MemoUpdate,
   type MemoWithEntries,
   createId,
   formatDefaultMemoTitle,
+  normalizeEntryRow,
   nowIso,
 } from "../types/memo";
 import {
@@ -34,12 +38,26 @@ export interface MemoRepository {
   createEntry(
     input: Omit<EntryInsert, "id" | "created_at" | "updated_at">,
   ): Promise<EntryRow>;
-
   updateEntry(entryId: string, patch: EntryUpdate): Promise<EntryRow>;
   deleteEntry(entryId: string): Promise<void>;
 
+  /** 直前の同階層項目の子にする。 */
+  indentEntry(entryId: string): Promise<void>;
+  /** 親と同じ階層へ戻す。 */
+  outdentEntry(entryId: string): Promise<void>;
+  /** 同じ親の中で順序を入れ替える。 */
+  moveEntry(entryId: string, direction: EntryMoveDirection): Promise<void>;
+
   exportBackup(): Promise<BackupPayload>;
   importBackup(payload: BackupPayload): Promise<void>;
+}
+
+function compareEntries(a: EntryRow, b: EntryRow): number {
+  if (a.sort_order !== b.sort_order) {
+    return a.sort_order - b.sort_order;
+  }
+
+  return a.created_at.localeCompare(b.created_at);
 }
 
 class IndexedDbMemoRepository implements MemoRepository {
@@ -76,23 +94,11 @@ class IndexedDbMemoRepository implements MemoRepository {
       return null;
     }
 
-    const entryIndex = entryStore.index("by_memo_id");
-
-    const entries = await requestToPromise(
-      entryIndex.getAll(memoId) as IDBRequest<EntryRow[]>,
-    );
+    const entries = await this.getEntriesForMemo(entryStore, memoId);
 
     return {
       ...memo,
-      entries: entries
-        .filter((entry) => entry.deleted_at === null)
-        .sort((a, b) => {
-          if (a.sort_order !== b.sort_order) {
-            return a.sort_order - b.sort_order;
-          }
-
-          return a.created_at.localeCompare(b.created_at);
-        }),
+      entries: entries.filter((entry) => entry.deleted_at === null),
     };
   }
 
@@ -178,11 +184,7 @@ class IndexedDbMemoRepository implements MemoRepository {
       deleted_at: deletedAt,
     } satisfies MemoRow);
 
-    const entryIndex = entryStore.index("by_memo_id");
-
-    const entries = await requestToPromise(
-      entryIndex.getAll(memoId) as IDBRequest<EntryRow[]>,
-    );
+    const entries = await this.getEntriesForMemo(entryStore, memoId);
 
     for (const entry of entries) {
       if (entry.deleted_at === null) {
@@ -225,15 +227,27 @@ class IndexedDbMemoRepository implements MemoRepository {
       throw new Error("保存先のメモが見つかりません。");
     }
 
-    const entryIndex = entryStore.index("by_memo_id");
+    const existingEntries = await this.getEntriesForMemo(entryStore, input.memo_id);
+    const parentId = input.parent_id ?? null;
 
-    const existingEntries = await requestToPromise(
-      entryIndex.getAll(input.memo_id) as IDBRequest<EntryRow[]>,
-    );
+    if (parentId !== null) {
+      const parent = existingEntries.find(
+        (entry) =>
+          entry.id === parentId &&
+          entry.deleted_at === null &&
+          entry.kind === input.kind,
+      );
 
-    const maxSortOrder = existingEntries.reduce(
-      (max, entry) => Math.max(max, entry.sort_order),
-      -1,
+      if (!parent) {
+        transaction.abort();
+        throw new Error("親にする項目が見つかりません。");
+      }
+    }
+
+    const siblings = this.getActiveSiblings(
+      existingEntries,
+      input.kind,
+      parentId,
     );
 
     const timestamp = nowIso();
@@ -243,8 +257,9 @@ class IndexedDbMemoRepository implements MemoRepository {
       memo_id: input.memo_id,
       user_id: input.user_id ?? memo.user_id,
       kind: input.kind,
+      parent_id: parentId,
       content,
-      sort_order: input.sort_order ?? maxSortOrder + 1,
+      sort_order: input.sort_order ?? siblings.length,
       created_at: timestamp,
       updated_at: timestamp,
       deleted_at: input.deleted_at ?? null,
@@ -274,16 +289,18 @@ class IndexedDbMemoRepository implements MemoRepository {
     const entryStore = transaction.objectStore(STORE_NAMES.entries);
 
     const current = await requestToPromise(
-      entryStore.get(entryId) as IDBRequest<EntryRow | undefined>,
+      entryStore.get(entryId) as IDBRequest<LegacyEntryRow | undefined>,
     );
 
-    if (!current || current.deleted_at !== null) {
+    const normalizedCurrent = current ? normalizeEntryRow(current) : undefined;
+
+    if (!normalizedCurrent || normalizedCurrent.deleted_at !== null) {
       transaction.abort();
       throw new Error("対象の項目が見つかりません。");
     }
 
     const content =
-      patch.content === undefined ? current.content : patch.content.trim();
+      patch.content === undefined ? normalizedCurrent.content : patch.content.trim();
 
     if (!content && patch.deleted_at === undefined) {
       transaction.abort();
@@ -293,9 +310,9 @@ class IndexedDbMemoRepository implements MemoRepository {
     const timestamp = patch.updated_at ?? nowIso();
 
     const next: EntryRow = {
-      ...current,
+      ...normalizedCurrent,
       ...patch,
-      content: content || current.content,
+      content: content || normalizedCurrent.content,
       updated_at: timestamp,
     };
 
@@ -303,7 +320,7 @@ class IndexedDbMemoRepository implements MemoRepository {
 
     await this.touchMemoWithinTransaction(
       memoStore,
-      current.memo_id,
+      normalizedCurrent.memo_id,
       timestamp,
     );
 
@@ -323,22 +340,30 @@ class IndexedDbMemoRepository implements MemoRepository {
     const memoStore = transaction.objectStore(STORE_NAMES.memos);
     const entryStore = transaction.objectStore(STORE_NAMES.entries);
 
-    const current = await requestToPromise(
-      entryStore.get(entryId) as IDBRequest<EntryRow | undefined>,
+    const rawCurrent = await requestToPromise(
+      entryStore.get(entryId) as IDBRequest<LegacyEntryRow | undefined>,
     );
+
+    const current = rawCurrent ? normalizeEntryRow(rawCurrent) : undefined;
 
     if (!current || current.deleted_at !== null) {
       transaction.abort();
       throw new Error("対象の項目が見つかりません。");
     }
 
+    const allEntries = await this.getEntriesForMemo(entryStore, current.memo_id);
     const deletedAt = nowIso();
+    const targetIds = this.getSubtreeIds(allEntries, current.id);
 
-    entryStore.put({
-      ...current,
-      updated_at: deletedAt,
-      deleted_at: deletedAt,
-    } satisfies EntryRow);
+    for (const entry of allEntries) {
+      if (targetIds.has(entry.id) && entry.deleted_at === null) {
+        entryStore.put({
+          ...entry,
+          updated_at: deletedAt,
+          deleted_at: deletedAt,
+        } satisfies EntryRow);
+      }
+    }
 
     await this.touchMemoWithinTransaction(
       memoStore,
@@ -346,6 +371,143 @@ class IndexedDbMemoRepository implements MemoRepository {
       deletedAt,
     );
 
+    await transactionToPromise(transaction);
+  }
+
+  async indentEntry(entryId: string): Promise<void> {
+    const db = await getDatabase();
+
+    const transaction = db.transaction(
+      [STORE_NAMES.memos, STORE_NAMES.entries],
+      "readwrite",
+    );
+
+    const memoStore = transaction.objectStore(STORE_NAMES.memos);
+    const entryStore = transaction.objectStore(STORE_NAMES.entries);
+    const current = await this.requireActiveEntry(entryStore, entryId, transaction);
+    const entries = await this.getEntriesForMemo(entryStore, current.memo_id);
+
+    const siblings = this.getActiveSiblings(entries, current.kind, current.parent_id);
+    const currentIndex = siblings.findIndex((entry) => entry.id === current.id);
+    const previousSibling = siblings[currentIndex - 1];
+
+    if (!previousSibling) {
+      transaction.abort();
+      throw new Error("これ以上右に下げられません。");
+    }
+
+    const timestamp = nowIso();
+    const remainingSiblings = siblings.filter((entry) => entry.id !== current.id);
+    const targetChildren = this.getActiveSiblings(
+      entries,
+      current.kind,
+      previousSibling.id,
+    );
+
+    const moved: EntryRow = {
+      ...current,
+      parent_id: previousSibling.id,
+      updated_at: timestamp,
+    };
+
+    this.writeOrderedEntries(entryStore, remainingSiblings, timestamp);
+    this.writeOrderedEntries(entryStore, [...targetChildren, moved], timestamp);
+
+    await this.touchMemoWithinTransaction(memoStore, current.memo_id, timestamp);
+    await transactionToPromise(transaction);
+  }
+
+  async outdentEntry(entryId: string): Promise<void> {
+    const db = await getDatabase();
+
+    const transaction = db.transaction(
+      [STORE_NAMES.memos, STORE_NAMES.entries],
+      "readwrite",
+    );
+
+    const memoStore = transaction.objectStore(STORE_NAMES.memos);
+    const entryStore = transaction.objectStore(STORE_NAMES.entries);
+    const current = await this.requireActiveEntry(entryStore, entryId, transaction);
+
+    if (current.parent_id === null) {
+      transaction.abort();
+      throw new Error("これ以上左に戻せません。");
+    }
+
+    const entries = await this.getEntriesForMemo(entryStore, current.memo_id);
+    const parent = entries.find(
+      (entry) =>
+        entry.id === current.parent_id &&
+        entry.deleted_at === null &&
+        entry.kind === current.kind,
+    );
+
+    if (!parent) {
+      transaction.abort();
+      throw new Error("親の項目が見つかりません。");
+    }
+
+    const timestamp = nowIso();
+    const oldSiblings = this
+      .getActiveSiblings(entries, current.kind, current.parent_id)
+      .filter((entry) => entry.id !== current.id);
+
+    const newSiblings = this.getActiveSiblings(
+      entries,
+      current.kind,
+      parent.parent_id,
+    );
+
+    const parentIndex = newSiblings.findIndex((entry) => entry.id === parent.id);
+    const moved: EntryRow = {
+      ...current,
+      parent_id: parent.parent_id,
+      updated_at: timestamp,
+    };
+
+    const nextSiblings = [...newSiblings];
+    nextSiblings.splice(Math.max(0, parentIndex + 1), 0, moved);
+
+    this.writeOrderedEntries(entryStore, oldSiblings, timestamp);
+    this.writeOrderedEntries(entryStore, nextSiblings, timestamp);
+
+    await this.touchMemoWithinTransaction(memoStore, current.memo_id, timestamp);
+    await transactionToPromise(transaction);
+  }
+
+  async moveEntry(
+    entryId: string,
+    direction: EntryMoveDirection,
+  ): Promise<void> {
+    const db = await getDatabase();
+
+    const transaction = db.transaction(
+      [STORE_NAMES.memos, STORE_NAMES.entries],
+      "readwrite",
+    );
+
+    const memoStore = transaction.objectStore(STORE_NAMES.memos);
+    const entryStore = transaction.objectStore(STORE_NAMES.entries);
+    const current = await this.requireActiveEntry(entryStore, entryId, transaction);
+    const entries = await this.getEntriesForMemo(entryStore, current.memo_id);
+
+    const siblings = this.getActiveSiblings(entries, current.kind, current.parent_id);
+    const currentIndex = siblings.findIndex((entry) => entry.id === current.id);
+    const targetIndex = direction === "up" ? currentIndex - 1 : currentIndex + 1;
+
+    if (currentIndex < 0 || targetIndex < 0 || targetIndex >= siblings.length) {
+      transaction.abort();
+      throw new Error("これ以上移動できません。");
+    }
+
+    const reordered = [...siblings];
+    const [moved] = reordered.splice(currentIndex, 1);
+    reordered.splice(targetIndex, 0, moved);
+
+    const timestamp = nowIso();
+    this.writeOrderedEntries(entryStore, reordered, timestamp);
+
+    await this.touchMemoWithinTransaction(memoStore, current.memo_id, timestamp);
     await transactionToPromise(transaction);
   }
 
@@ -365,20 +527,20 @@ class IndexedDbMemoRepository implements MemoRepository {
     );
 
     const entries = await requestToPromise(
-      entryStore.getAll() as IDBRequest<EntryRow[]>,
+      entryStore.getAll() as IDBRequest<LegacyEntryRow[]>,
     );
 
     return {
-      version: 1,
+      version: 2,
       exported_at: nowIso(),
       memos,
-      entries,
+      entries: entries.map(normalizeEntryRow),
     };
   }
 
   async importBackup(payload: BackupPayload): Promise<void> {
     if (
-      payload.version !== 1 ||
+      (payload.version !== 1 && payload.version !== 2) ||
       !Array.isArray(payload.memos) ||
       !Array.isArray(payload.entries)
     ) {
@@ -389,9 +551,99 @@ class IndexedDbMemoRepository implements MemoRepository {
       await this.upsertIfNewer(STORE_NAMES.memos, memo);
     }
 
-    for (const entry of payload.entries) {
-      await this.upsertIfNewer(STORE_NAMES.entries, entry);
+    for (const rawEntry of payload.entries) {
+      await this.upsertIfNewer(
+        STORE_NAMES.entries,
+        normalizeEntryRow(rawEntry),
+      );
     }
+  }
+
+  private async requireActiveEntry(
+    entryStore: IDBObjectStore,
+    entryId: string,
+    transaction: IDBTransaction,
+  ): Promise<EntryRow> {
+    const rawEntry = await requestToPromise(
+      entryStore.get(entryId) as IDBRequest<LegacyEntryRow | undefined>,
+    );
+
+    const entry = rawEntry ? normalizeEntryRow(rawEntry) : undefined;
+
+    if (!entry || entry.deleted_at !== null) {
+      transaction.abort();
+      throw new Error("対象の項目が見つかりません。");
+    }
+
+    return entry;
+  }
+
+  private async getEntriesForMemo(
+    entryStore: IDBObjectStore,
+    memoId: string,
+  ): Promise<EntryRow[]> {
+    const entryIndex = entryStore.index("by_memo_id");
+
+    const entries = await requestToPromise(
+      entryIndex.getAll(memoId) as IDBRequest<LegacyEntryRow[]>,
+    );
+
+    return entries.map(normalizeEntryRow).sort(compareEntries);
+  }
+
+  private getActiveSiblings(
+    entries: EntryRow[],
+    kind: EntryKind,
+    parentId: string | null,
+  ): EntryRow[] {
+    return entries
+      .filter(
+        (entry) =>
+          entry.deleted_at === null &&
+          entry.kind === kind &&
+          entry.parent_id === parentId,
+      )
+      .sort(compareEntries);
+  }
+
+  private getSubtreeIds(entries: EntryRow[], rootId: string): Set<string> {
+    const childrenByParent = new Map<string, EntryRow[]>();
+
+    entries.forEach((entry) => {
+      if (entry.deleted_at !== null || entry.parent_id === null) return;
+      const children = childrenByParent.get(entry.parent_id) ?? [];
+      children.push(entry);
+      childrenByParent.set(entry.parent_id, children);
+    });
+
+    const ids = new Set<string>();
+    const stack = [rootId];
+
+    while (stack.length > 0) {
+      const currentId = stack.pop();
+      if (!currentId || ids.has(currentId)) continue;
+
+      ids.add(currentId);
+
+      const children = childrenByParent.get(currentId) ?? [];
+      children.forEach((child) => stack.push(child.id));
+    }
+
+    return ids;
+  }
+
+  private writeOrderedEntries(
+    entryStore: IDBObjectStore,
+    entries: EntryRow[],
+    timestamp: string,
+  ): void {
+    entries.forEach((entry, index) => {
+      entryStore.put({
+        ...entry,
+        sort_order: index,
+        updated_at: timestamp,
+      } satisfies EntryRow);
+    });
   }
 
   private async touchMemoWithinTransaction(
