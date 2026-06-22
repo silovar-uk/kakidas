@@ -1,6 +1,21 @@
 # kakidas
 
-> v0.4.0 — Phase 1: Googleログイン / Phase 2: 選んだメモだけクラウドへ送る
+> v0.4.1 — 明示クラウド送信 + モバイル確定・個別コピー改善
+
+## v0.4.2｜区分ごとの一括削除
+
+- Word / Sentence / Paragraphの見出し右側に「すべて削除」を追加
+- 削除前に件数を表示して確認
+- Word / Sentenceは、親子関係も含めてその区分だけ削除
+- 削除後はローカル保存とクラウド送信状態を更新
+
+
+## v0.4.1の更新
+
+- スマホの固定入力欄に、Enter以外で確定できる `置く` ボタンを追加
+- 全項目に、個別コピーと直接削除の操作を追加
+- PCはホバー／フォーカス時に操作を強調、スマホは常時タップ可能な大きさで表示
+- Word / Sentenceの操作シートにも、個別コピーを追加
 
 Word / Sentence / Paragraphの3つの入口から、整える前に考えを外へ置くためのWebアプリです。
 
@@ -19,12 +34,15 @@ Word / Sentence / Paragraphの3つの入口から、整える前に考えを外�
 - メモはIndexedDBに自動保存
 - メモ単位で作成・編集・削除
 - Word / Sentence / Paragraphは完全に独立
-- Word / SentenceはEnterで確定
-- ParagraphはEnterで確定、Shift + Enterで改行
+- Word / SentenceはEnterまたは「置く」ボタンで確定
+- ParagraphはEnterまたは「置く」ボタンで確定、Shift + Enterで改行
+- スマホでは画面下の「置く」ボタンで、Enterを使わずに確定できる
 - 日本語IME変換中のEnterで誤保存しない
 - Word / Sentenceは親子関係を持つアウトライン（`entries.parent_id`）
 - PCでは `Tab` / `Shift + Tab`、`Ctrl / ⌘ + Shift + 矢印` で階層・並び替え
 - モバイルでは、項目を長押しまたは `⋯` タップで下から操作シートを開く
+- 各項目の右側から、個別コピー・削除を直接実行できる
+- 階層項目のモバイル操作シートにも「この項目をコピー」を追加
 - JSONのバックアップ・復元
 - Markdown形式でコピー、`.txt`書き出し
 - Googleログイン（Supabase Auth）

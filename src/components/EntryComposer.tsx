@@ -21,6 +21,10 @@ type EntryComposerProps = {
   onSubmit: (content: string) => Promise<unknown> | unknown;
 };
 
+/**
+ * 「Enterで置く」は残しつつ、スマホでは明示的な「置く」ボタンでも確定できる。
+ * 日本語IMEの変換確定Enterは、保存操作として扱わない。
+ */
 export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>(
   function EntryComposer(
     {
@@ -38,6 +42,7 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
 
     const inputRef = useRef<HTMLInputElement | HTMLTextAreaElement | null>(null);
     const isParagraph = kind === "paragraph";
+    const canSubmit = value.trim().length > 0 && !disabled && !isSubmitting;
 
     useImperativeHandle(ref, () => ({
       focus: () => {
@@ -69,6 +74,7 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
         await onSubmit(content);
         setValue("");
         window.requestAnimationFrame(adjustTextareaHeight);
+        window.requestAnimationFrame(() => inputRef.current?.focus());
       } finally {
         setIsSubmitting(false);
       }
@@ -142,30 +148,49 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
           </div>
         ) : null}
 
-        {isParagraph ? (
-          <textarea
-            {...commonProps}
-            ref={(element) => { inputRef.current = element; }}
-            className="entry-composer__textarea"
-            rows={4}
-            aria-label="Paragraphを入力"
-          />
-        ) : (
-          <input
-            {...commonProps}
-            ref={(element) => { inputRef.current = element; }}
-            className="entry-composer__input"
-            type="text"
-            aria-label={`${kind}を入力`}
-          />
-        )}
+        <div
+          className={`entry-composer__control-row ${
+            isParagraph ? "entry-composer__control-row--paragraph" : ""
+          }`}
+        >
+          {isParagraph ? (
+            <textarea
+              {...commonProps}
+              ref={(element) => {
+                inputRef.current = element;
+              }}
+              className="entry-composer__textarea"
+              rows={4}
+              aria-label="Paragraphを入力"
+            />
+          ) : (
+            <input
+              {...commonProps}
+              ref={(element) => {
+                inputRef.current = element;
+              }}
+              className="entry-composer__input"
+              type="text"
+              aria-label={`${kind}を入力`}
+            />
+          )}
+
+          <button
+            type="submit"
+            className="entry-composer__submit"
+            disabled={!canSubmit}
+            aria-label={`${ENTRY_KIND_GUIDE[kind]}を置く`}
+          >
+            {isSubmitting ? "…" : "置く"}
+          </button>
+        </div>
 
         <p className="entry-composer__hint">
           {isParagraph
-            ? "Enterで置く ／ Shift + Enterで改行"
+            ? "Enterまたは「置く」で確定 ／ Shift + Enterで改行"
             : targetLabel
-              ? "Enterで、この項目の子として置く"
-              : "Enterで置く"}
+              ? "Enterまたは「置く」で、この項目の子として置く"
+              : "Enterまたは「置く」で確定"}
         </p>
       </form>
     );

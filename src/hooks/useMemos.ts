@@ -241,6 +241,21 @@ export function useMemoDetail(memoId: string | undefined) {
     [refreshAfterWrite, runWrite],
   );
 
+  const deleteEntriesByKind = useCallback(
+    async (kind: EntryKind): Promise<number> => {
+      if (!memoId) {
+        throw new Error("メモIDがありません。");
+      }
+
+      return runWrite(async () => {
+        const deletedCount = await memoRepository.deleteEntriesByKind(memoId, kind);
+        await refreshAfterWrite();
+        return deletedCount;
+      });
+    },
+    [memoId, refreshAfterWrite, runWrite],
+  );
+
   const indentEntry = useCallback(
     async (entryId: string): Promise<void> => {
       return runWrite(async () => {
@@ -292,6 +307,7 @@ export function useMemoDetail(memoId: string | undefined) {
     createEntry,
     updateEntry,
     deleteEntry,
+    deleteEntriesByKind,
     indentEntry,
     outdentEntry,
     moveEntry,

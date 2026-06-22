@@ -25,6 +25,7 @@ type EntryColumnProps = {
   ) => Promise<unknown>;
   onUpdate: (entryId: string, content: string) => Promise<unknown>;
   onDelete: (entryId: string) => Promise<unknown>;
+  onDeleteAll: (kind: EntryKind) => Promise<number>;
   onIndent: (entryId: string) => Promise<unknown>;
   onOutdent: (entryId: string) => Promise<unknown>;
   onMove: (entryId: string, direction: "up" | "down") => Promise<unknown>;
@@ -42,6 +43,7 @@ export function EntryColumn({
   onCreate,
   onUpdate,
   onDelete,
+  onDeleteAll,
   onIndent,
   onOutdent,
   onMove,
@@ -51,6 +53,7 @@ export function EntryColumn({
   const [mobileActionEntryId, setMobileActionEntryId] = useState<string | null>(
     null,
   );
+  const [isDeletingAll, setIsDeletingAll] = useState(false);
 
   const composerRef = useRef<EntryComposerHandle | null>(null);
   const isHierarchical = supportsHierarchy(kind);
@@ -118,6 +121,31 @@ export function EntryColumn({
     setMobileActionEntryId(null);
   };
 
+  const handleDeleteAll = async () => {
+    if (entries.length === 0 || disabled || isDeletingAll) return;
+
+    const hierarchyNotice = isHierarchical
+      ? "\n親子構造も含めて削除されます。"
+      : "";
+
+    const confirmed = window.confirm(
+      `${ENTRY_KIND_LABEL[kind]}をすべて削除しますか？\n${entries.length}件が削除されます。${hierarchyNotice}\nこの操作は元に戻せません。`,
+    );
+
+    if (!confirmed) return;
+
+    setIsDeletingAll(true);
+
+    try {
+      await onDeleteAll(kind);
+      setParentId(null);
+      setStructureEntryId(null);
+      setMobileActionEntryId(null);
+    } finally {
+      setIsDeletingAll(false);
+    }
+  };
+
   const runStructureAction = async (
     action: (entryId: string) => Promise<unknown>,
     entryId: string,
@@ -140,7 +168,20 @@ export function EntryColumn({
           <p>{ENTRY_KIND_GUIDE[kind]}</p>
         </div>
 
-        <span className="entry-column__count">{entries.length}</span>
+        <div className="entry-column__header-actions">
+          <span className="entry-column__count">{entries.length}</span>
+          <button
+            type="button"
+            className="entry-column__delete-all"
+            onClick={() => void handleDeleteAll()}
+            disabled={disabled || isDeletingAll || entries.length === 0}
+            aria-label={`${ENTRY_KIND_LABEL[kind]}をすべて削除`}
+            title={`${ENTRY_KIND_LABEL[kind]}をすべて削除`}
+          >
+            <span aria-hidden="true">⌫</span>
+            すべて削除
+          </button>
+        </div>
       </div>
 
       {isHierarchical ? (
@@ -165,7 +206,7 @@ export function EntryColumn({
       <EntryComposer
         ref={composerRef}
         kind={kind}
-        disabled={disabled}
+        disabled={disabled || isDeletingAll}
         targetLabel={isHierarchical ? parentEntry?.content ?? null : null}
         onClearTarget={() => setParentId(null)}
         onSubmit={handleCreate}
@@ -182,7 +223,7 @@ export function EntryColumn({
               kind={kind}
               isStructureOpen={structureEntryId === entry.id}
               isMobileActionOpen={mobileActionEntryId === entry.id}
-              disabled={disabled}
+              disabled={disabled || isDeletingAll}
               onOpenStructure={openStructureActions}
               onAddChild={selectParent}
               onIndent={(entryId) => runStructureAction(onIndent, entryId)}
@@ -201,7 +242,7 @@ export function EntryColumn({
         <MobileEntryActionSheet
           entry={mobileActionEntry}
           kind={kind}
-          disabled={disabled}
+          disabled={disabled || isDeletingAll}
           onClose={() => setMobileActionEntryId(null)}
           onAddChild={selectParent}
           onIndent={(entryId) => runStructureAction(onIndent, entryId)}

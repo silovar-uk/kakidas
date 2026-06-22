@@ -6,6 +6,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { copyToClipboard } from "../lib/clipboard";
 import {
   type EntryKind,
   type EntryTreeNode,
@@ -13,6 +14,7 @@ import {
 } from "../types/memo";
 
 type StructureShortcut = "indent" | "outdent" | "move-up" | "move-down";
+type CopyFeedback = "copied" | "failed" | null;
 
 type EntryItemProps = {
   entry: EntryTreeNode;
@@ -48,7 +50,7 @@ function triggerHapticFeedback() {
  *
  * Mobile:
  * - 項目を長押し、または ⋯ をタップ: 下から操作シートを開く
- * - 操作シートで子追加・順番・階層・削除をまとめて操作する
+ * - 直接コピー / 直接削除も、項目の右側からすぐ使える
  */
 export function EntryItem({
   entry,
@@ -68,12 +70,14 @@ export function EntryItem({
   const [value, setValue] = useState(entry.content);
   const [isComposing, setIsComposing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [copyFeedback, setCopyFeedback] = useState<CopyFeedback>(null);
 
   const inputRef = useRef<HTMLInputElement | HTMLTextAreaElement | null>(null);
   const structureActionInFlightRef = useRef(false);
   const longPressTimerRef = useRef<number | null>(null);
   const longPressStartRef = useRef<{ x: number; y: number } | null>(null);
   const didLongPressRef = useRef(false);
+  const copyFeedbackTimerRef = useRef<number | null>(null);
 
   const isParagraph = kind === "paragraph";
   const isHierarchical = supportsHierarchy(kind);
@@ -92,6 +96,10 @@ export function EntryItem({
     return () => {
       if (longPressTimerRef.current !== null) {
         window.clearTimeout(longPressTimerRef.current);
+      }
+
+      if (copyFeedbackTimerRef.current !== null) {
+        window.clearTimeout(copyFeedbackTimerRef.current);
       }
     };
   }, []);
@@ -322,6 +330,30 @@ export function EntryItem({
     setIsEditing(true);
   };
 
+  const setCopyResult = (result: CopyFeedback) => {
+    setCopyFeedback(result);
+
+    if (copyFeedbackTimerRef.current !== null) {
+      window.clearTimeout(copyFeedbackTimerRef.current);
+    }
+
+    copyFeedbackTimerRef.current = window.setTimeout(() => {
+      setCopyFeedback(null);
+      copyFeedbackTimerRef.current = null;
+    }, 1600);
+  };
+
+  const copyEntry = async () => {
+    if (disabled) return;
+
+    try {
+      await copyToClipboard(entry.content);
+      setCopyResult("copied");
+    } catch {
+      setCopyResult("failed");
+    }
+  };
+
   const remove = async () => {
     const descendantNotice = entry.child_count
       ? `\n子項目 ${entry.child_count}件も一緒に削除されます。`
@@ -343,6 +375,13 @@ export function EntryItem({
   const hierarchyKeyShortcuts = isHierarchical
     ? "Tab Shift+Tab Control+Shift+ArrowRight Control+Shift+ArrowLeft Control+Shift+ArrowUp Control+Shift+ArrowDown"
     : undefined;
+
+  const copyLabel =
+    copyFeedback === "copied"
+      ? "コピーしました"
+      : copyFeedback === "failed"
+        ? "コピーできませんでした"
+        : "この項目をコピー";
 
   if (isEditing) {
     return (
@@ -385,6 +424,17 @@ export function EntryItem({
         )}
 
         <div className="entry-item__edit-actions">
+          <button
+            type="button"
+            className="text-button text-button--danger"
+            onMouseDown={(event) => {
+              event.preventDefault();
+              void remove();
+            }}
+          >
+            削除
+          </button>
+
           <button
             type="button"
             className="text-button"
@@ -441,31 +491,56 @@ export function EntryItem({
           {entry.content}
         </button>
 
-        {isHierarchical ? (
+        <div className="entry-item__quick-actions">
           <button
             type="button"
-            className="icon-button entry-item__structure-button"
-            onClick={() => onOpenStructure(entry.id)}
+            className="icon-button entry-item__quick-action entry-item__copy"
+            onClick={() => void copyEntry()}
             disabled={disabled}
-            aria-label={isStructureOpen || isMobileActionOpen ? "構造操作を閉じる" : "構造操作を開く"}
-            aria-expanded={isStructureOpen || isMobileActionOpen}
-            title="子の追加・並び替え・階層操作"
+            aria-label={copyLabel}
+            title={copyLabel}
           >
-            ⋯
+            {copyFeedback === "copied" ? "✓" : copyFeedback === "failed" ? "!" : "⧉"}
           </button>
-        ) : (
+
+          {isHierarchical ? (
+            <button
+              type="button"
+              className="icon-button entry-item__quick-action entry-item__structure-button"
+              onClick={() => onOpenStructure(entry.id)}
+              disabled={disabled}
+              aria-label={
+                isStructureOpen || isMobileActionOpen
+                  ? "構造操作を閉じる"
+                  : "構造操作を開く"
+              }
+              aria-expanded={isStructureOpen || isMobileActionOpen}
+              title="子の追加・並び替え・階層操作"
+            >
+              ⋯
+            </button>
+          ) : null}
+
           <button
             type="button"
-            className="icon-button entry-item__delete"
+            className="icon-button entry-item__quick-action entry-item__delete"
             onClick={() => void remove()}
             disabled={disabled}
-            aria-label="削除する"
-            title="削除する"
+            aria-label="この項目を削除"
+            title="この項目を削除"
           >
             ×
           </button>
-        )}
+        </div>
       </div>
+
+      <span className="visually-hidden" aria-live="polite">
+        {copyFeedback === "copied"
+          ? "この項目をコピーしました。"
+          : copyFeedback === "failed"
+            ? "コピーできませんでした。"
+            : ""}
+      </span>
 
       {isHierarchical && isStructureOpen ? (
         <div className="entry-item__structure-actions" aria-label="構造操作">

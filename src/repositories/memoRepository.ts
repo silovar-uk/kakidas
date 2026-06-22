@@ -46,6 +46,8 @@ export interface MemoRepository {
   ): Promise<EntryRow>;
   updateEntry(entryId: string, patch: EntryUpdate): Promise<EntryRow>;
   deleteEntry(entryId: string): Promise<void>;
+  /** 指定したWord / Sentence / Paragraphの内容をまとめてソフト削除する。 */
+  deleteEntriesByKind(memoId: string, kind: EntryKind): Promise<number>;
 
   /** 直前の同階層項目の子にする。 */
   indentEntry(entryId: string): Promise<void>;
@@ -438,6 +440,62 @@ class IndexedDbMemoRepository implements MemoRepository {
     );
 
     await transactionToPromise(transaction);
+  }
+
+  async deleteEntriesByKind(
+    memoId: string,
+    kind: EntryKind,
+  ): Promise<number> {
+    const db = await getDatabase();
+
+    const transaction = db.transaction(
+      [STORE_NAMES.memos, STORE_NAMES.entries, STORE_NAMES.memoSyncMeta],
+      "readwrite",
+    );
+
+    const memoStore = transaction.objectStore(STORE_NAMES.memos);
+    const entryStore = transaction.objectStore(STORE_NAMES.entries);
+    const syncMetaStore = transaction.objectStore(STORE_NAMES.memoSyncMeta);
+
+    const memo = await requestToPromise(
+      memoStore.get(memoId) as IDBRequest<MemoRow | undefined>,
+    );
+
+    if (!memo || memo.deleted_at !== null) {
+      transaction.abort();
+      throw new Error("対象のメモが見つかりません。");
+    }
+
+    const entries = await this.getEntriesForMemo(entryStore, memoId);
+    const targets = entries.filter(
+      (entry) => entry.kind === kind && entry.deleted_at === null,
+    );
+
+    if (targets.length === 0) {
+      await transactionToPromise(transaction);
+      return 0;
+    }
+
+    const deletedAt = nowIso();
+
+    for (const entry of targets) {
+      entryStore.put({
+        ...entry,
+        updated_at: deletedAt,
+        deleted_at: deletedAt,
+      } satisfies EntryRow);
+    }
+
+    await this.touchMemoWithinTransaction(memoStore, memoId, deletedAt);
+    await this.markMemoChangedWithinTransaction(
+      syncMetaStore,
+      memoId,
+      deletedAt,
+    );
+
+    await transactionToPromise(transaction);
+
+    return targets.length;
   }
 
   async indentEntry(entryId: string): Promise<void> {

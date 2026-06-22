@@ -102,6 +102,7 @@ export function MemoEditorPage() {
     createEntry,
     updateEntry,
     deleteEntry,
+    deleteEntriesByKind,
     indentEntry,
     outdentEntry,
     moveEntry,
@@ -382,6 +383,7 @@ export function MemoEditorPage() {
             onCreate={createEntry}
             onUpdate={(entryId, content) => updateEntry(entryId, { content })}
             onDelete={deleteEntry}
+            onDeleteAll={deleteEntriesByKind}
             onIndent={indentEntry}
             onOutdent={outdentEntry}
             onMove={moveEntry}

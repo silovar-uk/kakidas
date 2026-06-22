@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { copyToClipboard } from "../lib/clipboard";
 import { type EntryKind, type EntryTreeNode, ENTRY_KIND_LABEL } from "../types/memo";
 
 type MobileEntryActionSheetProps = {
@@ -18,7 +19,7 @@ type MobileEntryActionSheetProps = {
  * Workflowyのように「項目を選ぶ → 下から操作する」流れへ寄せる。
  *
  * - ⋯ タップ または 項目の長押しで開く
- * - 子追加・順番・階層・削除を片手で操作できる
+ * - コピー・子追加・順番・階層・削除を片手で操作できる
  * - シート表示中は背景のスクロールを止める
  */
 export function MobileEntryActionSheet({
@@ -33,7 +34,12 @@ export function MobileEntryActionSheet({
   onDelete,
 }: MobileEntryActionSheetProps) {
   const [isWorking, setIsWorking] = useState(false);
+  const [copyStatus, setCopyStatus] = useState<string | null>(null);
   const dialogRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    setCopyStatus(null);
+  }, [entry?.id]);
 
   useEffect(() => {
     if (!entry) return;
@@ -69,6 +75,17 @@ export function MobileEntryActionSheet({
       onClose();
     } finally {
       setIsWorking(false);
+    }
+  };
+
+  const copyEntry = async () => {
+    if (disabled || isWorking) return;
+
+    try {
+      await copyToClipboard(entry.content);
+      setCopyStatus("コピーしました");
+    } catch {
+      setCopyStatus("コピーできませんでした");
     }
   };
 
@@ -120,6 +137,19 @@ export function MobileEntryActionSheet({
             ×
           </button>
         </header>
+
+        <button
+          type="button"
+          className="mobile-action-sheet__copy"
+          onClick={() => void copyEntry()}
+          disabled={disabled || isWorking}
+        >
+          <span aria-hidden="true">⧉</span>
+          この項目をコピー
+        </button>
+        <p className="mobile-action-sheet__copy-status" aria-live="polite">
+          {copyStatus}
+        </p>
 
         <button
           type="button"
