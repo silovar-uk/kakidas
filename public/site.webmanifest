@@ -1,6 +1,11 @@
 {
-  "name": "My App",
-  "short_name": "My App",
+  "name": "kakidas",
+  "short_name": "kakidas",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f5f4ef",
+  "theme_color": "#bd562f",
   "icons": [
     {
       "src": "/android-chrome-192x192.png",
@@ -12,8 +17,5 @@
       "sizes": "512x512",
       "type": "image/png"
     }
-  ],
-  "theme_color": "#e60012",
-  "background_color": "#e60012",
-  "display": "standalone"
+  ]
 }

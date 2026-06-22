@@ -1,7 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
+import { useAuth } from "../auth/AuthProvider";
+import { CloudAccountDialog } from "../components/CloudAccountDialog";
+import {
+  CloudUploadDialog,
+  type CloudUploadTarget,
+} from "../components/CloudUploadDialog";
+import { CloudStatusBadge } from "../components/CloudStatusBadge";
 import { EntryColumn } from "../components/EntryColumn";
 import { useMemoDetail } from "../hooks/useMemos";
+import { uploadMemoToCloud } from "../repositories/cloudMemoRepository";
 import {
   type EntryKind,
   type MemoWithEntries,
@@ -82,12 +90,14 @@ function downloadText(filename: string, content: string) {
 export function MemoEditorPage() {
   const { memoId } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
 
   const {
     memo,
     isLoading,
     isSaving,
     error,
+    reload,
     updateTitle,
     createEntry,
     updateEntry,
@@ -101,6 +111,9 @@ export function MemoEditorPage() {
   const [title, setTitle] = useState("");
   const [activeKind, setActiveKind] = useState<EntryKind>("word");
   const [notice, setNotice] = useState<string | null>(null);
+  const [isCloudDialogOpen, setIsCloudDialogOpen] = useState(false);
+  const [isUploadDialogOpen, setIsUploadDialogOpen] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
 
   useEffect(() => {
     if (memo) {
@@ -190,6 +203,50 @@ export function MemoEditorPage() {
     };
   }, [memo?.entries]);
 
+  const cloudUploadTarget = useMemo<CloudUploadTarget[]>(() => {
+    if (!memo) return [];
+
+    return [
+      {
+        id: memo.id,
+        title: memo.title,
+        entry_counts: {
+          word: entriesByKind.word.length,
+          sentence: entriesByKind.sentence.length,
+          paragraph: entriesByKind.paragraph.length,
+        },
+        sync_meta: memo.sync_meta,
+      },
+    ];
+  }, [entriesByKind, memo]);
+
+  const openUpload = () => {
+    if (!user) {
+      setIsCloudDialogOpen(true);
+      return;
+    }
+
+    setIsUploadDialogOpen(true);
+  };
+
+  const handleUploadConfirm = async () => {
+    if (!memo || !user) {
+      throw new Error("クラウドへ送るにはログインが必要です。");
+    }
+
+    setIsUploading(true);
+
+    try {
+      await saveTitle(title);
+      await uploadMemoToCloud(memo.id, user.id);
+      await reload();
+      setIsUploadDialogOpen(false);
+      setNotice("このメモをクラウドへ送りました。");
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <main className="app-shell editor-page">
@@ -218,9 +275,12 @@ export function MemoEditorPage() {
           ← メモ一覧
         </Link>
 
-        <p className="save-status" aria-live="polite">
-          {isSaving ? "保存中…" : "保存済み"}
-        </p>
+        <div className="editor-header__right">
+          <CloudStatusBadge syncMeta={memo.sync_meta} />
+          <p className="save-status" aria-live="polite">
+            {isSaving ? "保存中…" : "保存済み"}
+          </p>
+        </div>
       </header>
 
       <section className="editor-title-row" aria-label="メモのタイトル">
@@ -233,6 +293,14 @@ export function MemoEditorPage() {
         />
 
         <div className="editor-title-row__actions">
+          <button
+            type="button"
+            className="cloud-upload-button"
+            onClick={openUpload}
+          >
+            <span aria-hidden="true">☁</span>
+            クラウドへ送る
+          </button>
           <button
             type="button"
             className="secondary-button"
@@ -310,7 +378,7 @@ export function MemoEditorPage() {
             kind={kind}
             entries={entriesByKind[kind]}
             isActiveOnMobile={activeKind === kind}
-            disabled={isSaving}
+            disabled={isSaving || isUploading}
             onCreate={createEntry}
             onUpdate={(entryId, content) => updateEntry(entryId, { content })}
             onDelete={deleteEntry}
@@ -320,6 +388,18 @@ export function MemoEditorPage() {
           />
         ))}
       </section>
+
+      <CloudAccountDialog
+        open={isCloudDialogOpen}
+        onClose={() => setIsCloudDialogOpen(false)}
+      />
+      <CloudUploadDialog
+        open={isUploadDialogOpen}
+        targets={cloudUploadTarget}
+        isSubmitting={isUploading}
+        onClose={() => setIsUploadDialogOpen(false)}
+        onConfirm={handleUploadConfirm}
+      />
     </main>
   );
 }

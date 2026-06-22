@@ -2,7 +2,7 @@
  * Supabase移行時にそのままテーブル定義へ対応できるよう、
  * DBのカラム名は snake_case のまま扱う。
  *
- * 想定するテーブル:
+ * 想定するクラウドテーブル:
  * - public.memos
  * - public.entries
  *
@@ -15,6 +15,12 @@ export const ENTRY_KINDS = ["word", "sentence", "paragraph"] as const;
 export type EntryKind = (typeof ENTRY_KINDS)[number];
 
 export type EntryMoveDirection = "up" | "down";
+
+export type CloudState =
+  | "local_only"
+  | "uploaded"
+  | "changed_after_upload"
+  | "error";
 
 export type MemoRow = {
   id: string;
@@ -76,7 +82,36 @@ export type EntryUpdate = Partial<
   Pick<EntryRow, "content" | "sort_order" | "updated_at" | "deleted_at" | "user_id">
 >;
 
+/**
+ * IndexedDBだけに持つ「クラウド送信状態」。
+ * 本文データと送信状態を分けることで、ローカル保存を常に主役に保つ。
+ */
+export type MemoSyncMetaRow = {
+  memo_id: string;
+  cloud_state: CloudState;
+  cloud_user_id: string | null;
+  last_uploaded_at: string | null;
+  cloud_updated_at: string | null;
+  last_uploaded_hash: string | null;
+  last_error: string | null;
+  updated_at: string;
+};
+
+export type MemoEntryCounts = Record<EntryKind, number>;
+
+export type MemoListItem = MemoRow & {
+  sync_meta: MemoSyncMetaRow;
+  entry_counts: MemoEntryCounts;
+};
+
 export type MemoWithEntries = MemoRow & {
+  entries: EntryRow[];
+  sync_meta: MemoSyncMetaRow;
+};
+
+/** クラウド送信用。削除済み（deleted_atあり）のEntryも含める。 */
+export type MemoCloudSnapshot = {
+  memo: MemoRow;
   entries: EntryRow[];
 };
 
@@ -105,18 +140,39 @@ export type Database = {
         Row: MemoRow;
         Insert: MemoInsert;
         Update: MemoUpdate;
+        Relationships: [];
       };
       entries: {
         Row: EntryRow;
         Insert: EntryInsert;
         Update: EntryUpdate;
+        Relationships: [
+          {
+            foreignKeyName: "entries_memo_id_fkey";
+            columns: ["memo_id"];
+            isOneToOne: false;
+            referencedRelation: "memos";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "entries_parent_id_fkey";
+            columns: ["parent_id"];
+            isOneToOne: false;
+            referencedRelation: "entries";
+            referencedColumns: ["id"];
+          },
+        ];
       };
     };
+    Views: Record<string, never>;
+    Functions: Record<string, never>;
+    Enums: Record<string, never>;
+    CompositeTypes: Record<string, never>;
   };
 };
 
 export type BackupPayload = {
-  version: 1 | 2;
+  version: 1 | 2 | 3;
   exported_at: string;
   memos: MemoRow[];
   entries: LegacyEntryRow[];
@@ -134,6 +190,13 @@ export const ENTRY_KIND_GUIDE: Record<EntryKind, string> = {
   paragraph: "まとまっていなくてOK。あとで直せる",
 };
 
+export const CLOUD_STATE_LABEL: Record<CloudState, string> = {
+  local_only: "ローカルのみ",
+  uploaded: "クラウド保存済み",
+  changed_after_upload: "ローカルで更新あり",
+  error: "送信エラー",
+};
+
 export function supportsHierarchy(kind: EntryKind): boolean {
   return kind === "word" || kind === "sentence";
 }
@@ -148,6 +211,19 @@ export function createId(): string {
 
 export function nowIso(): string {
   return new Date().toISOString();
+}
+
+export function createLocalSyncMeta(memoId: string): MemoSyncMetaRow {
+  return {
+    memo_id: memoId,
+    cloud_state: "local_only",
+    cloud_user_id: null,
+    last_uploaded_at: null,
+    cloud_updated_at: null,
+    last_uploaded_hash: null,
+    last_error: null,
+    updated_at: nowIso(),
+  };
 }
 
 export function normalizeEntryRow(entry: LegacyEntryRow): EntryRow {

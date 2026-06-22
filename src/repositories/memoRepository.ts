@@ -6,11 +6,16 @@ import {
   type EntryRow,
   type EntryUpdate,
   type LegacyEntryRow,
+  type MemoCloudSnapshot,
+  type MemoEntryCounts,
   type MemoInsert,
+  type MemoListItem,
   type MemoRow,
+  type MemoSyncMetaRow,
   type MemoUpdate,
   type MemoWithEntries,
   createId,
+  createLocalSyncMeta,
   formatDefaultMemoTitle,
   normalizeEntryRow,
   nowIso,
@@ -24,12 +29,13 @@ import {
 
 /**
  * UIはこのinterfaceだけを見る。
- * 将来は IndexedDbMemoRepository を SupabaseMemoRepository に置き換えるだけで、
- * 画面・Hook・コンポーネントを変えずに同期対応できる。
+ * IndexedDBの読み書きはここへ閉じ込め、将来の同期実装はCloudRepository側に足す。
  */
 export interface MemoRepository {
-  listMemos(): Promise<MemoRow[]>;
+  listMemos(): Promise<MemoListItem[]>;
   getMemo(memoId: string): Promise<MemoWithEntries | null>;
+  /** クラウド送信用。削除済みEntryも含める。 */
+  getMemoSnapshot(memoId: string): Promise<MemoCloudSnapshot | null>;
 
   createMemo(input?: Partial<MemoInsert>): Promise<MemoRow>;
   updateMemo(memoId: string, patch: MemoUpdate): Promise<MemoRow>;
@@ -48,6 +54,9 @@ export interface MemoRepository {
   /** 同じ親の中で順序を入れ替える。 */
   moveEntry(entryId: string, direction: EntryMoveDirection): Promise<void>;
 
+  getSyncMeta(memoId: string): Promise<MemoSyncMetaRow>;
+  saveSyncMeta(meta: MemoSyncMetaRow): Promise<MemoSyncMetaRow>;
+
   exportBackup(): Promise<BackupPayload>;
   importBackup(payload: BackupPayload): Promise<void>;
 }
@@ -60,24 +69,86 @@ function compareEntries(a: EntryRow, b: EntryRow): number {
   return a.created_at.localeCompare(b.created_at);
 }
 
-class IndexedDbMemoRepository implements MemoRepository {
-  async listMemos(): Promise<MemoRow[]> {
-    const db = await getDatabase();
-    const transaction = db.transaction(STORE_NAMES.memos, "readonly");
-    const store = transaction.objectStore(STORE_NAMES.memos);
+function getEmptyCounts(): MemoEntryCounts {
+  return { word: 0, sentence: 0, paragraph: 0 };
+}
 
-    const memos = await requestToPromise(
-      store.getAll() as IDBRequest<MemoRow[]>,
+class IndexedDbMemoRepository implements MemoRepository {
+  async listMemos(): Promise<MemoListItem[]> {
+    const db = await getDatabase();
+    const transaction = db.transaction(
+      [STORE_NAMES.memos, STORE_NAMES.entries, STORE_NAMES.memoSyncMeta],
+      "readonly",
+    );
+
+    const memoStore = transaction.objectStore(STORE_NAMES.memos);
+    const entryStore = transaction.objectStore(STORE_NAMES.entries);
+    const syncMetaStore = transaction.objectStore(STORE_NAMES.memoSyncMeta);
+
+    const [memos, entries, syncMetas] = await Promise.all([
+      requestToPromise(memoStore.getAll() as IDBRequest<MemoRow[]>),
+      requestToPromise(entryStore.getAll() as IDBRequest<LegacyEntryRow[]>),
+      requestToPromise(syncMetaStore.getAll() as IDBRequest<MemoSyncMetaRow[]>),
+    ]);
+
+    const countsByMemoId = new Map<string, MemoEntryCounts>();
+
+    for (const rawEntry of entries) {
+      const entry = normalizeEntryRow(rawEntry);
+      if (entry.deleted_at !== null) continue;
+
+      const counts = countsByMemoId.get(entry.memo_id) ?? getEmptyCounts();
+      counts[entry.kind] += 1;
+      countsByMemoId.set(entry.memo_id, counts);
+    }
+
+    const syncMetaByMemoId = new Map(
+      syncMetas.map((meta) => [meta.memo_id, meta]),
     );
 
     return memos
       .filter((memo) => memo.deleted_at === null)
+      .map((memo) => ({
+        ...memo,
+        sync_meta: syncMetaByMemoId.get(memo.id) ?? createLocalSyncMeta(memo.id),
+        entry_counts: countsByMemoId.get(memo.id) ?? getEmptyCounts(),
+      }))
       .sort((a, b) => b.updated_at.localeCompare(a.updated_at));
   }
 
   async getMemo(memoId: string): Promise<MemoWithEntries | null> {
     const db = await getDatabase();
+    const transaction = db.transaction(
+      [STORE_NAMES.memos, STORE_NAMES.entries, STORE_NAMES.memoSyncMeta],
+      "readonly",
+    );
 
+    const memoStore = transaction.objectStore(STORE_NAMES.memos);
+    const entryStore = transaction.objectStore(STORE_NAMES.entries);
+    const syncMetaStore = transaction.objectStore(STORE_NAMES.memoSyncMeta);
+
+    const memo = await requestToPromise(
+      memoStore.get(memoId) as IDBRequest<MemoRow | undefined>,
+    );
+
+    if (!memo || memo.deleted_at !== null) {
+      return null;
+    }
+
+    const [entries, syncMeta] = await Promise.all([
+      this.getEntriesForMemo(entryStore, memoId),
+      this.getSyncMetaFromStore(syncMetaStore, memoId),
+    ]);
+
+    return {
+      ...memo,
+      entries: entries.filter((entry) => entry.deleted_at === null),
+      sync_meta: syncMeta ?? createLocalSyncMeta(memoId),
+    };
+  }
+
+  async getMemoSnapshot(memoId: string): Promise<MemoCloudSnapshot | null> {
+    const db = await getDatabase();
     const transaction = db.transaction(
       [STORE_NAMES.memos, STORE_NAMES.entries],
       "readonly",
@@ -96,10 +167,7 @@ class IndexedDbMemoRepository implements MemoRepository {
 
     const entries = await this.getEntriesForMemo(entryStore, memoId);
 
-    return {
-      ...memo,
-      entries: entries.filter((entry) => entry.deleted_at === null),
-    };
+    return { memo, entries };
   }
 
   async createMemo(input: Partial<MemoInsert> = {}): Promise<MemoRow> {
@@ -127,8 +195,13 @@ class IndexedDbMemoRepository implements MemoRepository {
 
   async updateMemo(memoId: string, patch: MemoUpdate): Promise<MemoRow> {
     const db = await getDatabase();
-    const transaction = db.transaction(STORE_NAMES.memos, "readwrite");
+    const transaction = db.transaction(
+      [STORE_NAMES.memos, STORE_NAMES.memoSyncMeta],
+      "readwrite",
+    );
+
     const store = transaction.objectStore(STORE_NAMES.memos);
+    const syncMetaStore = transaction.objectStore(STORE_NAMES.memoSyncMeta);
 
     const current = await requestToPromise(
       store.get(memoId) as IDBRequest<MemoRow | undefined>,
@@ -139,6 +212,8 @@ class IndexedDbMemoRepository implements MemoRepository {
       throw new Error("対象のメモが見つかりません。");
     }
 
+    const timestamp = patch.updated_at ?? nowIso();
+
     const next: MemoRow = {
       ...current,
       ...patch,
@@ -146,10 +221,11 @@ class IndexedDbMemoRepository implements MemoRepository {
         patch.title === undefined
           ? current.title
           : patch.title.trim() || formatDefaultMemoTitle(new Date(current.created_at)),
-      updated_at: patch.updated_at ?? nowIso(),
+      updated_at: timestamp,
     };
 
     store.put(next);
+    await this.markMemoChangedWithinTransaction(syncMetaStore, memoId, timestamp);
 
     await transactionToPromise(transaction);
 
@@ -160,12 +236,13 @@ class IndexedDbMemoRepository implements MemoRepository {
     const db = await getDatabase();
 
     const transaction = db.transaction(
-      [STORE_NAMES.memos, STORE_NAMES.entries],
+      [STORE_NAMES.memos, STORE_NAMES.entries, STORE_NAMES.memoSyncMeta],
       "readwrite",
     );
 
     const memoStore = transaction.objectStore(STORE_NAMES.memos);
     const entryStore = transaction.objectStore(STORE_NAMES.entries);
+    const syncMetaStore = transaction.objectStore(STORE_NAMES.memoSyncMeta);
 
     const current = await requestToPromise(
       memoStore.get(memoId) as IDBRequest<MemoRow | undefined>,
@@ -196,6 +273,10 @@ class IndexedDbMemoRepository implements MemoRepository {
       }
     }
 
+    // Phase 2では「ローカルからの削除」をクラウドへ自動反映しない。
+    // 後で取り込み機能を作る時に、明示削除のUXを別途設計する。
+    syncMetaStore.delete(memoId);
+
     await transactionToPromise(transaction);
   }
 
@@ -211,12 +292,13 @@ class IndexedDbMemoRepository implements MemoRepository {
     const db = await getDatabase();
 
     const transaction = db.transaction(
-      [STORE_NAMES.memos, STORE_NAMES.entries],
+      [STORE_NAMES.memos, STORE_NAMES.entries, STORE_NAMES.memoSyncMeta],
       "readwrite",
     );
 
     const memoStore = transaction.objectStore(STORE_NAMES.memos);
     const entryStore = transaction.objectStore(STORE_NAMES.entries);
+    const syncMetaStore = transaction.objectStore(STORE_NAMES.memoSyncMeta);
 
     const memo = await requestToPromise(
       memoStore.get(input.memo_id) as IDBRequest<MemoRow | undefined>,
@@ -244,12 +326,7 @@ class IndexedDbMemoRepository implements MemoRepository {
       }
     }
 
-    const siblings = this.getActiveSiblings(
-      existingEntries,
-      input.kind,
-      parentId,
-    );
-
+    const siblings = this.getActiveSiblings(existingEntries, input.kind, parentId);
     const timestamp = nowIso();
 
     const entry: EntryRow = {
@@ -272,6 +349,12 @@ class IndexedDbMemoRepository implements MemoRepository {
       updated_at: timestamp,
     } satisfies MemoRow);
 
+    await this.markMemoChangedWithinTransaction(
+      syncMetaStore,
+      input.memo_id,
+      timestamp,
+    );
+
     await transactionToPromise(transaction);
 
     return entry;
@@ -281,26 +364,16 @@ class IndexedDbMemoRepository implements MemoRepository {
     const db = await getDatabase();
 
     const transaction = db.transaction(
-      [STORE_NAMES.memos, STORE_NAMES.entries],
+      [STORE_NAMES.memos, STORE_NAMES.entries, STORE_NAMES.memoSyncMeta],
       "readwrite",
     );
 
     const memoStore = transaction.objectStore(STORE_NAMES.memos);
     const entryStore = transaction.objectStore(STORE_NAMES.entries);
+    const syncMetaStore = transaction.objectStore(STORE_NAMES.memoSyncMeta);
 
-    const current = await requestToPromise(
-      entryStore.get(entryId) as IDBRequest<LegacyEntryRow | undefined>,
-    );
-
-    const normalizedCurrent = current ? normalizeEntryRow(current) : undefined;
-
-    if (!normalizedCurrent || normalizedCurrent.deleted_at !== null) {
-      transaction.abort();
-      throw new Error("対象の項目が見つかりません。");
-    }
-
-    const content =
-      patch.content === undefined ? normalizedCurrent.content : patch.content.trim();
+    const current = await this.requireActiveEntry(entryStore, entryId, transaction);
+    const content = patch.content === undefined ? current.content : patch.content.trim();
 
     if (!content && patch.deleted_at === undefined) {
       transaction.abort();
@@ -310,17 +383,18 @@ class IndexedDbMemoRepository implements MemoRepository {
     const timestamp = patch.updated_at ?? nowIso();
 
     const next: EntryRow = {
-      ...normalizedCurrent,
+      ...current,
       ...patch,
-      content: content || normalizedCurrent.content,
+      content: content || current.content,
       updated_at: timestamp,
     };
 
     entryStore.put(next);
 
-    await this.touchMemoWithinTransaction(
-      memoStore,
-      normalizedCurrent.memo_id,
+    await this.touchMemoWithinTransaction(memoStore, current.memo_id, timestamp);
+    await this.markMemoChangedWithinTransaction(
+      syncMetaStore,
+      current.memo_id,
       timestamp,
     );
 
@@ -333,24 +407,15 @@ class IndexedDbMemoRepository implements MemoRepository {
     const db = await getDatabase();
 
     const transaction = db.transaction(
-      [STORE_NAMES.memos, STORE_NAMES.entries],
+      [STORE_NAMES.memos, STORE_NAMES.entries, STORE_NAMES.memoSyncMeta],
       "readwrite",
     );
 
     const memoStore = transaction.objectStore(STORE_NAMES.memos);
     const entryStore = transaction.objectStore(STORE_NAMES.entries);
+    const syncMetaStore = transaction.objectStore(STORE_NAMES.memoSyncMeta);
 
-    const rawCurrent = await requestToPromise(
-      entryStore.get(entryId) as IDBRequest<LegacyEntryRow | undefined>,
-    );
-
-    const current = rawCurrent ? normalizeEntryRow(rawCurrent) : undefined;
-
-    if (!current || current.deleted_at !== null) {
-      transaction.abort();
-      throw new Error("対象の項目が見つかりません。");
-    }
-
+    const current = await this.requireActiveEntry(entryStore, entryId, transaction);
     const allEntries = await this.getEntriesForMemo(entryStore, current.memo_id);
     const deletedAt = nowIso();
     const targetIds = this.getSubtreeIds(allEntries, current.id);
@@ -365,8 +430,9 @@ class IndexedDbMemoRepository implements MemoRepository {
       }
     }
 
-    await this.touchMemoWithinTransaction(
-      memoStore,
+    await this.touchMemoWithinTransaction(memoStore, current.memo_id, deletedAt);
+    await this.markMemoChangedWithinTransaction(
+      syncMetaStore,
       current.memo_id,
       deletedAt,
     );
@@ -378,12 +444,13 @@ class IndexedDbMemoRepository implements MemoRepository {
     const db = await getDatabase();
 
     const transaction = db.transaction(
-      [STORE_NAMES.memos, STORE_NAMES.entries],
+      [STORE_NAMES.memos, STORE_NAMES.entries, STORE_NAMES.memoSyncMeta],
       "readwrite",
     );
 
     const memoStore = transaction.objectStore(STORE_NAMES.memos);
     const entryStore = transaction.objectStore(STORE_NAMES.entries);
+    const syncMetaStore = transaction.objectStore(STORE_NAMES.memoSyncMeta);
     const current = await this.requireActiveEntry(entryStore, entryId, transaction);
     const entries = await this.getEntriesForMemo(entryStore, current.memo_id);
 
@@ -398,11 +465,7 @@ class IndexedDbMemoRepository implements MemoRepository {
 
     const timestamp = nowIso();
     const remainingSiblings = siblings.filter((entry) => entry.id !== current.id);
-    const targetChildren = this.getActiveSiblings(
-      entries,
-      current.kind,
-      previousSibling.id,
-    );
+    const targetChildren = this.getActiveSiblings(entries, current.kind, previousSibling.id);
 
     const moved: EntryRow = {
       ...current,
@@ -414,6 +477,11 @@ class IndexedDbMemoRepository implements MemoRepository {
     this.writeOrderedEntries(entryStore, [...targetChildren, moved], timestamp);
 
     await this.touchMemoWithinTransaction(memoStore, current.memo_id, timestamp);
+    await this.markMemoChangedWithinTransaction(
+      syncMetaStore,
+      current.memo_id,
+      timestamp,
+    );
     await transactionToPromise(transaction);
   }
 
@@ -421,12 +489,13 @@ class IndexedDbMemoRepository implements MemoRepository {
     const db = await getDatabase();
 
     const transaction = db.transaction(
-      [STORE_NAMES.memos, STORE_NAMES.entries],
+      [STORE_NAMES.memos, STORE_NAMES.entries, STORE_NAMES.memoSyncMeta],
       "readwrite",
     );
 
     const memoStore = transaction.objectStore(STORE_NAMES.memos);
     const entryStore = transaction.objectStore(STORE_NAMES.entries);
+    const syncMetaStore = transaction.objectStore(STORE_NAMES.memoSyncMeta);
     const current = await this.requireActiveEntry(entryStore, entryId, transaction);
 
     if (current.parent_id === null) {
@@ -472,6 +541,11 @@ class IndexedDbMemoRepository implements MemoRepository {
     this.writeOrderedEntries(entryStore, nextSiblings, timestamp);
 
     await this.touchMemoWithinTransaction(memoStore, current.memo_id, timestamp);
+    await this.markMemoChangedWithinTransaction(
+      syncMetaStore,
+      current.memo_id,
+      timestamp,
+    );
     await transactionToPromise(transaction);
   }
 
@@ -482,12 +556,13 @@ class IndexedDbMemoRepository implements MemoRepository {
     const db = await getDatabase();
 
     const transaction = db.transaction(
-      [STORE_NAMES.memos, STORE_NAMES.entries],
+      [STORE_NAMES.memos, STORE_NAMES.entries, STORE_NAMES.memoSyncMeta],
       "readwrite",
     );
 
     const memoStore = transaction.objectStore(STORE_NAMES.memos);
     const entryStore = transaction.objectStore(STORE_NAMES.entries);
+    const syncMetaStore = transaction.objectStore(STORE_NAMES.memoSyncMeta);
     const current = await this.requireActiveEntry(entryStore, entryId, transaction);
     const entries = await this.getEntriesForMemo(entryStore, current.memo_id);
 
@@ -508,7 +583,37 @@ class IndexedDbMemoRepository implements MemoRepository {
     this.writeOrderedEntries(entryStore, reordered, timestamp);
 
     await this.touchMemoWithinTransaction(memoStore, current.memo_id, timestamp);
+    await this.markMemoChangedWithinTransaction(
+      syncMetaStore,
+      current.memo_id,
+      timestamp,
+    );
     await transactionToPromise(transaction);
+  }
+
+  async getSyncMeta(memoId: string): Promise<MemoSyncMetaRow> {
+    const db = await getDatabase();
+    const transaction = db.transaction(STORE_NAMES.memoSyncMeta, "readonly");
+    const store = transaction.objectStore(STORE_NAMES.memoSyncMeta);
+    const meta = await this.getSyncMetaFromStore(store, memoId);
+
+    return meta ?? createLocalSyncMeta(memoId);
+  }
+
+  async saveSyncMeta(meta: MemoSyncMetaRow): Promise<MemoSyncMetaRow> {
+    const db = await getDatabase();
+    const transaction = db.transaction(STORE_NAMES.memoSyncMeta, "readwrite");
+    const store = transaction.objectStore(STORE_NAMES.memoSyncMeta);
+
+    const next: MemoSyncMetaRow = {
+      ...meta,
+      updated_at: nowIso(),
+    };
+
+    store.put(next);
+    await transactionToPromise(transaction);
+
+    return next;
   }
 
   async exportBackup(): Promise<BackupPayload> {
@@ -531,7 +636,7 @@ class IndexedDbMemoRepository implements MemoRepository {
     );
 
     return {
-      version: 2,
+      version: 3,
       exported_at: nowIso(),
       memos,
       entries: entries.map(normalizeEntryRow),
@@ -540,7 +645,7 @@ class IndexedDbMemoRepository implements MemoRepository {
 
   async importBackup(payload: BackupPayload): Promise<void> {
     if (
-      (payload.version !== 1 && payload.version !== 2) ||
+      (payload.version !== 1 && payload.version !== 2 && payload.version !== 3) ||
       !Array.isArray(payload.memos) ||
       !Array.isArray(payload.entries)
     ) {
@@ -589,6 +694,32 @@ class IndexedDbMemoRepository implements MemoRepository {
     );
 
     return entries.map(normalizeEntryRow).sort(compareEntries);
+  }
+
+  private async getSyncMetaFromStore(
+    syncMetaStore: IDBObjectStore,
+    memoId: string,
+  ): Promise<MemoSyncMetaRow | undefined> {
+    return requestToPromise(
+      syncMetaStore.get(memoId) as IDBRequest<MemoSyncMetaRow | undefined>,
+    );
+  }
+
+  private async markMemoChangedWithinTransaction(
+    syncMetaStore: IDBObjectStore,
+    memoId: string,
+    timestamp: string,
+  ): Promise<void> {
+    const meta = await this.getSyncMetaFromStore(syncMetaStore, memoId);
+
+    if (!meta || meta.last_uploaded_at === null) return;
+
+    syncMetaStore.put({
+      ...meta,
+      cloud_state: "changed_after_upload",
+      last_error: null,
+      updated_at: timestamp,
+    } satisfies MemoSyncMetaRow);
   }
 
   private getActiveSiblings(
@@ -664,7 +795,7 @@ class IndexedDbMemoRepository implements MemoRepository {
   }
 
   private async upsertIfNewer<T extends { id: string; updated_at: string }>(
-    storeName: (typeof STORE_NAMES)[keyof typeof STORE_NAMES],
+    storeName: typeof STORE_NAMES.memos | typeof STORE_NAMES.entries,
     incoming: T,
   ): Promise<void> {
     const db = await getDatabase();

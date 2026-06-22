@@ -1,9 +1,10 @@
 const DB_NAME = "kakidasu-db";
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 
 export const STORE_NAMES = {
   memos: "memos",
   entries: "entries",
+  memoSyncMeta: "memo_sync_meta",
 } as const;
 
 let databasePromise: Promise<IDBDatabase> | null = null;
@@ -76,6 +77,16 @@ function openDatabase(): Promise<IDBDatabase> {
 
           cursor.continue();
         };
+      }
+
+      if (!db.objectStoreNames.contains(STORE_NAMES.memoSyncMeta)) {
+        const syncMetaStore = db.createObjectStore(STORE_NAMES.memoSyncMeta, {
+          keyPath: "memo_id",
+        });
+
+        syncMetaStore.createIndex("by_cloud_state", "cloud_state");
+        syncMetaStore.createIndex("by_cloud_user_id", "cloud_user_id");
+        syncMetaStore.createIndex("by_updated_at", "updated_at");
       }
     };
 

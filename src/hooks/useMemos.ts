@@ -5,6 +5,7 @@ import {
   type EntryMoveDirection,
   type EntryRow,
   type EntryUpdate,
+  type MemoListItem,
   type MemoRow,
   type MemoUpdate,
   type MemoWithEntries,
@@ -23,7 +24,7 @@ function toErrorMessage(error: unknown): string {
 }
 
 export function useMemos() {
-  const [memos, setMemos] = useState<MemoRow[]>([]);
+  const [memos, setMemos] = useState<MemoListItem[]>([]);
   const [status, setStatus] = useState<AsyncStatus>({
     isLoading: true,
     error: null,
@@ -58,9 +59,9 @@ export function useMemos() {
 
   const createMemo = useCallback(async (): Promise<MemoRow> => {
     const memo = await memoRepository.createMemo();
-    setMemos((current) => [memo, ...current]);
+    await refresh();
     return memo;
-  }, []);
+  }, [refresh]);
 
   const deleteMemo = useCallback(async (memoId: string): Promise<void> => {
     await memoRepository.deleteMemo(memoId);
@@ -187,11 +188,11 @@ export function useMemoDetail(memoId: string | undefined) {
 
       return runWrite(async () => {
         const updated = await memoRepository.updateMemo(memoId, patch);
-        setMemo((current) => (current ? { ...current, ...updated } : current));
+        await refreshAfterWrite();
         return updated;
       });
     },
-    [memoId, runWrite],
+    [memoId, refreshAfterWrite, runWrite],
   );
 
   const createEntry = useCallback(
@@ -223,21 +224,11 @@ export function useMemoDetail(memoId: string | undefined) {
     async (entryId: string, patch: EntryUpdate): Promise<EntryRow> => {
       return runWrite(async () => {
         const updated = await memoRepository.updateEntry(entryId, patch);
-        setMemo((current) =>
-          current
-            ? {
-                ...current,
-                updated_at: updated.updated_at,
-                entries: current.entries.map((entry) =>
-                  entry.id === entryId ? updated : entry,
-                ),
-              }
-            : current,
-        );
+        await refreshAfterWrite();
         return updated;
       });
     },
-    [runWrite],
+    [refreshAfterWrite, runWrite],
   );
 
   const deleteEntry = useCallback(
