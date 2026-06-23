@@ -945,19 +945,24 @@ a:focus-visible {
     display: inline;
   }
 
+  /*
+   * Mobile composer safety rule:
+   * Keep the composer in normal document flow. It must never become a full-screen
+   * fixed layer that can intercept taps intended for the memo list, tabs, or actions.
+   */
   .entry-column--active .entry-composer {
-    position: sticky;
-    top: 8px;
-    z-index: 5;
-    margin-inline: -6px;
-    padding: 10px 6px 8px;
-    border-bottom: 1px solid #e4ddd4;
-    background: rgba(255, 254, 250, 0.94);
-    backdrop-filter: blur(12px);
+    position: static;
+    z-index: auto;
+    margin: 14px 0 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+    backdrop-filter: none;
   }
 
   .entry-column--active .entry-list {
-    padding-bottom: 16px;
+    padding-bottom: 24px;
   }
 }
 
@@ -1247,34 +1252,29 @@ a:focus-visible {
 
 @media (max-width: 920px) {
   .editor-page {
-    padding-bottom: calc(148px + env(safe-area-inset-bottom));
+    padding-bottom: calc(34px + env(safe-area-inset-bottom));
   }
 
   .entry-column__guide-mobile {
     display: inline;
   }
 
+  /*
+   * Do not override the normal-flow mobile composer above with a fixed position.
+   * The previous fixed rule could expand with a long Paragraph input and cover the
+   * entire viewport, leaving visible controls behind it untappable.
+   */
   .entry-column--active .entry-composer {
-    position: fixed;
-    z-index: 12;
-    right: max(14px, env(safe-area-inset-right));
-    bottom: max(10px, env(safe-area-inset-bottom));
-    left: max(14px, env(safe-area-inset-left));
-    margin: 0;
-    padding: 10px 10px 8px;
-    border: 1px solid #ded7ce;
-    border-radius: 15px;
-    background: rgba(255, 254, 250, 0.96);
-    box-shadow: 0 12px 28px rgba(76, 60, 45, 0.17);
-    backdrop-filter: blur(14px);
+    position: static;
+    inset: auto;
+    z-index: auto;
+    max-height: none;
+    overflow: visible;
   }
 
-  .entry-column--active .entry-list {
-    padding-bottom: 132px;
-  }
-
+  .entry-column--active .entry-list,
   .entry-column--active.entry-column--paragraph .entry-list {
-    padding-bottom: 235px;
+    padding-bottom: 24px;
   }
 
   .entry-column--active .entry-composer__target {
@@ -2480,4 +2480,28 @@ a:focus-visible {
 
 .mobile-action-sheet__dismiss:active {
   background: #e7e1d8;
+}
+
+/* --------------------------------------------------------------------------
+   v0.5.5 — Mobile composer normal-flow safeguard
+   -------------------------------------------------------------------------- */
+@media (max-width: 920px) {
+  .entry-column--active .entry-composer {
+    position: static !important;
+    top: auto !important;
+    right: auto !important;
+    bottom: auto !important;
+    left: auto !important;
+    width: auto !important;
+    height: auto !important;
+    min-height: 0;
+    max-height: none;
+    pointer-events: auto;
+  }
+
+  .entry-column--active .entry-composer__textarea {
+    max-height: min(34dvh, 280px);
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
 }
