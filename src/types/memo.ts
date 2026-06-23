@@ -20,6 +20,8 @@ export type CloudState =
   | "local_only"
   | "uploaded"
   | "changed_after_upload"
+  | "remote_newer"
+  | "conflict"
   | "error";
 
 export type MemoRow = {
@@ -90,11 +92,29 @@ export type MemoSyncMetaRow = {
   memo_id: string;
   cloud_state: CloudState;
   cloud_user_id: string | null;
+  /** この端末から最後にクラウドへ送信した時刻。 */
   last_uploaded_at: string | null;
-  cloud_updated_at: string | null;
+  /** この端末が最後にクラウド内容を取り込んだ時刻。 */
+  last_downloaded_at: string | null;
+  /** 最後に確認したクラウド側の memo.updated_at。 */
+  last_cloud_updated_at: string | null;
+  /** 最後に送信したスナップショットの軽量ハッシュ。 */
   last_uploaded_hash: string | null;
   last_error: string | null;
   updated_at: string;
+};
+
+/**
+ * v0.5.0までのIndexedDBには cloud_updated_at だけが入っている。
+ * 読み込み時に新しい同期メタ型へ補完する。
+ */
+export type LegacyMemoSyncMetaRow = Omit<
+  MemoSyncMetaRow,
+  "last_downloaded_at" | "last_cloud_updated_at"
+> & {
+  last_downloaded_at?: string | null;
+  last_cloud_updated_at?: string | null;
+  cloud_updated_at?: string | null;
 };
 
 export type MemoEntryCounts = Record<EntryKind, number>;
@@ -113,6 +133,22 @@ export type MemoWithEntries = MemoRow & {
 export type MemoCloudSnapshot = {
   memo: MemoRow;
   entries: EntryRow[];
+};
+
+/** クラウド一覧で使う、本文を含まない軽量なメモ情報。 */
+export type CloudMemoListItem = MemoRow & {
+  entry_counts: MemoEntryCounts;
+};
+
+/** クラウドからローカルへ取り込む方法。 */
+export type CloudImportMode = "preserve" | "replace" | "clone";
+
+/** クラウド取り込み完了時にUIへ返す情報。 */
+export type CloudImportResult = {
+  memo: MemoRow;
+  source_memo_id: string;
+  mode: CloudImportMode;
+  imported_entry_count: number;
 };
 
 /**
@@ -208,6 +244,8 @@ export const CLOUD_STATE_LABEL: Record<CloudState, string> = {
   local_only: "ローカルのみ",
   uploaded: "クラウド保存済み",
   changed_after_upload: "ローカルで更新あり",
+  remote_newer: "クラウドが新しい",
+  conflict: "更新が競合",
   error: "送信エラー",
 };
 
@@ -233,11 +271,55 @@ export function createLocalSyncMeta(memoId: string): MemoSyncMetaRow {
     cloud_state: "local_only",
     cloud_user_id: null,
     last_uploaded_at: null,
-    cloud_updated_at: null,
+    last_downloaded_at: null,
+    last_cloud_updated_at: null,
     last_uploaded_hash: null,
     last_error: null,
     updated_at: nowIso(),
   };
+}
+
+function isCloudState(value: unknown): value is CloudState {
+  return (
+    value === "local_only" ||
+    value === "uploaded" ||
+    value === "changed_after_upload" ||
+    value === "remote_newer" ||
+    value === "conflict" ||
+    value === "error"
+  );
+}
+
+/**
+ * 旧バージョンのIndexedDBや不完全なレコードを安全に読み込む。
+ * UI・Repositoryはこの関数を通して同期メタを扱う。
+ */
+export function normalizeMemoSyncMeta(
+  meta: LegacyMemoSyncMetaRow | undefined,
+  memoId: string,
+): MemoSyncMetaRow {
+  const fallback = createLocalSyncMeta(memoId);
+
+  if (!meta) return fallback;
+
+  return {
+    memo_id: meta.memo_id || memoId,
+    cloud_state: isCloudState(meta.cloud_state)
+      ? meta.cloud_state
+      : fallback.cloud_state,
+    cloud_user_id: meta.cloud_user_id ?? null,
+    last_uploaded_at: meta.last_uploaded_at ?? null,
+    last_downloaded_at: meta.last_downloaded_at ?? null,
+    last_cloud_updated_at:
+      meta.last_cloud_updated_at ?? meta.cloud_updated_at ?? null,
+    last_uploaded_hash: meta.last_uploaded_hash ?? null,
+    last_error: meta.last_error ?? null,
+    updated_at: meta.updated_at ?? fallback.updated_at,
+  };
+}
+
+export function isCloudLinked(meta: MemoSyncMetaRow): boolean {
+  return meta.cloud_user_id !== null && meta.last_cloud_updated_at !== null;
 }
 
 export function normalizeEntryRow(entry: LegacyEntryRow): EntryRow {

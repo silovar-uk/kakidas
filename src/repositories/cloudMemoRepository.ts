@@ -1,10 +1,14 @@
 import type {
+  CloudMemoListItem,
+  CloudState,
   EntryRow,
   MemoCloudSnapshot,
+  MemoEntryCounts,
+  MemoListItem,
   MemoRow,
   MemoSyncMetaRow,
 } from "../types/memo";
-import { nowIso } from "../types/memo";
+import { isCloudLinked, nowIso, normalizeEntryRow } from "../types/memo";
 import { supabase } from "../lib/supabase";
 import { memoRepository } from "./memoRepository";
 
@@ -12,6 +16,11 @@ export type CloudUploadResult = {
   memo_id: string;
   uploaded_at: string;
   entry_count: number;
+};
+
+export type CloudSyncRefreshResult = {
+  cloud_memos: CloudMemoListItem[];
+  changed_memo_ids: string[];
 };
 
 function ensureSupabase() {
@@ -22,6 +31,20 @@ function ensureSupabase() {
   }
 
   return supabase;
+}
+
+function getEmptyCounts(): MemoEntryCounts {
+  return { word: 0, sentence: 0, paragraph: 0 };
+}
+
+function countActiveEntries(entries: EntryRow[]): MemoEntryCounts {
+  return entries.reduce<MemoEntryCounts>((counts, entry) => {
+    if (entry.deleted_at === null) {
+      counts[entry.kind] += 1;
+    }
+
+    return counts;
+  }, getEmptyCounts());
 }
 
 function orderEntriesForUpload(entries: EntryRow[]): EntryRow[] {
@@ -95,6 +118,61 @@ function toCloudEntries(entries: EntryRow[], userId: string): EntryRow[] {
   }));
 }
 
+function toDateValue(value: string | null): number | null {
+  if (!value) return null;
+
+  const timestamp = new Date(value).getTime();
+  return Number.isFinite(timestamp) ? timestamp : null;
+}
+
+function latestLocalBaseline(meta: MemoSyncMetaRow): string | null {
+  const uploadedAt = toDateValue(meta.last_uploaded_at);
+  const downloadedAt = toDateValue(meta.last_downloaded_at);
+
+  if (uploadedAt === null) return meta.last_downloaded_at;
+  if (downloadedAt === null) return meta.last_uploaded_at;
+
+  return uploadedAt >= downloadedAt
+    ? meta.last_uploaded_at
+    : meta.last_downloaded_at;
+}
+
+function isLater(left: string, right: string | null): boolean {
+  const leftValue = toDateValue(left);
+  const rightValue = toDateValue(right);
+
+  return leftValue !== null && rightValue !== null && leftValue > rightValue;
+}
+
+/**
+ * クラウド確認時にだけ、ローカルとクラウドの更新関係を判定する。
+ * 本文は一切変更せず、memo_sync_metaだけを更新する。
+ */
+function deriveCloudState(
+  localMemo: MemoListItem,
+  remoteMemo: CloudMemoListItem,
+): CloudState {
+  const meta = localMemo.sync_meta;
+  const localBaseline = latestLocalBaseline(meta);
+  const localChanged =
+    localBaseline !== null && isLater(localMemo.updated_at, localBaseline);
+  const remoteChanged = isLater(
+    remoteMemo.updated_at,
+    meta.last_cloud_updated_at,
+  );
+
+  // 両方が基準点より新しい時は、上書き判断をせず複製取り込みへ誘導する。
+  if (remoteChanged && localChanged) return "conflict";
+
+  // 送信エラーは、明示的な再送成功まで表示を残す。
+  if (meta.cloud_state === "error") return "error";
+
+  if (remoteChanged) return "remote_newer";
+  if (localChanged) return "changed_after_upload";
+
+  return "uploaded";
+}
+
 async function saveUploadError(
   memoId: string,
   userId: string,
@@ -128,9 +206,11 @@ export async function uploadMemoToCloud(
   }
 
   try {
-    const { error: memoError } = await client
+    const { data: memoData, error: memoError } = await client
       .from("memos")
-      .upsert(toCloudMemo(snapshot.memo, userId), { onConflict: "id" });
+      .upsert(toCloudMemo(snapshot.memo, userId), { onConflict: "id" })
+      .select("updated_at")
+      .single();
 
     if (memoError) throw memoError;
 
@@ -145,13 +225,18 @@ export async function uploadMemoToCloud(
     }
 
     const uploadedAt = nowIso();
+    const cloudUpdatedAt =
+      (memoData as Pick<MemoRow, "updated_at"> | null)?.updated_at ??
+      snapshot.memo.updated_at;
     const currentMeta = await memoRepository.getSyncMeta(memoId);
+
     const nextMeta: MemoSyncMetaRow = {
       ...currentMeta,
       cloud_state: "uploaded",
       cloud_user_id: userId,
       last_uploaded_at: uploadedAt,
-      cloud_updated_at: snapshot.memo.updated_at,
+      last_downloaded_at: currentMeta.last_downloaded_at,
+      last_cloud_updated_at: cloudUpdatedAt,
       last_uploaded_hash: snapshotHash(snapshot),
       last_error: null,
       updated_at: uploadedAt,
@@ -182,4 +267,137 @@ export async function uploadMemosToCloud(
   }
 
   return results;
+}
+
+/**
+ * ログイン中のユーザーがクラウドへ送ったメモだけを返す。
+ * RLSに加え、user_idでも絞り込むため、他人のメモを混ぜない。
+ */
+export async function listCloudMemos(userId: string): Promise<CloudMemoListItem[]> {
+  const client = ensureSupabase();
+
+  const { data: memoData, error: memoError } = await client
+    .from("memos")
+    .select("*")
+    .eq("user_id", userId)
+    .is("deleted_at", null)
+    .order("updated_at", { ascending: false });
+
+  if (memoError) throw memoError;
+
+  const memos = (memoData ?? []) as MemoRow[];
+  const memoIds = memos.map((memo) => memo.id);
+
+  if (memoIds.length === 0) return [];
+
+  const { data: entryData, error: entryError } = await client
+    .from("entries")
+    .select("memo_id, kind, deleted_at")
+    .eq("user_id", userId)
+    .in("memo_id", memoIds);
+
+  if (entryError) throw entryError;
+
+  const countsByMemoId = new Map<string, MemoEntryCounts>();
+
+  for (const rawEntry of entryData ?? []) {
+    const entry = rawEntry as Pick<EntryRow, "memo_id" | "kind" | "deleted_at">;
+    if (entry.deleted_at !== null) continue;
+
+    const counts = countsByMemoId.get(entry.memo_id) ?? getEmptyCounts();
+    counts[entry.kind] += 1;
+    countsByMemoId.set(entry.memo_id, counts);
+  }
+
+  return memos.map((memo) => ({
+    ...memo,
+    entry_counts: countsByMemoId.get(memo.id) ?? getEmptyCounts(),
+  }));
+}
+
+/**
+ * クラウド一覧を読み、同じIDを持つローカルメモの状態だけを再判定する。
+ * クラウドにないメモや別アカウントのメモは触らない。
+ */
+export async function refreshCloudSyncStates(
+  userId: string,
+): Promise<CloudSyncRefreshResult> {
+  const cloudMemos = await listCloudMemos(userId);
+  const remoteByMemoId = new Map(
+    cloudMemos.map((memo) => [memo.id, memo]),
+  );
+  const localMemos = await memoRepository.listMemos();
+  const changedMemoIds: string[] = [];
+
+  for (const localMemo of localMemos) {
+    const meta = localMemo.sync_meta;
+
+    if (!isCloudLinked(meta) || meta.cloud_user_id !== userId) continue;
+
+    const remoteMemo = remoteByMemoId.get(localMemo.id);
+    if (!remoteMemo) continue;
+
+    const nextState = deriveCloudState(localMemo, remoteMemo);
+
+    if (nextState === meta.cloud_state) continue;
+
+    await memoRepository.saveSyncMeta({
+      ...meta,
+      cloud_state: nextState,
+      updated_at: nowIso(),
+    });
+
+    changedMemoIds.push(localMemo.id);
+  }
+
+  return {
+    cloud_memos: cloudMemos,
+    changed_memo_ids: changedMemoIds,
+  };
+}
+
+/**
+ * 取り込み時だけ、対象メモの本文・親子構造・並び順を一括取得する。
+ * deleted_atを含めて読むことで、送信元の構造を欠損させず復元できる。
+ */
+export async function getCloudMemoSnapshot(
+  memoId: string,
+  userId: string,
+): Promise<MemoCloudSnapshot> {
+  const client = ensureSupabase();
+
+  const { data: memoData, error: memoError } = await client
+    .from("memos")
+    .select("*")
+    .eq("id", memoId)
+    .eq("user_id", userId)
+    .is("deleted_at", null)
+    .maybeSingle();
+
+  if (memoError) throw memoError;
+
+  if (!memoData) {
+    throw new Error("クラウド上のメモが見つかりません。画面を更新してください。");
+  }
+
+  const { data: entryData, error: entryError } = await client
+    .from("entries")
+    .select("*")
+    .eq("memo_id", memoId)
+    .eq("user_id", userId)
+    .order("sort_order", { ascending: true })
+    .order("created_at", { ascending: true });
+
+  if (entryError) throw entryError;
+
+  return {
+    memo: memoData as MemoRow,
+    entries: ((entryData ?? []) as EntryRow[]).map(normalizeEntryRow),
+  };
+}
+
+export function getCloudMemoEntryCounts(
+  snapshot: MemoCloudSnapshot,
+): MemoEntryCounts {
+  return countActiveEntries(snapshot.entries);
 }

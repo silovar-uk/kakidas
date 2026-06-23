@@ -418,6 +418,7 @@ export function MemoEditorPage() {
       <CloudAccountDialog
         open={isCloudDialogOpen}
         onClose={() => setIsCloudDialogOpen(false)}
+        onImported={() => setNotice("クラウドのメモをこの端末へ取り込みました。")}
       />
       <CloudUploadDialog
         open={isUploadDialogOpen}

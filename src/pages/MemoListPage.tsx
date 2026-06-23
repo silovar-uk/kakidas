@@ -1,15 +1,26 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthProvider";
 import { CloudAccountDialog } from "../components/CloudAccountDialog";
+import { CloudImportDialog } from "../components/CloudImportDialog";
 import {
   CloudUploadDialog,
   type CloudUploadTarget,
 } from "../components/CloudUploadDialog";
 import { CloudStatusBadge } from "../components/CloudStatusBadge";
+import { useCloudMemos } from "../hooks/useCloudMemos";
 import { useMemos } from "../hooks/useMemos";
-import { uploadMemosToCloud } from "../repositories/cloudMemoRepository";
-import { type BackupPayload, formatUpdatedAt } from "../types/memo";
+import {
+  refreshCloudSyncStates,
+  uploadMemosToCloud,
+} from "../repositories/cloudMemoRepository";
+import {
+  type BackupPayload,
+  type CloudState,
+  type MemoCloudSnapshot,
+  type MemoListItem,
+  formatUpdatedAt,
+} from "../types/memo";
 
 function downloadFile(filename: string, content: string, type: string) {
   const blob = new Blob([content], { type });
@@ -26,6 +37,26 @@ function downloadFile(filename: string, content: string, type: string) {
   URL.revokeObjectURL(url);
 }
 
+type CloudAction = {
+  label: string;
+  kind: "upload" | "update" | "clone";
+};
+
+function getCloudAction(state: CloudState): CloudAction | null {
+  switch (state) {
+    case "local_only":
+    case "changed_after_upload":
+    case "error":
+      return { label: "クラウドへ送る", kind: "upload" };
+    case "remote_newer":
+      return { label: "更新を取り込む", kind: "update" };
+    case "conflict":
+      return { label: "複製で取り込む", kind: "clone" };
+    case "uploaded":
+      return null;
+  }
+}
+
 export function MemoListPage() {
   const navigate = useNavigate();
   const importInputRef = useRef<HTMLInputElement | null>(null);
@@ -36,6 +67,9 @@ export function MemoListPage() {
   const [selectedMemoIds, setSelectedMemoIds] = useState<Set<string>>(new Set());
   const [isUploadDialogOpen, setIsUploadDialogOpen] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [isApplyingCloudUpdate, setIsApplyingCloudUpdate] = useState(false);
+  const [conflictSnapshot, setConflictSnapshot] =
+    useState<MemoCloudSnapshot | null>(null);
 
   const { isConfigured, isLoading: isAuthLoading, user } = useAuth();
 
@@ -49,6 +83,37 @@ export function MemoListPage() {
     exportBackup,
     importBackup,
   } = useMemos();
+
+  const {
+    isImporting,
+    prepareImport,
+    importSnapshot,
+  } = useCloudMemos(user?.id ?? null);
+
+  // ログイン済みなら、一覧を開いた時にだけクラウドの更新状態を照合する。
+  // 入力中に自動通信はしない。
+  useEffect(() => {
+    if (!user) return;
+
+    let cancelled = false;
+
+    const checkCloudStates = async () => {
+      try {
+        const result = await refreshCloudSyncStates(user.id);
+        if (!cancelled && result.changed_memo_ids.length > 0) {
+          await refresh();
+        }
+      } catch {
+        // ネットワーク不調でもローカルメモは通常どおり使える。
+      }
+    };
+
+    void checkCloudStates();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [refresh, user]);
 
   const selectedTargets = useMemo<CloudUploadTarget[]>(
     () =>
@@ -159,6 +224,17 @@ export function MemoListPage() {
     setIsUploadMode(true);
   };
 
+  const openSingleUpload = (memo: MemoListItem) => {
+    if (!isConfigured || !user) {
+      setIsCloudDialogOpen(true);
+      return;
+    }
+
+    setNotice(null);
+    setSelectedMemoIds(new Set([memo.id]));
+    setIsUploadDialogOpen(true);
+  };
+
   const cancelUploadMode = () => {
     setIsUploadMode(false);
     setSelectedMemoIds(new Set());
@@ -198,11 +274,93 @@ export function MemoListPage() {
     }
   };
 
-  const cloudButtonLabel = isAuthLoading
-    ? "クラウド…"
-    : user
-      ? "クラウド"
-      : "クラウド";
+  const prepareCloudSnapshot = async (memoId: string) => {
+    if (!user) {
+      setIsCloudDialogOpen(true);
+      return null;
+    }
+
+    return prepareImport(memoId);
+  };
+
+  const handleRemoteUpdate = async (memo: MemoListItem) => {
+    setNotice(null);
+    setIsApplyingCloudUpdate(true);
+
+    try {
+      const candidate = await prepareCloudSnapshot(memo.id);
+      if (!candidate) return;
+
+      const result = await importSnapshot(
+        candidate.snapshot,
+        candidate.hasLocalMemo ? "replace" : "preserve",
+      );
+
+      await refresh();
+      setNotice(`「${result.memo.title}」をクラウドの内容で更新しました。`);
+    } catch (caught) {
+      setNotice(
+        caught instanceof Error
+          ? caught.message
+          : "クラウドの更新を取り込めませんでした。",
+      );
+    } finally {
+      setIsApplyingCloudUpdate(false);
+    }
+  };
+
+  const handleConflictImport = async (memo: MemoListItem) => {
+    setNotice(null);
+
+    try {
+      const candidate = await prepareCloudSnapshot(memo.id);
+      if (!candidate) return;
+
+      if (!candidate.hasLocalMemo) {
+        const result = await importSnapshot(candidate.snapshot, "preserve");
+        await refresh();
+        setNotice(`「${result.memo.title}」をこの端末へ取り込みました。`);
+        return;
+      }
+
+      setConflictSnapshot(candidate.snapshot);
+    } catch (caught) {
+      setNotice(
+        caught instanceof Error
+          ? caught.message
+          : "クラウド版を確認できませんでした。",
+      );
+    }
+  };
+
+  const handleImportConflictCopy = async () => {
+    if (!conflictSnapshot) return;
+
+    const result = await importSnapshot(conflictSnapshot, "clone");
+    setConflictSnapshot(null);
+    await refresh();
+    setNotice(`「${result.memo.title}」をクラウド版として複製しました。`);
+  };
+
+  const handleCloudAction = (memo: MemoListItem) => {
+    const action = getCloudAction(memo.sync_meta.cloud_state);
+    if (!action) return;
+
+    if (action.kind === "upload") {
+      openSingleUpload(memo);
+      return;
+    }
+
+    if (action.kind === "update") {
+      void handleRemoteUpdate(memo);
+      return;
+    }
+
+    void handleConflictImport(memo);
+  };
+
+  const cloudButtonLabel = isAuthLoading ? "クラウド…" : "クラウド";
+  const isCloudActionBusy = isImporting || isApplyingCloudUpdate || isUploading;
 
   return (
     <main className="app-shell memo-list-page">
@@ -352,6 +510,7 @@ export function MemoListPage() {
         <ul className={`memo-list ${isUploadMode ? "memo-list--selecting" : ""}`}>
           {memos.map((memo) => {
             const selected = selectedMemoIds.has(memo.id);
+            const cloudAction = getCloudAction(memo.sync_meta.cloud_state);
 
             return (
               <li
@@ -394,15 +553,31 @@ export function MemoListPage() {
                     開く
                   </Link>
                 ) : (
-                  <button
-                    type="button"
-                    className="icon-button memo-card__delete"
-                    onClick={() => void handleDelete(memo.id)}
-                    aria-label={`${memo.title}を削除`}
-                    title="削除する"
-                  >
-                    ×
-                  </button>
+                  <div className="memo-card__actions">
+                    {cloudAction ? (
+                      <button
+                        type="button"
+                        className={`memo-card__cloud-action memo-card__cloud-action--${cloudAction.kind}`}
+                        disabled={isCloudActionBusy}
+                        onClick={() => handleCloudAction(memo)}
+                      >
+                        {isApplyingCloudUpdate && cloudAction.kind === "update"
+                          ? "取り込み中…"
+                          : isImporting && cloudAction.kind === "clone"
+                            ? "確認中…"
+                            : cloudAction.label}
+                      </button>
+                    ) : null}
+                    <button
+                      type="button"
+                      className="icon-button memo-card__delete"
+                      onClick={() => void handleDelete(memo.id)}
+                      aria-label={`${memo.title}を削除`}
+                      title="削除する"
+                    >
+                      ×
+                    </button>
+                  </div>
                 )}
               </li>
             );
@@ -417,6 +592,10 @@ export function MemoListPage() {
       <CloudAccountDialog
         open={isCloudDialogOpen}
         onClose={() => setIsCloudDialogOpen(false)}
+        onImported={async () => {
+          await refresh();
+          if (user) await refreshCloudSyncStates(user.id);
+        }}
       />
       <CloudUploadDialog
         open={isUploadDialogOpen}
@@ -424,6 +603,14 @@ export function MemoListPage() {
         isSubmitting={isUploading}
         onClose={() => setIsUploadDialogOpen(false)}
         onConfirm={handleUploadConfirm}
+      />
+      <CloudImportDialog
+        open={conflictSnapshot !== null}
+        snapshot={conflictSnapshot}
+        isSubmitting={isImporting}
+        onClose={() => setConflictSnapshot(null)}
+        onKeepLocal={() => setConflictSnapshot(null)}
+        onImportCopy={handleImportConflictCopy}
       />
     </main>
   );

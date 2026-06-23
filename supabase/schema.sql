@@ -112,3 +112,16 @@ create policy "kakidas_delete_own_entries"
   on public.entries for delete
   to authenticated
   using ((select auth.uid()) = user_id);
+
+
+-- SQL Editorで作成したテーブルをログイン済みユーザーが利用できるようにする。
+-- RLSポリシーが、ここで許可された操作のうち「自分の行だけ」に絞り込む。
+grant usage on schema public to authenticated;
+
+grant select, insert, update, delete
+on table public.memos
+to authenticated;
+
+grant select, insert, update, delete
+on table public.entries
+to authenticated;

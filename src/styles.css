@@ -2141,3 +2141,292 @@ a:focus-visible {
     animation: none;
   }
 }
+
+/* --------------------------------------------------------------------------
+   v0.5.0 — Cloud library / explicit import
+   -------------------------------------------------------------------------- */
+.cloud-dialog__panel--account {
+  width: min(100%, 620px);
+}
+
+.cloud-dialog__panel--import {
+  width: min(100%, 520px);
+}
+
+.cloud-dialog__tabs {
+  display: inline-grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  width: 100%;
+  gap: 4px;
+  margin: 0 0 22px;
+  padding: 4px;
+  border-radius: 12px;
+  background: #efebe4;
+}
+
+.cloud-dialog__tab {
+  min-height: 38px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 8px;
+  color: #706a60;
+  background: transparent;
+  font-size: 12px;
+  font-weight: 780;
+}
+
+.cloud-dialog__tab--active {
+  color: #3e382f;
+  background: #fffefa;
+  box-shadow: 0 1px 5px rgba(69, 55, 38, 0.12);
+}
+
+.cloud-dialog__library-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.cloud-dialog__library-heading h2 {
+  max-width: none;
+}
+
+.cloud-dialog__library-heading p {
+  margin: 7px 0 0;
+  color: #716a61;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.cloud-dialog__refresh {
+  flex: 0 0 auto;
+  min-height: 32px;
+  padding: 5px 8px;
+}
+
+.cloud-dialog__notice {
+  margin-top: 14px;
+}
+
+.cloud-dialog__loading {
+  margin-top: 20px;
+}
+
+.cloud-library-empty {
+  display: grid;
+  justify-items: center;
+  gap: 7px;
+  margin-top: 20px;
+  padding: 28px 18px;
+  border: 1px dashed #d8d0c6;
+  border-radius: 13px;
+  color: #706a61;
+  text-align: center;
+}
+
+.cloud-library-empty p {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 750;
+}
+
+.cloud-library-empty span {
+  color: #90877c;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.cloud-library-list {
+  display: grid;
+  gap: 9px;
+  margin: 20px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.cloud-library-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  padding: 13px;
+  border: 1px solid #e4ddd4;
+  border-radius: 13px;
+  background: #faf8f3;
+}
+
+.cloud-library-card__main {
+  display: grid;
+  min-width: 0;
+  gap: 5px;
+}
+
+.cloud-library-card__main strong {
+  overflow: hidden;
+  color: #37312b;
+  font-size: 14px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cloud-library-card__main span {
+  color: #777067;
+  font-size: 11px;
+}
+
+.cloud-library-card__main small {
+  color: #827a70;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.cloud-library-card .secondary-button {
+  flex: 0 0 auto;
+  min-height: 36px;
+  padding: 0 10px;
+  border-radius: 9px;
+  font-size: 11px;
+}
+
+.cloud-import-preview {
+  display: grid;
+  gap: 5px;
+  margin-top: 18px;
+  padding: 12px;
+  border: 1px solid #e4ddd4;
+  border-radius: 12px;
+  background: #faf8f3;
+}
+
+.cloud-import-preview strong {
+  overflow: hidden;
+  color: #37312b;
+  font-size: 14px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cloud-import-preview span {
+  color: #777067;
+  font-size: 12px;
+}
+
+.cloud-dialog__actions--stacked {
+  display: grid;
+  grid-template-columns: 1fr;
+}
+
+.cloud-dialog__actions--stacked .primary-button,
+.cloud-dialog__actions--stacked .secondary-button {
+  width: 100%;
+}
+
+@media (max-width: 560px) {
+  .cloud-dialog__panel--account,
+  .cloud-dialog__panel--import {
+    width: 100%;
+  }
+
+  .cloud-dialog__library-heading {
+    align-items: center;
+  }
+
+  .cloud-library-card {
+    grid-template-columns: 1fr;
+    gap: 11px;
+  }
+
+  .cloud-library-card .secondary-button {
+    width: 100%;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   v0.5.1 — Cloud sync state and state-specific memo actions
+   -------------------------------------------------------------------------- */
+.cloud-status-badge--remote_newer {
+  border-color: #b8cae7;
+  color: #355b8d;
+  background: #edf4ff;
+}
+
+.cloud-status-badge--conflict {
+  border-color: #e2bddb;
+  color: #7c4171;
+  background: #fff0fb;
+}
+
+.memo-card__actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.memo-card__cloud-action {
+  display: inline-flex;
+  min-height: 32px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 9px;
+  border: 1px solid #d7cec2;
+  border-radius: 9px;
+  color: #655e55;
+  background: #fffefa;
+  font-size: 11px;
+  font-weight: 760;
+  white-space: nowrap;
+}
+
+.memo-card__cloud-action:hover {
+  border-color: #b99077;
+  color: #914327;
+  background: #fff6f0;
+}
+
+.memo-card__cloud-action--update {
+  border-color: #b8cae7;
+  color: #355b8d;
+  background: #f4f8ff;
+}
+
+.memo-card__cloud-action--update:hover {
+  border-color: #7799cb;
+  color: #234a7b;
+  background: #eaf2ff;
+}
+
+.memo-card__cloud-action--clone {
+  border-color: #e2bddb;
+  color: #7c4171;
+  background: #fff5fc;
+}
+
+.memo-card__cloud-action--clone:hover {
+  border-color: #c889ba;
+  color: #69345f;
+  background: #ffecf9;
+}
+
+.memo-card__cloud-action:disabled {
+  cursor: wait;
+  opacity: 0.58;
+}
+
+@media (max-width: 560px) {
+  .memo-card {
+    align-items: start;
+  }
+
+  .memo-card__actions {
+    flex-wrap: wrap;
+    max-width: 126px;
+  }
+
+  .memo-card__cloud-action {
+    min-height: 34px;
+    padding: 0 8px;
+    font-size: 10px;
+  }
+}

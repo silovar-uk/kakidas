@@ -1,5 +1,7 @@
 import {
   type BackupPayload,
+  type CloudImportMode,
+  type CloudImportResult,
   type EntryDeletionResult,
   type EntryInsert,
   type EntryKind,
@@ -7,6 +9,7 @@ import {
   type EntryRow,
   type EntryUpdate,
   type LegacyEntryRow,
+  type LegacyMemoSyncMetaRow,
   type MemoCloudSnapshot,
   type MemoEntryCounts,
   type MemoInsert,
@@ -18,6 +21,8 @@ import {
   createId,
   createLocalSyncMeta,
   formatDefaultMemoTitle,
+  isCloudLinked,
+  normalizeMemoSyncMeta,
   normalizeEntryRow,
   nowIso,
 } from "../types/memo";
@@ -37,6 +42,12 @@ export interface MemoRepository {
   getMemo(memoId: string): Promise<MemoWithEntries | null>;
   /** クラウド送信用。削除済みEntryも含める。 */
   getMemoSnapshot(memoId: string): Promise<MemoCloudSnapshot | null>;
+  /** クラウドの完全なスナップショットを、IndexedDBへ一括取り込みする。 */
+  importCloudSnapshot(
+    snapshot: MemoCloudSnapshot,
+    cloudUserId: string,
+    mode: CloudImportMode,
+  ): Promise<CloudImportResult>;
 
   createMemo(input?: Partial<MemoInsert>): Promise<MemoRow>;
   updateMemo(memoId: string, patch: MemoUpdate): Promise<MemoRow>;
@@ -94,7 +105,9 @@ class IndexedDbMemoRepository implements MemoRepository {
     const [memos, entries, syncMetas] = await Promise.all([
       requestToPromise(memoStore.getAll() as IDBRequest<MemoRow[]>),
       requestToPromise(entryStore.getAll() as IDBRequest<LegacyEntryRow[]>),
-      requestToPromise(syncMetaStore.getAll() as IDBRequest<MemoSyncMetaRow[]>),
+      requestToPromise(
+        syncMetaStore.getAll() as IDBRequest<LegacyMemoSyncMetaRow[]>,
+      ),
     ]);
 
     const countsByMemoId = new Map<string, MemoEntryCounts>();
@@ -109,7 +122,10 @@ class IndexedDbMemoRepository implements MemoRepository {
     }
 
     const syncMetaByMemoId = new Map(
-      syncMetas.map((meta) => [meta.memo_id, meta]),
+      syncMetas.map((meta) => [
+        meta.memo_id,
+        normalizeMemoSyncMeta(meta, meta.memo_id),
+      ]),
     );
 
     return memos
@@ -174,6 +190,166 @@ class IndexedDbMemoRepository implements MemoRepository {
     const entries = await this.getEntriesForMemo(entryStore, memoId);
 
     return { memo, entries };
+  }
+
+  async importCloudSnapshot(
+    snapshot: MemoCloudSnapshot,
+    cloudUserId: string,
+    mode: CloudImportMode,
+  ): Promise<CloudImportResult> {
+    const sourceMemo = snapshot.memo;
+
+    if (sourceMemo.deleted_at !== null) {
+      throw new Error("削除済みのクラウドメモは取り込めません。");
+    }
+
+    const db = await getDatabase();
+    const transaction = db.transaction(
+      [STORE_NAMES.memos, STORE_NAMES.entries, STORE_NAMES.memoSyncMeta],
+      "readwrite",
+    );
+
+    const memoStore = transaction.objectStore(STORE_NAMES.memos);
+    const entryStore = transaction.objectStore(STORE_NAMES.entries);
+    const syncMetaStore = transaction.objectStore(STORE_NAMES.memoSyncMeta);
+    const importedAt = nowIso();
+
+    const existingMemo = await requestToPromise(
+      memoStore.get(sourceMemo.id) as IDBRequest<MemoRow | undefined>,
+    );
+
+    if (mode === "preserve" && existingMemo?.deleted_at === null) {
+      transaction.abort();
+      throw new Error(
+        "このメモはすでにこの端末にあります。クラウド版を複製して取り込んでください。",
+      );
+    }
+
+    if (mode === "replace" && (!existingMemo || existingMemo.deleted_at !== null)) {
+      transaction.abort();
+      throw new Error("更新するローカルメモが見つかりません。");
+    }
+
+    const existingMeta = await this.getSyncMetaFromStore(
+      syncMetaStore,
+      sourceMemo.id,
+    );
+
+    if (
+      mode === "replace" &&
+      (existingMeta?.cloud_state === "changed_after_upload" ||
+        existingMeta?.cloud_state === "conflict")
+    ) {
+      transaction.abort();
+      throw new Error(
+        "この端末でもメモが更新されています。上書きせず、クラウド版を複製して取り込んでください。",
+      );
+    }
+
+    const sourceEntries = snapshot.entries
+      .map(normalizeEntryRow)
+      .filter((entry) => entry.memo_id === sourceMemo.id);
+
+    let importedMemo: MemoRow;
+    let importedEntries: EntryRow[];
+
+    if (mode === "clone") {
+      const copiedMemoId = createId();
+      const entryIdMap = new Map(
+        sourceEntries.map((entry) => [entry.id, createId()]),
+      );
+
+      importedMemo = {
+        ...sourceMemo,
+        id: copiedMemoId,
+        user_id: cloudUserId,
+        title: `${sourceMemo.title}（クラウド版）`,
+        created_at: importedAt,
+        updated_at: importedAt,
+        deleted_at: null,
+      };
+
+      importedEntries = sourceEntries.map((entry) => ({
+        ...entry,
+        id: entryIdMap.get(entry.id) ?? createId(),
+        memo_id: copiedMemoId,
+        user_id: cloudUserId,
+        parent_id: entry.parent_id
+          ? (entryIdMap.get(entry.parent_id) ?? null)
+          : null,
+        created_at: importedAt,
+        updated_at: importedAt,
+      }));
+    } else {
+      importedMemo = {
+        ...sourceMemo,
+        user_id: cloudUserId,
+        deleted_at: null,
+      };
+
+      importedEntries = sourceEntries.map((entry) => ({
+        ...entry,
+        memo_id: importedMemo.id,
+        user_id: cloudUserId,
+      }));
+
+      // 「更新を取り込む」では、クラウドに存在しないローカルEntryを
+      // ソフト削除して、クラウドのスナップショットに完全に揃える。
+      const existingEntries = await this.getEntriesForMemo(
+        entryStore,
+        sourceMemo.id,
+      );
+      const sourceEntryIds = new Set(sourceEntries.map((entry) => entry.id));
+
+      for (const entry of existingEntries) {
+        if (!sourceEntryIds.has(entry.id)) {
+          entryStore.put({
+            ...entry,
+            updated_at: importedAt,
+            deleted_at: importedAt,
+          } satisfies EntryRow);
+        }
+      }
+    }
+
+    memoStore.put(importedMemo);
+
+    for (const entry of importedEntries) {
+      entryStore.put(entry);
+    }
+
+    if (mode === "clone") {
+      syncMetaStore.put({
+        ...createLocalSyncMeta(importedMemo.id),
+        updated_at: importedAt,
+      } satisfies MemoSyncMetaRow);
+    } else {
+      const currentMeta = existingMeta ?? createLocalSyncMeta(importedMemo.id);
+
+      syncMetaStore.put({
+        ...currentMeta,
+        memo_id: importedMemo.id,
+        cloud_state: "uploaded",
+        cloud_user_id: cloudUserId,
+        last_uploaded_at: currentMeta.last_uploaded_at,
+        last_downloaded_at: importedAt,
+        last_cloud_updated_at: sourceMemo.updated_at,
+        last_uploaded_hash: null,
+        last_error: null,
+        updated_at: importedAt,
+      } satisfies MemoSyncMetaRow);
+    }
+
+    await transactionToPromise(transaction);
+
+    return {
+      memo: importedMemo,
+      source_memo_id: sourceMemo.id,
+      mode,
+      imported_entry_count: importedEntries.filter(
+        (entry) => entry.deleted_at === null,
+      ).length,
+    };
   }
 
   async createMemo(input: Partial<MemoInsert> = {}): Promise<MemoRow> {
@@ -731,7 +907,7 @@ class IndexedDbMemoRepository implements MemoRepository {
     const store = transaction.objectStore(STORE_NAMES.memoSyncMeta);
 
     const next: MemoSyncMetaRow = {
-      ...meta,
+      ...normalizeMemoSyncMeta(meta, meta.memo_id),
       updated_at: nowIso(),
     };
 
@@ -825,9 +1001,11 @@ class IndexedDbMemoRepository implements MemoRepository {
     syncMetaStore: IDBObjectStore,
     memoId: string,
   ): Promise<MemoSyncMetaRow | undefined> {
-    return requestToPromise(
-      syncMetaStore.get(memoId) as IDBRequest<MemoSyncMetaRow | undefined>,
+    const raw = await requestToPromise(
+      syncMetaStore.get(memoId) as IDBRequest<LegacyMemoSyncMetaRow | undefined>,
     );
+
+    return raw ? normalizeMemoSyncMeta(raw, memoId) : undefined;
   }
 
   private async markMemoChangedWithinTransaction(
@@ -837,12 +1015,21 @@ class IndexedDbMemoRepository implements MemoRepository {
   ): Promise<void> {
     const meta = await this.getSyncMetaFromStore(syncMetaStore, memoId);
 
-    if (!meta || meta.last_uploaded_at === null) return;
+    // クラウド由来の情報がないメモは、引き続きローカルのみ。
+    if (!meta || !isCloudLinked(meta)) return;
+
+    const nextState =
+      meta.cloud_state === "remote_newer" || meta.cloud_state === "conflict"
+        ? "conflict"
+        : meta.cloud_state === "error"
+          ? "error"
+          : "changed_after_upload";
 
     syncMetaStore.put({
       ...meta,
-      cloud_state: "changed_after_upload",
-      last_error: null,
+      cloud_state: nextState,
+      // 送信エラーは再送成功まで見えるように残す。
+      last_error: nextState === "error" ? meta.last_error : null,
       updated_at: timestamp,
     } satisfies MemoSyncMetaRow);
   }
