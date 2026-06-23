@@ -1,9 +1,8 @@
 /**
  * 項目が最初に書かれた日時を、端末のローカル時刻で表示する。
- * DBには常にISO 8601の created_at を保存し、表示だけをここで整える。
+ * DBには常に年を含むISO 8601の created_at を保存し、画面では月日と時刻だけを表示する。
  */
 const entryCreatedAtFormatter = new Intl.DateTimeFormat("ja-JP", {
-  year: "numeric",
   month: "2-digit",
   day: "2-digit",
   hour: "2-digit",
