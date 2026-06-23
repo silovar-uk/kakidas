@@ -155,6 +155,12 @@ export type CloudImportResult = {
  * UI表示専用の型。DBには保存しない。
  */
 export type EntryTreeNode = EntryRow & {
+  /**
+   * 表示・コピー専用の振り番。DBへは保存せず、
+   * parent_id と sort_order から毎回導出する。
+   * 例: 1 / 1.1 / 1.1.1
+   */
+  outline_number: string;
   depth: number;
   child_count: number;
   has_children: boolean;
@@ -423,7 +429,15 @@ export function getEntryTree(
   const output: EntryTreeNode[] = [];
   const visited = new Set<string>();
 
-  const visit = (parentId: string | null, depth: number) => {
+  /**
+   * 振り番は保存しない。並び替え・右へ下げる・左へ戻すのたびに
+   * parent_id と sort_order から再計算するので、常に現在の階層と一致する。
+   */
+  const visit = (
+    parentId: string | null,
+    depth: number,
+    parentNumber: number[],
+  ) => {
     const siblings = childrenByParent.get(parentId) ?? [];
 
     siblings.forEach((entry, index) => {
@@ -431,10 +445,12 @@ export function getEntryTree(
 
       visited.add(entry.id);
 
+      const numberParts = [...parentNumber, index + 1];
       const children = childrenByParent.get(entry.id) ?? [];
 
       output.push({
         ...entry,
+        outline_number: numberParts.join("."),
         depth,
         child_count: countDescendants(entry.id, new Set([entry.id])),
         has_children: children.length > 0,
@@ -444,13 +460,16 @@ export function getEntryTree(
         can_move_down: index < siblings.length - 1,
       });
 
-      visit(entry.id, depth + 1);
+      visit(entry.id, depth + 1, numberParts);
     });
   };
 
-  visit(null, 0);
+  visit(null, 0, []);
 
   // 循環参照などでrootから辿れないデータも、見えなくならないよう最後に表示する。
+  // 通常のroot項目の続き番号を振ることで、番号が重複しないようにする。
+  let nextOrphanRootNumber = (childrenByParent.get(null) ?? []).length + 1;
+
   activeEntries.forEach((entry) => {
     if (visited.has(entry.id)) return;
 
@@ -464,11 +483,13 @@ export function getEntryTree(
       if (visited.has(orphan.id)) return;
 
       visited.add(orphan.id);
+      const numberParts = [nextOrphanRootNumber + index];
       const children = childrenByParent.get(orphan.id) ?? [];
 
       output.push({
         ...orphan,
         parent_id: null,
+        outline_number: numberParts.join("."),
         depth: 0,
         child_count: countDescendants(orphan.id, new Set([orphan.id])),
         has_children: children.length > 0,
@@ -478,8 +499,10 @@ export function getEntryTree(
         can_move_down: index < siblings.length - 1,
       });
 
-      visit(orphan.id, 1);
+      visit(orphan.id, 1, numberParts);
     });
+
+    nextOrphanRootNumber += siblings.length;
   });
 
   return output;
@@ -495,6 +518,7 @@ export function getActiveEntries(
 ): EntryRow[] {
   return getEntryTree(entries, kind).map(
     ({
+      outline_number: _outlineNumber,
       depth: _depth,
       child_count: _childCount,
       has_children: _hasChildren,

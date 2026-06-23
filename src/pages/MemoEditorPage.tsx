@@ -21,7 +21,11 @@ import {
   supportsHierarchy,
 } from "../types/memo";
 
-function buildMarkdown(memo: MemoWithEntries, onlyKind?: EntryKind): string {
+function buildMarkdown(
+  memo: MemoWithEntries,
+  onlyKind?: EntryKind,
+  includeEntryNumbers = false,
+): string {
   const kinds = onlyKind ? [onlyKind] : ENTRY_KINDS;
   const parts = [`# ${memo.title}`];
 
@@ -37,16 +41,21 @@ function buildMarkdown(memo: MemoWithEntries, onlyKind?: EntryKind): string {
     }
 
     for (const entry of entries) {
-      if (kind === "paragraph") {
-        parts.push(`\n${entry.content}`);
-        continue;
-      }
-
       const indentation = supportsHierarchy(kind)
         ? "  ".repeat(entry.depth)
         : "";
+      const prefix = includeEntryNumbers
+        ? `${entry.outline_number} `
+        : kind === "paragraph"
+          ? ""
+          : "- ";
 
-      parts.push(`${indentation}- ${entry.content}`);
+      if (kind === "paragraph") {
+        parts.push(`\n${prefix}${entry.content}`);
+        continue;
+      }
+
+      parts.push(`${indentation}${prefix}${entry.content}`);
     }
   }
 
@@ -93,6 +102,7 @@ type EditorNavigationState = {
 };
 
 const ENTRY_TIMESTAMP_VISIBILITY_STORAGE_KEY = "kakidas.show-entry-timestamps";
+const ENTRY_NUMBER_VISIBILITY_STORAGE_KEY = "kakidas.show-entry-numbers";
 
 function readEntryTimestampVisibility(): boolean {
   try {
@@ -100,6 +110,18 @@ function readEntryTimestampVisibility(): boolean {
   } catch {
     // ストレージが使えないブラウザでも、従来どおり日時を表示する。
     return true;
+  }
+}
+
+/**
+ * 振り番は初期状態では非表示。表示設定は端末ごとに保存し、
+ * 表示中だけコピーと .txt 出力にも反映する。
+ */
+function readEntryNumberVisibility(): boolean {
+  try {
+    return window.localStorage.getItem(ENTRY_NUMBER_VISIBILITY_STORAGE_KEY) === "true";
+  } catch {
+    return false;
   }
 }
 
@@ -139,6 +161,9 @@ export function MemoEditorPage() {
   const [showEntryTimestamps, setShowEntryTimestamps] = useState(
     readEntryTimestampVisibility,
   );
+  const [showEntryNumbers, setShowEntryNumbers] = useState(
+    readEntryNumberVisibility,
+  );
 
   // 表示設定は端末ごとに記憶する。クラウドへは送らないUI設定。
   useEffect(() => {
@@ -151,6 +176,17 @@ export function MemoEditorPage() {
       // private modeなどで保存できない場合でも、現在の画面では切り替えられる。
     }
   }, [showEntryTimestamps]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(
+        ENTRY_NUMBER_VISIBILITY_STORAGE_KEY,
+        String(showEntryNumbers),
+      );
+    } catch {
+      // private modeなどで保存できない場合でも、現在の画面では切り替えられる。
+    }
+  }, [showEntryNumbers]);
 
   // メモ画面を離れた後に、モバイル操作シート等のスクロールロックを残さない。
   useEffect(() => {
@@ -204,7 +240,7 @@ export function MemoEditorPage() {
     if (!memo) return;
 
     try {
-      await copyText(buildMarkdown(memo, kind));
+      await copyText(buildMarkdown(memo, kind, showEntryNumbers));
 
       setNotice(
         `${kind ? ENTRY_KIND_LABEL[kind] : "すべて"}をコピーしました。`,
@@ -221,7 +257,7 @@ export function MemoEditorPage() {
 
     const safeTitle = memo.title.replace(/[\\/:*?"<>|]/g, "_");
 
-    downloadText(`${safeTitle}.txt`, buildMarkdown(memo));
+    downloadText(`${safeTitle}.txt`, buildMarkdown(memo, undefined, showEntryNumbers));
 
     setNotice("テキストを書き出しました。");
   };
@@ -393,18 +429,32 @@ export function MemoEditorPage() {
       </section>
 
       <section className="editor-display-options" aria-label="表示設定">
-        <label className="timestamp-visibility-toggle">
-          <input
-            type="checkbox"
-            checked={showEntryTimestamps}
-            onChange={(event) => setShowEntryTimestamps(event.target.checked)}
-          />
-          <span className="timestamp-visibility-toggle__track" aria-hidden="true">
-            <span className="timestamp-visibility-toggle__thumb" />
-          </span>
-          <span>項目の日時を表示</span>
-        </label>
-        <p>この端末だけの表示設定です。</p>
+        <div className="editor-display-options__toggles">
+          <label className="timestamp-visibility-toggle">
+            <input
+              type="checkbox"
+              checked={showEntryTimestamps}
+              onChange={(event) => setShowEntryTimestamps(event.target.checked)}
+            />
+            <span className="timestamp-visibility-toggle__track" aria-hidden="true">
+              <span className="timestamp-visibility-toggle__thumb" />
+            </span>
+            <span>項目の日時を表示</span>
+          </label>
+
+          <label className="timestamp-visibility-toggle">
+            <input
+              type="checkbox"
+              checked={showEntryNumbers}
+              onChange={(event) => setShowEntryNumbers(event.target.checked)}
+            />
+            <span className="timestamp-visibility-toggle__track" aria-hidden="true">
+              <span className="timestamp-visibility-toggle__thumb" />
+            </span>
+            <span>番号を表示</span>
+          </label>
+        </div>
+        <p>番号はコピー・.txt出力にも反映されます。</p>
       </section>
 
       <div className="editor-tabs" role="tablist" aria-label="入力する粒度">
@@ -446,6 +496,7 @@ export function MemoEditorPage() {
             entries={entriesByKind[kind]}
             isActiveOnMobile={activeKind === kind}
             showCreatedAt={showEntryTimestamps}
+            showEntryNumbers={showEntryNumbers}
             disabled={isSaving || isUploading}
             autoFocusComposer={
               kind === "word" && shouldFocusNewMemoComposer

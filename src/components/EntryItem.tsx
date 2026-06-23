@@ -22,6 +22,8 @@ type EntryItemProps = {
   isStructureOpen: boolean;
   isMobileActionOpen: boolean;
   showCreatedAt: boolean;
+  /** 表示・個別コピーに振り番を含めるか。 */
+  showEntryNumbers: boolean;
   disabled?: boolean;
   onOpenStructure: (entryId: string) => void;
   onAddChild: (entryId: string) => void;
@@ -50,6 +52,7 @@ export function EntryItem({
   isStructureOpen,
   isMobileActionOpen,
   showCreatedAt,
+  showEntryNumbers,
   disabled = false,
   onOpenStructure,
   onAddChild,
@@ -280,7 +283,11 @@ export function EntryItem({
     if (disabled) return;
 
     try {
-      await copyToClipboard(entry.content);
+      await copyToClipboard(
+        showEntryNumbers
+          ? `${entry.outline_number} ${entry.content}`
+          : entry.content,
+      );
       setCopyResult("copied");
     } catch {
       setCopyResult("failed");
@@ -318,37 +325,45 @@ export function EntryItem({
         } ${entry.depth > 0 ? "entry-item--nested" : ""}`}
         style={style}
       >
-        {isParagraph ? (
-          <textarea
-            ref={(element) => {
-              inputRef.current = element;
-            }}
-            value={value}
-            disabled={disabled || isSaving}
-            onChange={(event) => setValue(event.target.value)}
-            onKeyDown={handleKeyDown}
-            onCompositionStart={() => setIsComposing(true)}
-            onCompositionEnd={() => setIsComposing(false)}
-            onBlur={() => void save()}
-            rows={4}
-            aria-label="段落を編集"
-          />
-        ) : (
-          <input
-            ref={(element) => {
-              inputRef.current = element;
-            }}
-            value={value}
-            disabled={disabled || isSaving}
-            onChange={(event) => setValue(event.target.value)}
-            onKeyDown={handleKeyDown}
-            onCompositionStart={() => setIsComposing(true)}
-            onCompositionEnd={() => setIsComposing(false)}
-            onBlur={() => void save()}
-            aria-label="項目を編集"
-            aria-keyshortcuts={hierarchyKeyShortcuts}
-          />
-        )}
+        <div className="entry-item__editor-control">
+          {showEntryNumbers ? (
+            <span className="entry-item__number entry-item__number--editing" aria-hidden="true">
+              {entry.outline_number}
+            </span>
+          ) : null}
+
+          {isParagraph ? (
+            <textarea
+              ref={(element) => {
+                inputRef.current = element;
+              }}
+              value={value}
+              disabled={disabled || isSaving}
+              onChange={(event) => setValue(event.target.value)}
+              onKeyDown={handleKeyDown}
+              onCompositionStart={() => setIsComposing(true)}
+              onCompositionEnd={() => setIsComposing(false)}
+              onBlur={() => void save()}
+              rows={4}
+              aria-label="段落を編集"
+            />
+          ) : (
+            <input
+              ref={(element) => {
+                inputRef.current = element;
+              }}
+              value={value}
+              disabled={disabled || isSaving}
+              onChange={(event) => setValue(event.target.value)}
+              onKeyDown={handleKeyDown}
+              onCompositionStart={() => setIsComposing(true)}
+              onCompositionEnd={() => setIsComposing(false)}
+              onBlur={() => void save()}
+              aria-label="項目を編集"
+              aria-keyshortcuts={hierarchyKeyShortcuts}
+            />
+          )}
+        </div>
 
         {showCreatedAt ? (
           <time
@@ -415,10 +430,19 @@ export function EntryItem({
             onClick={handleContentClick}
             onKeyDown={handleReadOnlyKeyDown}
             disabled={disabled}
-            aria-label="編集する"
+            aria-label={
+              showEntryNumbers
+                ? `${entry.outline_number} ${entry.content}を編集`
+                : "編集する"
+            }
             aria-keyshortcuts={hierarchyKeyShortcuts}
           >
-            {entry.content}
+            {showEntryNumbers ? (
+              <span className="entry-item__number" aria-hidden="true">
+                {entry.outline_number}
+              </span>
+            ) : null}
+            <span className="entry-item__content-text">{entry.content}</span>
           </button>
 
           {showCreatedAt ? (

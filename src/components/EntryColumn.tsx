@@ -20,6 +20,8 @@ type EntryColumnProps = {
   isActiveOnMobile: boolean;
   /** 各項目の作成日時を表示するか。 */
   showCreatedAt: boolean;
+  /** 振り番を画面・個別コピーに含めるか。 */
+  showEntryNumbers: boolean;
   /** 新規メモ作成直後、Wordの入力欄へ一度だけフォーカスする。 */
   autoFocusComposer?: boolean;
   onAutoFocusHandled?: () => void;
@@ -54,6 +56,7 @@ export function EntryColumn({
   entries,
   isActiveOnMobile,
   showCreatedAt,
+  showEntryNumbers,
   autoFocusComposer = false,
   onAutoFocusHandled,
   disabled = false,
@@ -313,6 +316,7 @@ ${entries.length}件が削除されます。${hierarchyNotice}
               isStructureOpen={structureEntryId === entry.id}
               isMobileActionOpen={mobileActionEntryId === entry.id}
               showCreatedAt={showCreatedAt}
+              showEntryNumbers={showEntryNumbers}
               disabled={disabled || isDeletingAll}
               onOpenStructure={openStructureActions}
               onAddChild={selectParent}
@@ -332,6 +336,7 @@ ${entries.length}件が削除されます。${hierarchyNotice}
         <MobileEntryActionSheet
           entry={mobileActionEntry}
           kind={kind}
+          showEntryNumbers={showEntryNumbers}
           disabled={disabled || isDeletingAll}
           onClose={() => setMobileActionEntryId(null)}
           onAddChild={selectParent}

@@ -7,6 +7,8 @@ import { type EntryKind, type EntryTreeNode } from "../types/memo";
 type MobileEntryActionSheetProps = {
   entry: EntryTreeNode | null;
   kind: EntryKind;
+  /** 個別コピー・見出しに振り番を含めるか。 */
+  showEntryNumbers: boolean;
   disabled?: boolean;
   onClose: () => void;
   onAddChild: (entryId: string) => Promise<unknown> | unknown;
@@ -26,6 +28,7 @@ type MobileEntryActionSheetProps = {
 export function MobileEntryActionSheet({
   entry,
   kind,
+  showEntryNumbers,
   disabled = false,
   onClose,
   onAddChild,
@@ -106,7 +109,11 @@ export function MobileEntryActionSheet({
     if (disabled || isWorking) return;
 
     try {
-      await copyToClipboard(entry.content);
+      await copyToClipboard(
+        showEntryNumbers
+          ? `${entry.outline_number} ${entry.content}`
+          : entry.content,
+      );
       setCopyStatus("コピーしました");
     } catch {
       setCopyStatus("コピーできませんでした");
@@ -135,7 +142,9 @@ export function MobileEntryActionSheet({
         <header className="mobile-action-sheet__header">
           <div>
             <p>操作</p>
-            <h2 id="mobile-action-sheet-title">{entry.content}</h2>
+            <h2 id="mobile-action-sheet-title">
+              {showEntryNumbers ? `${entry.outline_number} ${entry.content}` : entry.content}
+            </h2>
           </div>
 
           <button
