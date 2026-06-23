@@ -108,6 +108,14 @@ export function EntryColumn({
     }
   }, [parentEntry, parentId]);
 
+  // タブ切替後に、非表示の列のボトムシートが前面へ残らないようにする。
+  useEffect(() => {
+    if (!isActiveOnMobile) {
+      setMobileActionEntryId(null);
+      setStructureEntryId(null);
+    }
+  }, [isActiveOnMobile]);
+
   useEffect(() => {
     if (
       structureEntryId &&
@@ -288,7 +296,7 @@ ${entries.length}件が削除されます。${hierarchyNotice}
       {isHierarchical ? (
         <p className="entry-column__hierarchy-guide">
           <span className="entry-column__guide-mobile">
-            タップで編集。長押し / <span>⋯</span> で、子・順番・階層を整える。
+            タップで編集。<span>⋯</span> から、子・順番・階層を整える。
           </span>
 
           <span className="entry-column__guide-desktop">
@@ -339,7 +347,7 @@ ${entries.length}件が削除されます。${hierarchyNotice}
         )}
       </div>
 
-      {isHierarchical ? (
+      {isHierarchical && isActiveOnMobile ? (
         <MobileEntryActionSheet
           entry={mobileActionEntry}
           kind={kind}

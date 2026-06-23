@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { lockBodyScroll } from "../lib/bodyScrollLock";
 import type { MemoCloudSnapshot } from "../types/memo";
 
 type CloudImportDialogProps = {
@@ -31,12 +32,11 @@ export function CloudImportDialog({
       return;
     }
 
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    const releaseScrollLock = lockBodyScroll();
     window.requestAnimationFrame(() => panelRef.current?.focus());
 
     return () => {
-      document.body.style.overflow = previousOverflow;
+      releaseScrollLock();
     };
   }, [open]);
 
@@ -74,6 +74,15 @@ export function CloudImportDialog({
         aria-labelledby="cloud-import-title"
         tabIndex={-1}
       >
+        <button
+          type="button"
+          className="icon-button cloud-dialog__close"
+          onClick={onClose}
+          disabled={isSubmitting}
+          aria-label="取り込み方法の選択を閉じる"
+        >
+          ×
+        </button>
         <p className="cloud-dialog__eyebrow">LOCAL COPY EXISTS</p>
         <h2 id="cloud-import-title">このメモは、この端末にもあります。</h2>
         <p className="cloud-dialog__body">

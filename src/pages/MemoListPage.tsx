@@ -592,9 +592,14 @@ export function MemoListPage() {
       <CloudAccountDialog
         open={isCloudDialogOpen}
         onClose={() => setIsCloudDialogOpen(false)}
-        onImported={async () => {
+        onImported={async ({ title, wasCopy }) => {
           await refresh();
           if (user) await refreshCloudSyncStates(user.id);
+          setNotice(
+            wasCopy
+              ? `「${title}」をクラウド版として複製しました。`
+              : `「${title}」をこの端末へ取り込みました。`,
+          );
         }}
       />
       <CloudUploadDialog

@@ -1,6 +1,12 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { copyToClipboard } from "../lib/clipboard";
-import { type EntryKind, type EntryTreeNode, ENTRY_KIND_LABEL } from "../types/memo";
+import { lockBodyScroll } from "../lib/bodyScrollLock";
+import {
+  type EntryKind,
+  type EntryTreeNode,
+  ENTRY_KIND_LABEL,
+} from "../types/memo";
 
 type MobileEntryActionSheetProps = {
   entry: EntryTreeNode | null;
@@ -15,12 +21,11 @@ type MobileEntryActionSheetProps = {
 };
 
 /**
- * モバイルは、カード内に小さい操作ボタンを並べず、
- * Workflowyのように「項目を選ぶ → 下から操作する」流れへ寄せる。
+ * Word / Sentenceのモバイル操作シート。
  *
- * - ⋯ タップ または 項目の長押しで開く
- * - コピー・子追加・順番・階層・削除を片手で操作できる
- * - シート表示中は背景のスクロールを止める
+ * - 画面の通常レイアウトから切り離して body 直下へ Portal 表示する
+ * - 画面遷移・タブ切替・画面非表示・ブラウザ戻るで必ず閉じる
+ * - 操作の失敗時でもシートだけが前面に残らないよう、finallyで閉じる
  */
 export function MobileEntryActionSheet({
   entry,
@@ -35,35 +40,55 @@ export function MobileEntryActionSheet({
 }: MobileEntryActionSheetProps) {
   const [isWorking, setIsWorking] = useState(false);
   const [copyStatus, setCopyStatus] = useState<string | null>(null);
-  const dialogRef = useRef<HTMLDivElement | null>(null);
+  const dialogRef = useRef<HTMLElement | null>(null);
+  const onCloseRef = useRef(onClose);
+
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
 
   useEffect(() => {
     setCopyStatus(null);
+    setIsWorking(false);
   }, [entry?.id]);
 
   useEffect(() => {
     if (!entry) return;
 
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        onClose();
-      }
+    const releaseScrollLock = lockBodyScroll();
+    const close = () => onCloseRef.current();
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") close();
+    };
+    const onVisibilityChange = () => {
+      if (document.visibilityState !== "visible") close();
+    };
+    const desktopMediaQuery = window.matchMedia("(min-width: 921px)");
+    const onViewportChange = () => {
+      if (desktopMediaQuery.matches) close();
     };
 
-    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("pagehide", close, { once: true });
+    window.addEventListener("popstate", close);
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    desktopMediaQuery.addEventListener("change", onViewportChange);
 
     window.requestAnimationFrame(() => dialogRef.current?.focus());
 
     return () => {
-      document.body.style.overflow = previousOverflow;
-      window.removeEventListener("keydown", handleKeyDown);
+      releaseScrollLock();
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("pagehide", close);
+      window.removeEventListener("popstate", close);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      desktopMediaQuery.removeEventListener("change", onViewportChange);
     };
-  }, [entry, onClose]);
+  }, [entry]);
 
-  if (!entry) return null;
+  if (!entry || typeof document === "undefined") return null;
+
+  const close = () => onCloseRef.current();
 
   const run = async (action: () => Promise<unknown> | unknown) => {
     if (disabled || isWorking) return;
@@ -72,8 +97,11 @@ export function MobileEntryActionSheet({
 
     try {
       await action();
-      onClose();
+    } catch {
+      // 保存・削除処理側のエラー表示を妨げない。
+      // 重要なのは、エラー時にも操作シートを前面に残さないこと。
     } finally {
+      close();
       setIsWorking(false);
     }
   };
@@ -89,19 +117,13 @@ export function MobileEntryActionSheet({
     }
   };
 
-  const requestDelete = async () => {
-    // 子を持つ親だけ、EntryColumn側で確認する。
-    // それ以外は即時削除してUndoトーストを表示する。
-    await run(() => onDelete(entry.id));
-  };
-
-  return (
+  const sheet = (
     <div className="mobile-action-sheet" role="presentation">
       <button
         type="button"
         className="mobile-action-sheet__backdrop"
         aria-label="操作メニューを閉じる"
-        onClick={onClose}
+        onPointerDown={close}
       />
 
       <section
@@ -116,15 +138,15 @@ export function MobileEntryActionSheet({
 
         <header className="mobile-action-sheet__header">
           <div>
-            <p>{ENTRY_KIND_LABEL[kind]}を整える</p>
+            <p>{ENTRY_KIND_LABEL[kind]}の操作</p>
             <h2 id="mobile-action-sheet-title">{entry.content}</h2>
           </div>
 
           <button
             type="button"
             className="icon-button mobile-action-sheet__close"
-            onClick={onClose}
-            aria-label="閉じる"
+            onClick={close}
+            aria-label="操作メニューを閉じる"
           >
             ×
           </button>
@@ -208,12 +230,22 @@ export function MobileEntryActionSheet({
         <button
           type="button"
           className="mobile-action-sheet__delete"
-          onClick={() => void requestDelete()}
+          onClick={() => void run(() => onDelete(entry.id))}
           disabled={disabled || isWorking}
         >
           この項目を削除
         </button>
+
+        <button
+          type="button"
+          className="mobile-action-sheet__dismiss"
+          onClick={close}
+        >
+          閉じる
+        </button>
       </section>
     </div>
   );
+
+  return createPortal(sheet, document.body);
 }

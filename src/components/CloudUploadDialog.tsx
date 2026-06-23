@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { lockBodyScroll } from "../lib/bodyScrollLock";
 import type { MemoEntryCounts, MemoSyncMetaRow } from "../types/memo";
 
 export type CloudUploadTarget = {
@@ -32,12 +33,11 @@ export function CloudUploadDialog({
       return;
     }
 
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    const releaseScrollLock = lockBodyScroll();
     window.requestAnimationFrame(() => panelRef.current?.focus());
 
     return () => {
-      document.body.style.overflow = previousOverflow;
+      releaseScrollLock();
     };
   }, [open]);
 

@@ -1,7 +1,6 @@
 import {
   type CSSProperties,
   type KeyboardEvent,
-  type PointerEvent,
   useEffect,
   useRef,
   useState,
@@ -31,15 +30,6 @@ type EntryItemProps = {
   onDelete: (entryId: string) => Promise<unknown>;
 };
 
-const LONG_PRESS_MS = 460;
-const LONG_PRESS_MOVE_TOLERANCE = 10;
-
-function triggerHapticFeedback() {
-  if (typeof navigator !== "undefined" && "vibrate" in navigator) {
-    navigator.vibrate?.(8);
-  }
-}
-
 /**
  * Word / Sentenceのアウトライン操作は、Workflowyの考え方を参考にしている。
  *
@@ -49,7 +39,7 @@ function triggerHapticFeedback() {
  * - Ctrl or Cmd + Shift + ↑ ↓: 同じ階層で並び替える
  *
  * Mobile:
- * - 項目を長押し、または ⋯ をタップ: 下から操作シートを開く
+ * - 誤操作を避けるため、⋯ をタップしたときだけ下から操作シートを開く
  * - 直接コピー / 直接削除も、項目の右側からすぐ使える
  */
 export function EntryItem({
@@ -74,9 +64,6 @@ export function EntryItem({
 
   const inputRef = useRef<HTMLInputElement | HTMLTextAreaElement | null>(null);
   const structureActionInFlightRef = useRef(false);
-  const longPressTimerRef = useRef<number | null>(null);
-  const longPressStartRef = useRef<{ x: number; y: number } | null>(null);
-  const didLongPressRef = useRef(false);
   const copyFeedbackTimerRef = useRef<number | null>(null);
 
   const isParagraph = kind === "paragraph";
@@ -94,24 +81,12 @@ export function EntryItem({
 
   useEffect(() => {
     return () => {
-      if (longPressTimerRef.current !== null) {
-        window.clearTimeout(longPressTimerRef.current);
-      }
-
       if (copyFeedbackTimerRef.current !== null) {
         window.clearTimeout(copyFeedbackTimerRef.current);
       }
     };
   }, []);
 
-  const clearLongPress = () => {
-    if (longPressTimerRef.current !== null) {
-      window.clearTimeout(longPressTimerRef.current);
-      longPressTimerRef.current = null;
-    }
-
-    longPressStartRef.current = null;
-  };
 
   const persistCurrentValue = async (exitEditing: boolean): Promise<boolean> => {
     const nextValue = value.trim();
@@ -280,53 +255,8 @@ export function EntryItem({
     void handleStructureShortcut(event);
   };
 
-  const handleTouchPointerDown = (event: PointerEvent<HTMLButtonElement>) => {
-    if (
-      !isHierarchical ||
-      disabled ||
-      event.pointerType !== "touch" ||
-      isEditing
-    ) {
-      return;
-    }
-
-    didLongPressRef.current = false;
-    longPressStartRef.current = { x: event.clientX, y: event.clientY };
-
-    longPressTimerRef.current = window.setTimeout(() => {
-      didLongPressRef.current = true;
-      triggerHapticFeedback();
-      onOpenStructure(entry.id);
-      longPressTimerRef.current = null;
-    }, LONG_PRESS_MS);
-  };
-
-  const handleTouchPointerMove = (event: PointerEvent<HTMLButtonElement>) => {
-    const start = longPressStartRef.current;
-
-    if (!start) return;
-
-    const movedX = Math.abs(event.clientX - start.x);
-    const movedY = Math.abs(event.clientY - start.y);
-
-    if (
-      movedX > LONG_PRESS_MOVE_TOLERANCE ||
-      movedY > LONG_PRESS_MOVE_TOLERANCE
-    ) {
-      clearLongPress();
-    }
-  };
-
-  const handleTouchPointerEnd = () => {
-    clearLongPress();
-  };
 
   const handleContentClick = () => {
-    if (didLongPressRef.current) {
-      didLongPressRef.current = false;
-      return;
-    }
-
     setIsEditing(true);
   };
 
@@ -472,12 +402,8 @@ export function EntryItem({
           className="entry-item__content"
           onClick={handleContentClick}
           onKeyDown={handleReadOnlyKeyDown}
-          onPointerDown={handleTouchPointerDown}
-          onPointerMove={handleTouchPointerMove}
-          onPointerUp={handleTouchPointerEnd}
-          onPointerCancel={handleTouchPointerEnd}
           disabled={disabled}
-          aria-label="編集する。長押しで並び替えと階層操作。"
+          aria-label="編集する"
           aria-keyshortcuts={hierarchyKeyShortcuts}
         >
           {entry.content}

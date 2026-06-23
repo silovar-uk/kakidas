@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { lockBodyScroll } from "../lib/bodyScrollLock";
 import { useAuth } from "../auth/AuthProvider";
 import { useCloudMemos } from "../hooks/useCloudMemos";
 import type { CloudMemoListItem, MemoCloudSnapshot } from "../types/memo";
@@ -8,8 +9,8 @@ import { CloudImportDialog } from "./CloudImportDialog";
 type CloudAccountDialogProps = {
   open: boolean;
   onClose: () => void;
-  /** 取り込み完了後に、親画面のローカル一覧を更新する。 */
-  onImported?: () => Promise<void> | void;
+  /** 取り込み完了後に、親画面のローカル一覧を更新して通知する。 */
+  onImported?: (result: { title: string; wasCopy: boolean }) => Promise<void> | void;
 };
 
 type CloudTab = "account" | "library";
@@ -37,6 +38,16 @@ export function CloudAccountDialog({
   const [conflictSnapshot, setConflictSnapshot] =
     useState<MemoCloudSnapshot | null>(null);
   const panelRef = useRef<HTMLElement | null>(null);
+  const onCloseRef = useRef(onClose);
+  const conflictOpenRef = useRef(false);
+
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
+
+  useEffect(() => {
+    conflictOpenRef.current = conflictSnapshot !== null;
+  }, [conflictSnapshot]);
 
   useEffect(() => {
     if (!open) {
@@ -45,21 +56,22 @@ export function CloudAccountDialog({
       return;
     }
 
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    const releaseScrollLock = lockBodyScroll();
 
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && !conflictSnapshot) onClose();
+      if (event.key === "Escape" && !conflictOpenRef.current) {
+        onCloseRef.current();
+      }
     };
 
     window.addEventListener("keydown", onKeyDown);
     window.requestAnimationFrame(() => panelRef.current?.focus());
 
     return () => {
-      document.body.style.overflow = previousOverflow;
+      releaseScrollLock();
       window.removeEventListener("keydown", onKeyDown);
     };
-  }, [conflictSnapshot, onClose, open]);
+  }, [open]);
 
   useEffect(() => {
     if (!open || !user || activeTab !== "library") return;
@@ -97,14 +109,19 @@ export function CloudAccountDialog({
     }
   };
 
+  /**
+   * 取り込み成功後は、クラウド画面とその上の確認画面をまとめて閉じる。
+   * モバイルでは「取り込んだ後も前面のダイアログが残る」状態を作らない。
+   */
   const finishImported = async (title: string, wasCopy: boolean) => {
-    setNotice(
-      wasCopy
-        ? `「${title}」をクラウド版として複製しました。`
-        : `「${title}」をこの端末へ取り込みました。`,
-    );
+    setConflictSnapshot(null);
 
-    await Promise.resolve(onImported?.());
+    try {
+      await Promise.resolve(onImported?.({ title, wasCopy }));
+    } finally {
+      // 一覧を閉じて通常操作へ戻す。失敗通知は親画面側で扱えるようにする。
+      onClose();
+    }
   };
 
   const handleImportRequest = async (cloudMemo: CloudMemoListItem) => {

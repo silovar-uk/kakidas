@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { resetBodyScrollLock } from "../lib/bodyScrollLock";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../auth/AuthProvider";
 import { CloudAccountDialog } from "../components/CloudAccountDialog";
@@ -124,6 +125,11 @@ export function MemoEditorPage() {
   const [isCloudDialogOpen, setIsCloudDialogOpen] = useState(false);
   const [isUploadDialogOpen, setIsUploadDialogOpen] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+
+  // メモ画面を離れた後に、モバイル操作シート等のスクロールロックを残さない。
+  useEffect(() => {
+    return () => resetBodyScrollLock();
+  }, []);
 
   useEffect(() => {
     if (memo) {
@@ -418,7 +424,13 @@ export function MemoEditorPage() {
       <CloudAccountDialog
         open={isCloudDialogOpen}
         onClose={() => setIsCloudDialogOpen(false)}
-        onImported={() => setNotice("クラウドのメモをこの端末へ取り込みました。")}
+        onImported={({ title, wasCopy }) =>
+          setNotice(
+            wasCopy
+              ? `「${title}」をクラウド版として複製しました。`
+              : `「${title}」をこの端末へ取り込みました。`,
+          )
+        }
       />
       <CloudUploadDialog
         open={isUploadDialogOpen}
