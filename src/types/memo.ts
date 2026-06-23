@@ -228,16 +228,18 @@ export type BackupPayload = {
   entries: LegacyEntryRow[];
 };
 
+/** 画面に出す名前だけを日本語にする。kind / DB値は従来のまま。 */
 export const ENTRY_KIND_LABEL: Record<EntryKind, string> = {
-  word: "Word",
-  sentence: "Sentence",
-  paragraph: "Paragraph",
+  word: "単語",
+  sentence: "文",
+  paragraph: "段落",
 };
 
-export const ENTRY_KIND_GUIDE: Record<EntryKind, string> = {
-  word: "断片、名詞、違和感、タイトル案",
-  sentence: "いま考えていることを、一文で",
-  paragraph: "まとまっていなくてOK。あとで直せる",
+/** 入力欄でだけ使う、短い補助文。 */
+export const ENTRY_KIND_PLACEHOLDER: Record<EntryKind, string> = {
+  word: "思いつき",
+  sentence: "一文で書く",
+  paragraph: "少し長めに書く",
 };
 
 export const CLOUD_STATE_LABEL: Record<CloudState, string> = {

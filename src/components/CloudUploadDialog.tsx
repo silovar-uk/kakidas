@@ -73,7 +73,6 @@ export function CloudUploadDialog({
         aria-labelledby="cloud-upload-title"
         tabIndex={-1}
       >
-        <p className="cloud-dialog__eyebrow">EXPLICIT UPLOAD</p>
         <h2 id="cloud-upload-title">この {targets.length}件をクラウドへ送る</h2>
         <p className="cloud-dialog__body">
           下のメモだけが、ログイン中のアカウントのクラウド領域に保存されます。
@@ -85,7 +84,7 @@ export function CloudUploadDialog({
             <li key={target.id}>
               <strong>{target.title}</strong>
               <span>
-                Word {target.entry_counts.word}件 ／ Sentence {target.entry_counts.sentence}件 ／ Paragraph {target.entry_counts.paragraph}件
+                単語 {target.entry_counts.word}件 ／ 文 {target.entry_counts.sentence}件 ／ 段落 {target.entry_counts.paragraph}件
               </span>
             </li>
           ))}

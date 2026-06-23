@@ -218,7 +218,7 @@ export function CloudAccountDialog({
                 <strong>{cloudMemo.title}</strong>
                 <span>最終更新 {formatUpdatedAt(cloudMemo.updated_at)}</span>
                 <small>
-                  Word {cloudMemo.entry_counts.word}件 ／ Sentence {cloudMemo.entry_counts.sentence}件 ／ Paragraph {cloudMemo.entry_counts.paragraph}件
+                  単語 {cloudMemo.entry_counts.word}件 ／ 文 {cloudMemo.entry_counts.sentence}件 ／ 段落 {cloudMemo.entry_counts.paragraph}件
                 </small>
               </div>
               <button

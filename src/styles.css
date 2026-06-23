@@ -2505,3 +2505,270 @@ a:focus-visible {
     -webkit-overflow-scrolling: touch;
   }
 }
+
+
+/* --------------------------------------------------------------------------
+   v0.5.6 — entry created timestamps
+   -------------------------------------------------------------------------- */
+.entry-item__body {
+  min-width: 0;
+}
+
+.entry-item__created-at {
+  display: block;
+  margin-top: 3px;
+  color: #938a80;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+  line-height: 1.35;
+}
+
+.entry-item__created-at--editing {
+  margin: 8px 1px 0;
+}
+
+@media (max-width: 920px) {
+  .entry-item__created-at {
+    margin-top: 4px;
+    font-size: 11px;
+  }
+}
+
+
+/* --------------------------------------------------------------------------
+   v0.5.7 — entry timestamp visibility preference
+   -------------------------------------------------------------------------- */
+.editor-display-options {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  min-height: 36px;
+  margin: -2px 0 12px;
+}
+
+.editor-display-options p {
+  margin: 0;
+  color: #8a857d;
+  font-size: 11px;
+}
+
+.timestamp-visibility-toggle {
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 9px;
+  border: 1px solid #ded8ce;
+  border-radius: 999px;
+  color: #665f55;
+  background: rgba(255, 254, 250, 0.76);
+  font-size: 12px;
+  font-weight: 720;
+  line-height: 1;
+  user-select: none;
+}
+
+.timestamp-visibility-toggle:hover {
+  border-color: #cbbcac;
+  background: #fffefa;
+}
+
+.timestamp-visibility-toggle input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  clip-path: inset(50%);
+}
+
+.timestamp-visibility-toggle__track {
+  display: inline-flex;
+  width: 30px;
+  height: 18px;
+  align-items: center;
+  padding: 2px;
+  border-radius: 999px;
+  background: #cfc7bc;
+  transition: background-color 160ms ease;
+}
+
+.timestamp-visibility-toggle__thumb {
+  display: block;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #fffefa;
+  box-shadow: 0 1px 2px rgba(73, 62, 48, 0.22);
+  transform: translateX(0);
+  transition: transform 160ms ease;
+}
+
+.timestamp-visibility-toggle input:checked + .timestamp-visibility-toggle__track {
+  background: #b95b30;
+}
+
+.timestamp-visibility-toggle input:checked + .timestamp-visibility-toggle__track .timestamp-visibility-toggle__thumb {
+  transform: translateX(12px);
+}
+
+.timestamp-visibility-toggle input:focus-visible + .timestamp-visibility-toggle__track {
+  outline: 3px solid rgba(185, 91, 48, 0.42);
+  outline-offset: 3px;
+}
+
+@media (max-width: 560px) {
+  .editor-display-options {
+    justify-content: space-between;
+    gap: 8px;
+    margin-top: 2px;
+    margin-bottom: 12px;
+  }
+
+  .editor-display-options p {
+    max-width: 130px;
+    text-align: right;
+  }
+
+  .timestamp-visibility-toggle {
+    min-height: 38px;
+    padding-inline: 11px;
+  }
+}
+
+
+/* --------------------------------------------------------------------------
+   v0.5.8 — plain Japanese labels / quiet outline UI
+   -------------------------------------------------------------------------- */
+.entry-column__header {
+  align-items: center;
+  min-height: 30px;
+}
+
+.entry-column__header h2 {
+  margin: 0;
+  color: #4c4943;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  line-height: 1.35;
+}
+
+.entry-column__header p,
+.entry-column__hierarchy-guide,
+.entry-composer__hint {
+  display: none;
+}
+
+.entry-column__header-actions {
+  align-items: center;
+}
+
+.entry-column__count {
+  min-width: 20px;
+  height: auto;
+  padding: 0;
+  border-radius: 0;
+  color: #98938a;
+  background: transparent;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+/* 階層は余白と細い線だけで示す。記号・色の強いマーカーは使わない。 */
+.entry-item--hierarchical {
+  border-inline-start: 0;
+}
+
+.entry-item--nested {
+  border-inline-start: 1px solid #d8d1c7;
+}
+
+.entry-item--nested::before {
+  position: absolute;
+  top: 50%;
+  left: -11px;
+  width: 10px;
+  height: 1px;
+  content: "";
+  background: #d8d1c7;
+}
+
+.entry-item--hierarchical::before,
+.entry-item--hierarchical[style*="--entry-depth: 0"]::before {
+  display: none;
+}
+
+.entry-item--nested::before {
+  display: block;
+}
+
+.entry-item__row,
+.entry-item:not(.entry-item--hierarchical) .entry-item__row {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.entry-item__tree-marker {
+  display: none;
+}
+
+/* 単語は、カードではなく軽い一覧として見せる。 */
+.entry-column--word .entry-list {
+  gap: 2px;
+  margin-top: 12px;
+}
+
+.entry-column--word .entry-item {
+  padding: 7px 6px 7px 8px;
+  border-color: transparent;
+  background: transparent;
+}
+
+.entry-column--word .entry-item:hover,
+.entry-column--word .entry-item:focus-within {
+  border-color: #e3ddd4;
+  background: #fffefa;
+}
+
+.entry-column--word .entry-item__content {
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.entry-column--word .entry-item__created-at {
+  margin-top: 1px;
+}
+
+@media (max-width: 920px) {
+  .editor-tabs {
+    gap: 0;
+    margin: 12px 0 16px;
+    padding: 0;
+    border-bottom: 1px solid #ddd7ce;
+    border-radius: 0;
+    background: transparent;
+  }
+
+  .editor-tab {
+    min-height: 39px;
+    border-radius: 0;
+    color: #78736b;
+    background: transparent;
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  .editor-tab--active {
+    color: #34312c;
+    background: transparent;
+    box-shadow: inset 0 -2px 0 #bd562f;
+  }
+
+  .entry-column__header h2 {
+    font-size: 13px;
+  }
+}

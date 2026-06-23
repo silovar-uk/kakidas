@@ -7,7 +7,11 @@ import {
   useRef,
   useState,
 } from "react";
-import { type EntryKind, ENTRY_KIND_GUIDE } from "../types/memo";
+import {
+  type EntryKind,
+  ENTRY_KIND_LABEL,
+  ENTRY_KIND_PLACEHOLDER,
+} from "../types/memo";
 
 export type EntryComposerHandle = {
   focus: (options?: { scroll?: boolean; delay?: number }) => void;
@@ -124,7 +128,7 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
       disabled: disabled || isSubmitting,
       placeholder: targetLabel
         ? `「${targetLabel}」の下に追加`
-        : ENTRY_KIND_GUIDE[kind],
+        : ENTRY_KIND_PLACEHOLDER[kind],
       onChange: handleChange,
       onKeyDown: handleKeyDown,
       onCompositionStart: () => setIsComposing(true),
@@ -136,15 +140,15 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
         {targetLabel ? (
           <div className="entry-composer__target" role="status">
             <span>
-              <strong>子として追加</strong>
-              <span>「{targetLabel}」の下</span>
+              <strong>下に追加</strong>
+              <span>{`「${targetLabel}」の下`}</span>
             </span>
             <button
               type="button"
               className="entry-composer__target-clear"
               onClick={onClearTarget}
-              aria-label="親の指定を解除して、最上位に戻す"
-              title="最上位に戻す"
+              aria-label="追加先を解除"
+              title="追加先を解除"
             >
               ×
             </button>
@@ -164,7 +168,7 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
               }}
               className="entry-composer__textarea"
               rows={4}
-              aria-label="Paragraphを入力"
+              aria-label={`${ENTRY_KIND_LABEL[kind]}を入力`}
             />
           ) : (
             <input
@@ -174,7 +178,7 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
               }}
               className="entry-composer__input"
               type="text"
-              aria-label={`${kind}を入力`}
+              aria-label={`${ENTRY_KIND_LABEL[kind]}を入力`}
             />
           )}
 
@@ -182,19 +186,12 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
             type="submit"
             className="entry-composer__submit"
             disabled={!canSubmit}
-            aria-label={`${ENTRY_KIND_GUIDE[kind]}を置く`}
+            aria-label={`${ENTRY_KIND_LABEL[kind]}を置く`}
           >
             {isSubmitting ? "…" : "置く"}
           </button>
         </div>
 
-        <p className="entry-composer__hint">
-          {isParagraph
-            ? "Enterまたは「置く」で確定 ／ Shift + Enterで改行"
-            : targetLabel
-              ? "Enterまたは「置く」で、この項目の子として置く"
-              : "Enterまたは「置く」で確定"}
-        </p>
       </form>
     );
   },

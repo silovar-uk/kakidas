@@ -277,8 +277,9 @@ class IndexedDbMemoRepository implements MemoRepository {
         parent_id: entry.parent_id
           ? (entryIdMap.get(entry.parent_id) ?? null)
           : null,
-        created_at: importedAt,
-        updated_at: importedAt,
+        // 複製して取り込んでも、「いつ書いた項目か」は元の記録を残す。
+        created_at: entry.created_at,
+        updated_at: entry.updated_at,
       }));
     } else {
       importedMemo = {

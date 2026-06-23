@@ -377,7 +377,6 @@ export function MemoListPage() {
         </Link>
 
         <div className="app-header__right">
-          <p className="app-header__message">整える前に、まず置く。</p>
           <button
             type="button"
             className={`cloud-account-button ${user ? "cloud-account-button--signed-in" : ""}`}
@@ -390,16 +389,7 @@ export function MemoListPage() {
       </header>
 
       <section className="memo-list-hero" aria-labelledby="memo-list-title">
-        <div>
-          <p className="eyebrow">WORD / SENTENCE / PARAGRAPH</p>
-          <h1 id="memo-list-title">
-            <span>書き始めのための、</span>
-            <span>3つの入口。</span>
-          </h1>
-          <p className="memo-list-hero__description">
-            どこから書いてもいい。直すのは、出し切ってから。
-          </p>
-        </div>
+        <h1 id="memo-list-title">メモ</h1>
 
         <button
           type="button"
@@ -414,7 +404,6 @@ export function MemoListPage() {
       {isUploadMode ? (
         <section className="cloud-selection-toolbar" aria-label="クラウドへ送るメモを選択">
           <div>
-            <span className="cloud-selection-toolbar__eyebrow">CLOUD UPLOAD</span>
             <strong>送るメモを選ぶ</strong>
             <p>選んだものだけを送ります。ローカルのメモは残ります。</p>
           </div>
@@ -496,8 +485,6 @@ export function MemoListPage() {
       ) : memos.length === 0 ? (
         <section className="empty-state">
           <p>まだメモがありません。</p>
-          <p>最初の一語から、置いてみよう。</p>
-
           <button
             type="button"
             className="primary-button"
@@ -530,7 +517,7 @@ export function MemoListPage() {
                     <span className="memo-card__details">
                       <strong>{memo.title}</strong>
                       <span>
-                        Word {memo.entry_counts.word}件 ／ Sentence {memo.entry_counts.sentence}件 ／ Paragraph {memo.entry_counts.paragraph}件
+                        単語 {memo.entry_counts.word}件 ／ 文 {memo.entry_counts.sentence}件 ／ 段落 {memo.entry_counts.paragraph}件
                       </span>
                     </span>
                   </button>

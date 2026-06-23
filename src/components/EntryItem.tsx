@@ -6,6 +6,7 @@ import {
   useState,
 } from "react";
 import { copyToClipboard } from "../lib/clipboard";
+import { formatEntryCreatedAt } from "../lib/formatDate";
 import {
   type EntryKind,
   type EntryTreeNode,
@@ -20,6 +21,7 @@ type EntryItemProps = {
   kind: EntryKind;
   isStructureOpen: boolean;
   isMobileActionOpen: boolean;
+  showCreatedAt: boolean;
   disabled?: boolean;
   onOpenStructure: (entryId: string) => void;
   onAddChild: (entryId: string) => void;
@@ -47,6 +49,7 @@ export function EntryItem({
   kind,
   isStructureOpen,
   isMobileActionOpen,
+  showCreatedAt,
   disabled = false,
   onOpenStructure,
   onAddChild,
@@ -305,12 +308,14 @@ export function EntryItem({
         ? "コピーできませんでした"
         : "この項目をコピー";
 
+  const createdAtLabel = formatEntryCreatedAt(entry.created_at);
+
   if (isEditing) {
     return (
       <article
         className={`entry-item entry-item--editing ${
           isHierarchical ? "entry-item--hierarchical" : ""
-        }`}
+        } ${entry.depth > 0 ? "entry-item--nested" : ""}`}
         style={style}
       >
         {isParagraph ? (
@@ -326,7 +331,7 @@ export function EntryItem({
             onCompositionEnd={() => setIsComposing(false)}
             onBlur={() => void save()}
             rows={4}
-            aria-label="Paragraphを編集"
+            aria-label="段落を編集"
           />
         ) : (
           <input
@@ -340,10 +345,20 @@ export function EntryItem({
             onCompositionStart={() => setIsComposing(true)}
             onCompositionEnd={() => setIsComposing(false)}
             onBlur={() => void save()}
-            aria-label={`${kind}を編集`}
+            aria-label="項目を編集"
             aria-keyshortcuts={hierarchyKeyShortcuts}
           />
         )}
+
+        {showCreatedAt ? (
+          <time
+            className="entry-item__created-at entry-item__created-at--editing"
+            dateTime={entry.created_at}
+            aria-label={`書いた日時 ${createdAtLabel}`}
+          >
+            作成 {createdAtLabel}
+          </time>
+        ) : null}
 
         <div className="entry-item__edit-actions">
           <button
@@ -387,27 +402,35 @@ export function EntryItem({
     <article
       className={`entry-item ${
         isHierarchical ? "entry-item--hierarchical" : ""
-      } ${isStructureOpen ? "entry-item--structure-open" : ""} ${
-        isMobileActionOpen ? "entry-item--mobile-action-open" : ""
-      }`}
+      } ${entry.depth > 0 ? "entry-item--nested" : ""} ${
+        isStructureOpen ? "entry-item--structure-open" : ""
+      } ${isMobileActionOpen ? "entry-item--mobile-action-open" : ""}`}
       style={style}
     >
       <div className="entry-item__row">
-        {isHierarchical ? (
-          <span className="entry-item__tree-marker" aria-hidden="true" />
-        ) : null}
+        <div className="entry-item__body">
+          <button
+            type="button"
+            className="entry-item__content"
+            onClick={handleContentClick}
+            onKeyDown={handleReadOnlyKeyDown}
+            disabled={disabled}
+            aria-label="編集する"
+            aria-keyshortcuts={hierarchyKeyShortcuts}
+          >
+            {entry.content}
+          </button>
 
-        <button
-          type="button"
-          className="entry-item__content"
-          onClick={handleContentClick}
-          onKeyDown={handleReadOnlyKeyDown}
-          disabled={disabled}
-          aria-label="編集する"
-          aria-keyshortcuts={hierarchyKeyShortcuts}
-        >
-          {entry.content}
-        </button>
+          {showCreatedAt ? (
+            <time
+              className="entry-item__created-at"
+              dateTime={entry.created_at}
+              aria-label={`書いた日時 ${createdAtLabel}`}
+            >
+              作成 {createdAtLabel}
+            </time>
+          ) : null}
+        </div>
 
         <div className="entry-item__quick-actions">
           <button
@@ -429,11 +452,11 @@ export function EntryItem({
               disabled={disabled}
               aria-label={
                 isStructureOpen || isMobileActionOpen
-                  ? "構造操作を閉じる"
-                  : "構造操作を開く"
+                  ? "操作を閉じる"
+                  : "操作を開く"
               }
               aria-expanded={isStructureOpen || isMobileActionOpen}
-              title="子の追加・並び替え・階層操作"
+              title="追加・移動"
             >
               ⋯
             </button>
@@ -461,14 +484,14 @@ export function EntryItem({
       </span>
 
       {isHierarchical && isStructureOpen ? (
-        <div className="entry-item__structure-actions" aria-label="構造操作">
+        <div className="entry-item__structure-actions" aria-label="項目の操作">
           <button
             type="button"
             className="structure-action structure-action--child"
             onClick={() => onAddChild(entry.id)}
             disabled={disabled}
           >
-            ＋ 子を追加
+            ＋ 下に追加
           </button>
 
           <button
@@ -476,9 +499,9 @@ export function EntryItem({
             className="structure-action"
             onClick={() => void onMove(entry.id, "up")}
             disabled={disabled || !entry.can_move_up}
-            title="同じ階層で上へ移動"
+            title="上へ移動"
           >
-            ↑ 上へ
+            ↑ 上へ移動
           </button>
 
           <button
@@ -486,9 +509,9 @@ export function EntryItem({
             className="structure-action"
             onClick={() => void onMove(entry.id, "down")}
             disabled={disabled || !entry.can_move_down}
-            title="同じ階層で下へ移動"
+            title="下へ移動"
           >
-            ↓ 下へ
+            ↓ 下へ移動
           </button>
 
           <button
@@ -496,9 +519,9 @@ export function EntryItem({
             className="structure-action"
             onClick={() => void onOutdent(entry.id)}
             disabled={disabled || !entry.can_outdent}
-            title="親と同じ階層に戻す"
+            title="左へ戻す"
           >
-            ← 戻す
+            ← 左へ戻す
           </button>
 
           <button
@@ -506,9 +529,9 @@ export function EntryItem({
             className="structure-action"
             onClick={() => void onIndent(entry.id)}
             disabled={disabled || !entry.can_indent}
-            title="ひとつ上の項目の子にする"
+            title="右へ下げる"
           >
-            → 下げる
+            → 右へ下げる
           </button>
 
           <button

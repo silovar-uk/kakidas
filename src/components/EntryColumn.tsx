@@ -10,7 +10,6 @@ import {
   type EntryDeletionResult,
   type EntryKind,
   type EntryTreeNode,
-  ENTRY_KIND_GUIDE,
   ENTRY_KIND_LABEL,
   supportsHierarchy,
 } from "../types/memo";
@@ -19,6 +18,8 @@ type EntryColumnProps = {
   kind: EntryKind;
   entries: EntryTreeNode[];
   isActiveOnMobile: boolean;
+  /** 各項目の作成日時を表示するか。 */
+  showCreatedAt: boolean;
   /** 新規メモ作成直後、Wordの入力欄へ一度だけフォーカスする。 */
   autoFocusComposer?: boolean;
   onAutoFocusHandled?: () => void;
@@ -52,6 +53,7 @@ export function EntryColumn({
   kind,
   entries,
   isActiveOnMobile,
+  showCreatedAt,
   autoFocusComposer = false,
   onAutoFocusHandled,
   disabled = false,
@@ -140,7 +142,7 @@ export function EntryColumn({
     didAutoFocusRef.current = true;
 
     // 新規作成ボタンのタップから最短で入力へ渡す。
-    // 固定コンポーザーなので、スクロールのアニメーションを挟まない。
+    // 通常フローの入力欄へ、画面遷移直後に渡す。
     const frame = window.requestAnimationFrame(() => {
       composerRef.current?.focus({ scroll: false, delay: 0 });
       onAutoFocusHandled?.();
@@ -177,7 +179,7 @@ export function EntryColumn({
     }
 
     const message = deletion.child_count > 0
-      ? `「${deletion.content}」と子項目${deletion.child_count}件を削除しました`
+      ? `「${deletion.content}」と下の項目${deletion.child_count}件を削除しました`
       : `「${deletion.content}」を削除しました`;
 
     setPendingUndo({ deletion, message });
@@ -192,12 +194,12 @@ export function EntryColumn({
 
     if (!target || disabled || isDeletingAll) return;
 
-    // 親を消すときだけ、巻き込まれる子の件数を明示して確認する。
+    // ほかの項目も一緒に消える場合だけ、件数を明示して確認する。
     if (target.child_count > 0) {
       const confirmed = window.confirm(
-        `「${target.content}」には子項目が${target.child_count}件あります。
-親子${target.child_count + 1}件をまとめて削除しますか？
-削除後は［元に戻す］で復元できます。`,
+        `「${target.content}」の下には${target.child_count}件あります。
+合計${target.child_count + 1}件をまとめて削除しますか？
+削除後は［元に戻す］で戻せます。`,
       );
 
       if (!confirmed) return;
@@ -231,7 +233,7 @@ export function EntryColumn({
     if (entries.length === 0 || disabled || isDeletingAll) return;
 
     const hierarchyNotice = isHierarchical
-      ? "\n親子構造も含めて削除されます。"
+      ? "\n下にある項目も含めて削除されます。"
       : "";
 
     const confirmed = window.confirm(
@@ -272,10 +274,7 @@ ${entries.length}件が削除されます。${hierarchyNotice}
       aria-labelledby={`${kind}-heading`}
     >
       <div className="entry-column__header">
-        <div>
-          <h2 id={`${kind}-heading`}>{ENTRY_KIND_LABEL[kind]}</h2>
-          <p>{ENTRY_KIND_GUIDE[kind]}</p>
-        </div>
+        <h2 id={`${kind}-heading`}>{ENTRY_KIND_LABEL[kind]}</h2>
 
         <div className="entry-column__header-actions">
           <span className="entry-column__count">{entries.length}</span>
@@ -293,25 +292,6 @@ ${entries.length}件が削除されます。${hierarchyNotice}
         </div>
       </div>
 
-      {isHierarchical ? (
-        <p className="entry-column__hierarchy-guide">
-          <span className="entry-column__guide-mobile">
-            タップで編集。<span>⋯</span> から、子・順番・階層を整える。
-          </span>
-
-          <span className="entry-column__guide-desktop">
-            <strong>PC:</strong> <kbd>Tab</kbd> 下げる ／ <kbd>Shift</kbd> + <kbd>Tab</kbd> 戻す
-            <br />
-            <kbd>Ctrl</kbd> / <kbd>⌘</kbd> + <kbd>Shift</kbd> + <kbd>← →</kbd> でも階層 ／
-            <kbd>↑ ↓</kbd> で同階層を移動
-          </span>
-        </p>
-      ) : (
-        <p className="entry-column__hierarchy-guide entry-column__hierarchy-guide--plain">
-          長めに書く場所。Paragraphは階層をつけず、流れのまま置けます。
-        </p>
-      )}
-
       <EntryComposer
         ref={composerRef}
         kind={kind}
@@ -323,7 +303,7 @@ ${entries.length}件が削除されます。${hierarchyNotice}
 
       <div className="entry-list" aria-live="polite">
         {entries.length === 0 ? (
-          <p className="entry-list__empty">まだ何も置かれていません。</p>
+          <p className="entry-list__empty">まだありません。</p>
         ) : (
           entries.map((entry) => (
             <EntryItem
@@ -332,6 +312,7 @@ ${entries.length}件が削除されます。${hierarchyNotice}
               kind={kind}
               isStructureOpen={structureEntryId === entry.id}
               isMobileActionOpen={mobileActionEntryId === entry.id}
+              showCreatedAt={showCreatedAt}
               disabled={disabled || isDeletingAll}
               onOpenStructure={openStructureActions}
               onAddChild={selectParent}

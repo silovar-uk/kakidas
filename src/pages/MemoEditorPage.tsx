@@ -92,6 +92,17 @@ type EditorNavigationState = {
   focusComposer?: boolean;
 };
 
+const ENTRY_TIMESTAMP_VISIBILITY_STORAGE_KEY = "kakidas.show-entry-timestamps";
+
+function readEntryTimestampVisibility(): boolean {
+  try {
+    return window.localStorage.getItem(ENTRY_TIMESTAMP_VISIBILITY_STORAGE_KEY) !== "false";
+  } catch {
+    // ストレージが使えないブラウザでも、従来どおり日時を表示する。
+    return true;
+  }
+}
+
 export function MemoEditorPage() {
   const { memoId } = useParams();
   const navigate = useNavigate();
@@ -125,6 +136,21 @@ export function MemoEditorPage() {
   const [isCloudDialogOpen, setIsCloudDialogOpen] = useState(false);
   const [isUploadDialogOpen, setIsUploadDialogOpen] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [showEntryTimestamps, setShowEntryTimestamps] = useState(
+    readEntryTimestampVisibility,
+  );
+
+  // 表示設定は端末ごとに記憶する。クラウドへは送らないUI設定。
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(
+        ENTRY_TIMESTAMP_VISIBILITY_STORAGE_KEY,
+        String(showEntryTimestamps),
+      );
+    } catch {
+      // private modeなどで保存できない場合でも、現在の画面では切り替えられる。
+    }
+  }, [showEntryTimestamps]);
 
   // メモ画面を離れた後に、モバイル操作シート等のスクロールロックを残さない。
   useEffect(() => {
@@ -197,7 +223,7 @@ export function MemoEditorPage() {
 
     downloadText(`${safeTitle}.txt`, buildMarkdown(memo));
 
-    setNotice("テキストを書き出しました。階層もインデントで反映されています。");
+    setNotice("テキストを書き出しました。");
   };
 
   const handleDeleteMemo = async () => {
@@ -366,6 +392,21 @@ export function MemoEditorPage() {
         ))}
       </section>
 
+      <section className="editor-display-options" aria-label="表示設定">
+        <label className="timestamp-visibility-toggle">
+          <input
+            type="checkbox"
+            checked={showEntryTimestamps}
+            onChange={(event) => setShowEntryTimestamps(event.target.checked)}
+          />
+          <span className="timestamp-visibility-toggle__track" aria-hidden="true">
+            <span className="timestamp-visibility-toggle__thumb" />
+          </span>
+          <span>項目の日時を表示</span>
+        </label>
+        <p>この端末だけの表示設定です。</p>
+      </section>
+
       <div className="editor-tabs" role="tablist" aria-label="入力する粒度">
         {ENTRY_KINDS.map((kind) => (
           <button
@@ -404,6 +445,7 @@ export function MemoEditorPage() {
             kind={kind}
             entries={entriesByKind[kind]}
             isActiveOnMobile={activeKind === kind}
+            showCreatedAt={showEntryTimestamps}
             disabled={isSaving || isUploading}
             autoFocusComposer={
               kind === "word" && shouldFocusNewMemoComposer
