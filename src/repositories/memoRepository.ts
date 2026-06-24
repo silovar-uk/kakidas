@@ -24,6 +24,7 @@ import {
   isCloudLinked,
   normalizeMemoSyncMeta,
   normalizeEntryRow,
+  normalizeSatisfaction,
   nowIso,
 } from "../types/memo";
 import {
@@ -520,6 +521,7 @@ class IndexedDbMemoRepository implements MemoRepository {
       parent_id: parentId,
       content,
       note: input.note?.trim() ?? "",
+      satisfaction: normalizeSatisfaction(input.satisfaction),
       sort_order: input.sort_order ?? siblings.length,
       created_at: timestamp,
       updated_at: timestamp,
@@ -559,6 +561,10 @@ class IndexedDbMemoRepository implements MemoRepository {
     const current = await this.requireActiveEntry(entryStore, entryId, transaction);
     const content = patch.content === undefined ? current.content : patch.content.trim();
     const note = patch.note === undefined ? current.note : patch.note.trim();
+    const satisfaction =
+      patch.satisfaction === undefined
+        ? current.satisfaction
+        : normalizeSatisfaction(patch.satisfaction);
 
     if (!content && patch.deleted_at === undefined) {
       transaction.abort();
@@ -572,6 +578,7 @@ class IndexedDbMemoRepository implements MemoRepository {
       ...patch,
       content: content || current.content,
       note,
+      satisfaction,
       updated_at: timestamp,
     };
 

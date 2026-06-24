@@ -55,6 +55,8 @@ export type EntryRow = {
   content: string;
   /** 任意の補足。空文字なら画面に余白を作らない。 */
   note: string;
+  /** 0〜5の満足度。0が初期値で、画面上ではタップごとに1ずつ進む。 */
+  satisfaction: number;
   sort_order: number;
   created_at: string;
   updated_at: string;
@@ -65,10 +67,12 @@ export type EntryRow = {
  * v1バックアップや既存IndexedDBには parent_id が存在しないことがある。
  * 読み込み時は null として補完する。
  */
-export type LegacyEntryRow = Omit<EntryRow, "parent_id" | "note"> & {
+export type LegacyEntryRow = Omit<EntryRow, "parent_id" | "note" | "satisfaction"> & {
   parent_id?: string | null;
   /** v0.5.10以前は備考カラムがないため、読み込み時に空文字へ補完する。 */
   note?: string | null;
+  /** v0.5.13以前は満足度がないため、読み込み時に0へ補完する。 */
+  satisfaction?: number | null;
 };
 
 export type EntryInsert = {
@@ -79,6 +83,7 @@ export type EntryInsert = {
   parent_id?: string | null;
   content: string;
   note?: string;
+  satisfaction?: number;
   sort_order?: number;
   created_at?: string;
   updated_at?: string;
@@ -86,7 +91,10 @@ export type EntryInsert = {
 };
 
 export type EntryUpdate = Partial<
-  Pick<EntryRow, "content" | "note" | "sort_order" | "updated_at" | "deleted_at" | "user_id">
+  Pick<
+    EntryRow,
+    "content" | "note" | "satisfaction" | "sort_order" | "updated_at" | "deleted_at" | "user_id"
+  >
 >;
 
 /**
@@ -335,21 +343,37 @@ export function isCloudLinked(meta: MemoSyncMetaRow): boolean {
   return meta.cloud_user_id !== null && meta.last_cloud_updated_at !== null;
 }
 
+/**
+ * 満足度は0〜5だけを受け入れる。古いバックアップや不正な値も、
+ * 表示と同期の前に必ずこの範囲へ収める。
+ */
+export function normalizeSatisfaction(value: unknown): number {
+  const numeric = typeof value === "number" ? value : Number(value);
+
+  if (!Number.isFinite(numeric)) return 0;
+
+  return Math.min(5, Math.max(0, Math.round(numeric)));
+}
+
 export function normalizeEntryRow(entry: LegacyEntryRow): EntryRow {
   return {
     ...entry,
     parent_id: entry.parent_id ?? null,
     note: typeof entry.note === "string" ? entry.note : "",
+    satisfaction: normalizeSatisfaction(entry.satisfaction),
   };
 }
 
+/**
+ * 新規メモのタイトル。年は内部の created_at に保持し、表示タイトルは軽くする。
+ * 末尾の空のかぎ括弧は、あとからテーマなどを足せる余白。
+ */
 export function formatDefaultMemoTitle(date = new Date()): string {
   const pad = (value: number) => String(value).padStart(2, "0");
 
-  return (
-    [date.getFullYear(), pad(date.getMonth() + 1), pad(date.getDate())].join("/") +
-    ` ${pad(date.getHours())}:${pad(date.getMinutes())}`
-  );
+  return `${date.getMonth() + 1}/${date.getDate()} ${pad(date.getHours())}:${pad(
+    date.getMinutes(),
+  )} 「」`;
 }
 
 export function formatUpdatedAt(iso: string): string {

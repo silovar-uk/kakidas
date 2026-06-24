@@ -7,6 +7,7 @@ import {
   useState,
 } from "react";
 import { copyToClipboard } from "../lib/clipboard";
+import { EntrySatisfactionControl } from "./EntrySatisfactionControl";
 import { formatEntryCopyText } from "../lib/entryText";
 import { formatEntryCreatedAt } from "../lib/formatDate";
 import {
@@ -321,6 +322,10 @@ export function EntryItem({
     await onDelete(entry.id);
   };
 
+  const advanceSatisfaction = async (nextValue: number) => {
+    await onUpdate(entry.id, { satisfaction: nextValue });
+  };
+
   const style = {
     "--entry-depth": Math.min(entry.depth, 6),
   } as CSSProperties;
@@ -541,6 +546,12 @@ export function EntryItem({
         </div>
 
         <div className="entry-item__quick-actions">
+          <EntrySatisfactionControl
+            value={entry.satisfaction}
+            disabled={disabled}
+            onChange={advanceSatisfaction}
+          />
+
           <button
             type="button"
             className="icon-button entry-item__quick-action entry-item__copy"

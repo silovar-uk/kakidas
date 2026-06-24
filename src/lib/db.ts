@@ -1,5 +1,5 @@
 const DB_NAME = "kakidasu-db";
-const DB_VERSION = 5;
+const DB_VERSION = 6;
 
 export const STORE_NAMES = {
   memos: "memos",
@@ -128,6 +128,30 @@ function openDatabase(): Promise<IDBDatabase> {
 
           if (typeof value.note !== "string") {
             cursor.update({ ...value, note: "" });
+          }
+
+          cursor.continue();
+        };
+      }
+
+      // v0.5.13: 各項目の満足度を0で補完する。
+      // UI上は0〜5に制限し、既存の項目には余白や表示崩れを追加しない。
+      if (oldVersion < 6) {
+        const cursorRequest = entryStore.openCursor();
+
+        cursorRequest.onsuccess = () => {
+          const cursor = cursorRequest.result;
+          if (!cursor) return;
+
+          const value = cursor.value as Record<string, unknown>;
+          const raw = value.satisfaction;
+          const numeric = typeof raw === "number" ? raw : Number(raw);
+          const satisfaction = Number.isFinite(numeric)
+            ? Math.min(5, Math.max(0, Math.round(numeric)))
+            : 0;
+
+          if (value.satisfaction !== satisfaction) {
+            cursor.update({ ...value, satisfaction });
           }
 
           cursor.continue();

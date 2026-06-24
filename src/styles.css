@@ -3001,3 +3001,97 @@ a:focus-visible {
     font-size: 9px;
   }
 }
+
+
+/* --------------------------------------------------------------------------
+   v0.5.13 — compact per-entry satisfaction (0–5)
+   -------------------------------------------------------------------------- */
+.entry-satisfaction {
+  display: inline-grid;
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  min-height: 28px;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--satisfaction-border, #d3dbe7);
+  border-radius: 8px;
+  color: var(--satisfaction-color, #697fa2);
+  background: var(--satisfaction-background, #eff2f6);
+  font-size: 12px;
+  font-weight: 760;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+  line-height: 1;
+  transition:
+    transform 120ms ease,
+    background-color 120ms ease,
+    border-color 120ms ease;
+}
+
+.entry-satisfaction:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+.entry-satisfaction:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.entry-satisfaction[data-satisfaction="0"] {
+  --satisfaction-color: #647fa4;
+  --satisfaction-border: #d3ddea;
+  --satisfaction-background: #eef2f7;
+}
+
+.entry-satisfaction[data-satisfaction="1"] {
+  --satisfaction-color: #73899f;
+  --satisfaction-border: #d8dfe4;
+  --satisfaction-background: #f0f3f4;
+}
+
+.entry-satisfaction[data-satisfaction="2"] {
+  --satisfaction-color: #89887f;
+  --satisfaction-border: #e1ddd3;
+  --satisfaction-background: #f5f3ee;
+}
+
+.entry-satisfaction[data-satisfaction="3"] {
+  --satisfaction-color: #9d7c67;
+  --satisfaction-border: #e7d9cd;
+  --satisfaction-background: #faf1e9;
+}
+
+.entry-satisfaction[data-satisfaction="4"] {
+  --satisfaction-color: #ad624b;
+  --satisfaction-border: #ebd0c3;
+  --satisfaction-background: #fcece5;
+}
+
+.entry-satisfaction[data-satisfaction="5"] {
+  --satisfaction-color: #a74038;
+  --satisfaction-border: #e5c1bb;
+  --satisfaction-background: #fae7e3;
+}
+
+.entry-satisfaction:focus-visible {
+  outline: 3px solid rgba(100, 127, 164, 0.34);
+  outline-offset: 3px;
+}
+
+@media (max-width: 920px) {
+  .entry-satisfaction {
+    width: 36px;
+    min-width: 36px;
+    height: 36px;
+    min-height: 36px;
+    border-radius: 10px;
+    font-size: 13px;
+  }
+}
+
+@media (max-width: 370px) {
+  .entry-satisfaction {
+    width: 32px;
+    min-width: 32px;
+  }
+}

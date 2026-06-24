@@ -25,6 +25,8 @@ create table if not exists public.entries (
   content text not null,
   -- 任意の備考。空文字ならアプリ画面には表示しない。
   note text not null default '',
+  -- 0〜5の満足度。画面ではタップごとに1ずつ進める。
+  satisfaction smallint not null default 0 check (satisfaction between 0 and 5),
   sort_order integer not null default 0,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
@@ -35,6 +37,11 @@ create table if not exists public.entries (
 -- v0.5.11: 既存プロジェクトにも任意の備考カラムを追加する。
 alter table public.entries
   add column if not exists note text not null default '';
+
+-- v0.5.13: 既存プロジェクトにも各項目の満足度を追加する。
+alter table public.entries
+  add column if not exists satisfaction smallint not null default 0
+  check (satisfaction between 0 and 5);
 
 create index if not exists entries_memo_kind_parent_order_idx
   on public.entries (memo_id, kind, parent_id, sort_order, created_at)
