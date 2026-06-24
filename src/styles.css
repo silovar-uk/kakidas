@@ -4039,6 +4039,9 @@ a:focus-visible {
   }
 
   .entry-item__note-trigger--rail {
+    /* 実テキストではなく擬似要素の記号だけを使う。
+       これで「＋」と ::before の「+」が二重に見えない。 */
+    font-size: 0;
     display: inline-grid;
     width: 34px;
     min-width: 34px;

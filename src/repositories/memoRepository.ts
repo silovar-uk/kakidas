@@ -5,6 +5,7 @@ import {
   type CompletedEntriesDeletionResult,
   type EntryDeletionResult,
   type EntryInsert,
+  type EntryInsertPosition,
   type EntryKind,
   type EntryMoveDirection,
   type EntryRow,
@@ -58,6 +59,7 @@ export interface MemoRepository {
 
   createEntry(
     input: Omit<EntryInsert, "id" | "created_at" | "updated_at">,
+    position?: EntryInsertPosition,
   ): Promise<EntryRow>;
   updateEntry(entryId: string, patch: EntryUpdate): Promise<EntryRow>;
   /** 個別削除。親の場合は子孫もまとめてソフト削除し、Undo用の情報を返す。 */
@@ -478,6 +480,7 @@ class IndexedDbMemoRepository implements MemoRepository {
 
   async createEntry(
     input: Omit<EntryInsert, "id" | "created_at" | "updated_at">,
+    position: EntryInsertPosition = "bottom",
   ): Promise<EntryRow> {
     const content = input.content.trim();
 
@@ -524,6 +527,15 @@ class IndexedDbMemoRepository implements MemoRepository {
 
     const siblings = this.getActiveSiblings(existingEntries, input.kind, parentId);
     const timestamp = nowIso();
+    // sort_orderは親・種別ごとの表示順。先頭追加では最小値より1つ前、
+    // 末尾追加では最大値より1つ後を採用して、既存の順番を崩さない。
+    const nextSortOrder = input.sort_order ?? (
+      siblings.length === 0
+        ? 0
+        : position === "top"
+          ? Math.min(...siblings.map((sibling) => sibling.sort_order)) - 1
+          : Math.max(...siblings.map((sibling) => sibling.sort_order)) + 1
+    );
 
     const entry: EntryRow = {
       id: createId(),
@@ -535,7 +547,7 @@ class IndexedDbMemoRepository implements MemoRepository {
       note: input.note?.trim() ?? "",
       satisfaction: normalizeSatisfaction(input.satisfaction),
       is_completed: normalizeCompletion(input.is_completed),
-      sort_order: input.sort_order ?? siblings.length,
+      sort_order: nextSortOrder,
       created_at: timestamp,
       updated_at: timestamp,
       deleted_at: input.deleted_at ?? null,

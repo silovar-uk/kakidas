@@ -549,9 +549,7 @@ export function EntryItem({
             disabled={disabled || isSaving}
             aria-label={hasNote ? "気持ち・備考を編集" : "気持ち・備考を追加"}
             title={hasNote ? "気持ち・備考を編集" : "気持ち・備考を追加"}
-          >
-            ＋
-          </button>
+          />
 
           <button
             type="button"

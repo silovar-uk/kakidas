@@ -4,6 +4,7 @@ import {
   type CompletedEntriesDeletionResult,
   type EntryDeletionResult,
   type EntryKind,
+  type EntryInsertPosition,
   type EntryMoveDirection,
   type EntryRow,
   type EntryUpdate,
@@ -214,6 +215,7 @@ export function useMemoDetail(memoId: string | undefined) {
       kind: EntryKind,
       content: string,
       parentId: string | null = null,
+      position: EntryInsertPosition = "bottom",
     ): Promise<EntryRow> => {
       if (!memoId) {
         throw new Error("メモIDがありません。");
@@ -225,7 +227,7 @@ export function useMemoDetail(memoId: string | undefined) {
           kind,
           parent_id: parentId,
           content,
-        });
+        }, position);
 
         await refreshAfterWrite();
         return entry;

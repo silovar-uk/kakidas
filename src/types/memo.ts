@@ -14,6 +14,9 @@ export const ENTRY_KINDS = ["word", "sentence", "paragraph"] as const;
 
 export type EntryKind = (typeof ENTRY_KINDS)[number];
 
+/** 新しい項目を同じ階層の先頭／末尾どちらに置くか。DBには保存しないUI設定。 */
+export type EntryInsertPosition = "top" | "bottom";
+
 export type EntryMoveDirection = "up" | "down";
 
 export type CloudState =

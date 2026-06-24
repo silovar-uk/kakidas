@@ -51,6 +51,7 @@ type EditorNavigationState = {
 const ENTRY_TIMESTAMP_VISIBILITY_STORAGE_KEY = "kakidas.show-entry-timestamps";
 const ENTRY_NUMBER_VISIBILITY_STORAGE_KEY = "kakidas.show-entry-numbers";
 const HIDE_COMPLETED_ENTRIES_STORAGE_KEY = "kakidas.hide-completed-entries";
+const ADD_ENTRIES_AT_BOTTOM_STORAGE_KEY = "kakidas.add-entries-at-bottom";
 
 function readEntryTimestampVisibility(): boolean {
   try {
@@ -77,6 +78,15 @@ function readEntryNumberVisibility(): boolean {
 function readHideCompletedEntries(): boolean {
   try {
     return window.localStorage.getItem(HIDE_COMPLETED_ENTRIES_STORAGE_KEY) === "true";
+  } catch {
+    return false;
+  }
+}
+
+/** 新しい項目は初期状態では先頭に置く。必要な端末だけ末尾追加を記憶する。 */
+function readAddEntriesAtBottom(): boolean {
+  try {
+    return window.localStorage.getItem(ADD_ENTRIES_AT_BOTTOM_STORAGE_KEY) === "true";
   } catch {
     return false;
   }
@@ -127,6 +137,9 @@ export function MemoEditorPage() {
   const [hideCompletedEntries, setHideCompletedEntries] = useState(
     readHideCompletedEntries,
   );
+  const [addEntriesAtBottom, setAddEntriesAtBottom] = useState(
+    readAddEntriesAtBottom,
+  );
   /** コピーだけに適用する設定。完了の表示／非表示とは独立させる。 */
   const [includeCompletedInCopy, setIncludeCompletedInCopy] = useState(
     readCopyIncludeCompleted,
@@ -165,6 +178,17 @@ export function MemoEditorPage() {
       // 表示設定の保存に失敗しても、その場での表示切り替えは維持する。
     }
   }, [hideCompletedEntries]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(
+        ADD_ENTRIES_AT_BOTTOM_STORAGE_KEY,
+        String(addEntriesAtBottom),
+      );
+    } catch {
+      // 端末設定を保存できない場合でも、現在の画面では切り替えられる。
+    }
+  }, [addEntriesAtBottom]);
 
   useEffect(() => {
     writeCopyIncludeCompleted(includeCompletedInCopy);
@@ -551,6 +575,18 @@ export function MemoEditorPage() {
               <label className="timestamp-visibility-toggle">
                 <input
                   type="checkbox"
+                  checked={addEntriesAtBottom}
+                  onChange={(event) => setAddEntriesAtBottom(event.target.checked)}
+                />
+                <span className="timestamp-visibility-toggle__track" aria-hidden="true">
+                  <span className="timestamp-visibility-toggle__thumb" />
+                </span>
+                <span>新しい項目を一番下に追加</span>
+              </label>
+
+              <label className="timestamp-visibility-toggle">
+                <input
+                  type="checkbox"
                   checked={includeCompletedInCopy}
                   onChange={(event) => setIncludeCompletedInCopy(event.target.checked)}
                 />
@@ -623,6 +659,7 @@ export function MemoEditorPage() {
             autoFocusComposer={
               kind === "word" && shouldFocusNewMemoComposer
             }
+            addAtBottom={addEntriesAtBottom}
             onAutoFocusHandled={handleComposerAutoFocusHandled}
             onCreate={createEntry}
             onUpdate={(entryId, patch) => updateEntry(entryId, patch)}

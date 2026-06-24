@@ -9,6 +9,7 @@ import { UndoToast } from "./UndoToast";
 import {
   type EntryDeletionResult,
   type EntryKind,
+  type EntryInsertPosition,
   type EntryUpdate,
   type EntryTreeNode,
   ENTRY_KIND_LABEL,
@@ -25,12 +26,15 @@ type EntryColumnProps = {
   showEntryNumbers: boolean;
   /** 新規メモ作成直後、Wordの入力欄へ一度だけフォーカスする。 */
   autoFocusComposer?: boolean;
+  /** trueなら新しい項目を同じ階層の末尾へ、falseなら先頭へ置く。 */
+  addAtBottom?: boolean;
   onAutoFocusHandled?: () => void;
   disabled?: boolean;
   onCreate: (
     kind: EntryKind,
     content: string,
     parentId?: string | null,
+    position?: EntryInsertPosition,
   ) => Promise<unknown>;
   onUpdate: (entryId: string, patch: EntryUpdate) => Promise<unknown>;
   onDelete: (entryId: string) => Promise<EntryDeletionResult>;
@@ -66,6 +70,7 @@ export function EntryColumn({
   showCreatedAt,
   showEntryNumbers,
   autoFocusComposer = false,
+  addAtBottom = false,
   onAutoFocusHandled,
   disabled = false,
   onCreate,
@@ -189,7 +194,12 @@ export function EntryColumn({
   };
 
   const handleCreate = async (content: string) => {
-    await onCreate(kind, content, isHierarchical ? parentId : null);
+    await onCreate(
+      kind,
+      content,
+      isHierarchical ? parentId : null,
+      addAtBottom ? "bottom" : "top",
+    );
   };
 
   const openUndo = (deletion: EntryDeletionResult) => {
