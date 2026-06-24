@@ -3288,3 +3288,228 @@ a:focus-visible {
     font-size: 11px;
   }
 }
+
+/* --------------------------------------------------------------------------
+   v0.5.16 — stronger completion state / clearer satisfaction / mobile width
+   -------------------------------------------------------------------------- */
+/* 完了済みは、未完了の項目から明確に区別する。
+   色を増やさず、紙色の明度差・彩度低下・本文の淡色化で見分ける。 */
+.entry-item--completed {
+  border-color: #cbc7bf;
+  background: #e4e2dd;
+}
+
+.entry-item--completed:hover {
+  border-color: #bdb8b0;
+  background: #e7e5e0;
+}
+
+.entry-item--completed .entry-item__body {
+  opacity: 0.38;
+  filter: grayscale(1);
+}
+
+.entry-item--completed .entry-item__content-text {
+  color: #6c6963;
+  text-decoration-color: #aaa69f;
+  text-decoration-thickness: 1.5px;
+}
+
+.entry-item--completed .entry-item__note,
+.entry-item--completed .entry-item__created-at {
+  color: #89857e;
+}
+
+.entry-item--completed .entry-item__quick-actions {
+  opacity: 0.78;
+}
+
+.entry-item--completed .entry-item__complete--active {
+  border-color: #b9b5ae;
+  color: #6a6660;
+  background: #d7d5d0;
+}
+
+/* 0〜5の違いを一目で捉えられるよう、細い色枠を二重にする。 */
+.entry-satisfaction {
+  border-width: 2px;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.34);
+}
+
+.entry-satisfaction[data-satisfaction="0"] {
+  --satisfaction-border: #8da4c2;
+}
+
+.entry-satisfaction[data-satisfaction="1"] {
+  --satisfaction-border: #9eafbc;
+}
+
+.entry-satisfaction[data-satisfaction="2"] {
+  --satisfaction-border: #b4aa98;
+}
+
+.entry-satisfaction[data-satisfaction="3"] {
+  --satisfaction-border: #c59b7e;
+}
+
+.entry-satisfaction[data-satisfaction="4"] {
+  --satisfaction-border: #ce8068;
+}
+
+.entry-satisfaction[data-satisfaction="5"] {
+  --satisfaction-border: #bf5b52;
+}
+
+/* スマホでは、入力欄が常に主役。
+   文・段落の「置く」は52pxに固定し、残り幅を入力欄へ渡す。 */
+@media (max-width: 920px) {
+  .entry-column--active .entry-composer__control-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 52px;
+    align-items: stretch;
+    gap: 7px;
+  }
+
+  .entry-column--active .entry-composer__control-row--paragraph {
+    align-items: end;
+  }
+
+  .entry-column--active .entry-composer__control-row .entry-composer__input,
+  .entry-column--active .entry-composer__control-row .entry-composer__textarea {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .entry-column--active .entry-composer__submit {
+    width: 52px;
+    min-width: 52px;
+    padding-inline: 4px;
+    font-size: 13px;
+  }
+
+  /* 項目右の操作は2列の小さな縦スタックにして、本文へ幅を返す。
+     典型的なスマホ幅で本文領域が概ね75%以上になる。 */
+  .entry-item__row,
+  .entry-item:not(.entry-item--hierarchical) .entry-item__row {
+    grid-template-columns: minmax(0, 1fr) 76px;
+    column-gap: 8px;
+    align-items: start;
+  }
+
+  .entry-item__quick-actions {
+    display: grid;
+    grid-template-columns: 34px 38px;
+    grid-auto-rows: 34px;
+    width: 76px;
+    min-width: 76px;
+    align-self: start;
+    gap: 4px;
+    margin-top: 0;
+  }
+
+  .entry-satisfaction {
+    width: 34px;
+    min-width: 34px;
+    height: 34px;
+    min-height: 34px;
+    border-radius: 10px;
+  }
+
+  .entry-item__complete {
+    width: 38px;
+    min-width: 38px;
+    height: 34px;
+    min-height: 34px;
+    padding: 0 3px;
+    border-radius: 10px;
+    font-size: 9px;
+  }
+
+  .entry-item__note-trigger,
+  .entry-item__quick-action,
+  .entry-item__delete,
+  .entry-item__structure-button {
+    width: 34px;
+    min-width: 34px;
+    height: 34px;
+    min-height: 34px;
+    margin: 0;
+    padding: 0;
+    border-color: #e2d7cd;
+    border-radius: 10px;
+    background: #fffefa;
+  }
+
+  .entry-item__note-trigger {
+    overflow: hidden;
+    color: #786957;
+    font-size: 0;
+  }
+
+  .entry-item__note-trigger::before {
+    content: "+";
+    font-size: 18px;
+    font-weight: 500;
+    line-height: 1;
+  }
+
+  .entry-item__note-trigger[aria-label="気持ち・備考を編集"]::before {
+    content: "✎";
+    font-size: 16px;
+  }
+
+  .entry-item__delete {
+    color: #a34b44;
+    background: #fff5f2;
+  }
+
+  .entry-item__structure-button {
+    color: #835f4c;
+    font-size: 18px;
+  }
+}
+
+@media (max-width: 370px) {
+  .entry-column--active .entry-composer__control-row {
+    grid-template-columns: minmax(0, 1fr) 50px;
+  }
+
+  .entry-column--active .entry-composer__submit {
+    width: 50px;
+    min-width: 50px;
+    font-size: 12px;
+  }
+
+  .entry-item__row,
+  .entry-item:not(.entry-item--hierarchical) .entry-item__row {
+    grid-template-columns: minmax(0, 1fr) 72px;
+    column-gap: 7px;
+  }
+
+  .entry-item__quick-actions {
+    grid-template-columns: 32px 36px;
+    grid-auto-rows: 32px;
+    width: 72px;
+    min-width: 72px;
+  }
+
+  .entry-satisfaction,
+  .entry-item__note-trigger,
+  .entry-item__quick-action,
+  .entry-item__delete,
+  .entry-item__structure-button {
+    width: 32px;
+    min-width: 32px;
+    height: 32px;
+    min-height: 32px;
+  }
+
+  .entry-item__complete {
+    width: 36px;
+    min-width: 36px;
+    height: 32px;
+    min-height: 32px;
+    font-size: 8px;
+  }
+}
+
