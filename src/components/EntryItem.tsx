@@ -1,20 +1,24 @@
 import {
   type CSSProperties,
+  type FocusEvent,
   type KeyboardEvent,
   useEffect,
   useRef,
   useState,
 } from "react";
 import { copyToClipboard } from "../lib/clipboard";
+import { formatEntryCopyText } from "../lib/entryText";
 import { formatEntryCreatedAt } from "../lib/formatDate";
 import {
   type EntryKind,
   type EntryTreeNode,
+  type EntryUpdate,
   supportsHierarchy,
 } from "../types/memo";
 
 type StructureShortcut = "indent" | "outdent" | "move-up" | "move-down";
 type CopyFeedback = "copied" | "failed" | null;
+type EditMode = "content" | "note" | null;
 
 type EntryItemProps = {
   entry: EntryTreeNode;
@@ -30,21 +34,13 @@ type EntryItemProps = {
   onIndent: (entryId: string) => Promise<unknown>;
   onOutdent: (entryId: string) => Promise<unknown>;
   onMove: (entryId: string, direction: "up" | "down") => Promise<unknown>;
-  onUpdate: (entryId: string, content: string) => Promise<unknown>;
+  onUpdate: (entryId: string, patch: EntryUpdate) => Promise<unknown>;
   onDelete: (entryId: string) => Promise<unknown>;
 };
 
 /**
- * Word / Sentenceのアウトライン操作は、Workflowyの考え方を参考にしている。
- *
- * PC:
- * - Tab / Shift + Tab: 階層を下げる / 戻す
- * - Ctrl or Cmd + Shift + ← →: 階層を戻す / 下げる
- * - Ctrl or Cmd + Shift + ↑ ↓: 同じ階層で並び替える
- *
- * Mobile:
- * - 誤操作を避けるため、⋯ をタップしたときだけ下から操作シートを開く
- * - 直接コピー / 直接削除も、項目の右側からすぐ使える
+ * 本文と任意の備考をまとめて扱う項目。
+ * 備考が空のときは表示用の行を一切出さない。
  */
 export function EntryItem({
   entry,
@@ -62,28 +58,41 @@ export function EntryItem({
   onUpdate,
   onDelete,
 }: EntryItemProps) {
-  const [isEditing, setIsEditing] = useState(false);
+  const [editMode, setEditMode] = useState<EditMode>(null);
   const [value, setValue] = useState(entry.content);
+  const [noteValue, setNoteValue] = useState(entry.note);
+  const [showNoteEditor, setShowNoteEditor] = useState(Boolean(entry.note.trim()));
   const [isComposing, setIsComposing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [copyFeedback, setCopyFeedback] = useState<CopyFeedback>(null);
 
-  const inputRef = useRef<HTMLInputElement | HTMLTextAreaElement | null>(null);
+  const contentInputRef = useRef<HTMLInputElement | HTMLTextAreaElement | null>(null);
+  const noteInputRef = useRef<HTMLTextAreaElement | null>(null);
   const structureActionInFlightRef = useRef(false);
   const copyFeedbackTimerRef = useRef<number | null>(null);
 
   const isParagraph = kind === "paragraph";
   const isHierarchical = supportsHierarchy(kind);
+  const hasNote = entry.note.trim().length > 0;
+  const isEditing = editMode !== null;
 
   useEffect(() => {
-    setValue(entry.content);
-  }, [entry.content]);
-
-  useEffect(() => {
-    if (isEditing) {
-      inputRef.current?.focus();
+    if (!isEditing) {
+      setValue(entry.content);
+      setNoteValue(entry.note);
+      setShowNoteEditor(Boolean(entry.note.trim()));
     }
-  }, [isEditing]);
+  }, [entry.content, entry.note, isEditing]);
+
+  useEffect(() => {
+    if (editMode === "content") {
+      contentInputRef.current?.focus();
+    }
+
+    if (editMode === "note") {
+      noteInputRef.current?.focus();
+    }
+  }, [editMode]);
 
   useEffect(() => {
     return () => {
@@ -93,37 +102,47 @@ export function EntryItem({
     };
   }, []);
 
+  const beginContentEdit = () => {
+    if (disabled) return;
+    setValue(entry.content);
+    setNoteValue(entry.note);
+    setShowNoteEditor(Boolean(entry.note.trim()));
+    setEditMode("content");
+  };
 
-  const persistCurrentValue = async (exitEditing: boolean): Promise<boolean> => {
-    const nextValue = value.trim();
+  const beginNoteEdit = () => {
+    if (disabled) return;
+    setValue(entry.content);
+    setNoteValue(entry.note);
+    setShowNoteEditor(true);
+    setEditMode("note");
+  };
 
-    if (!nextValue) {
+  const persist = async (exitEditing = true): Promise<boolean> => {
+    const nextContent = value.trim();
+    const nextNote = noteValue.trim();
+
+    if (!nextContent) {
       setValue(entry.content);
-
-      if (exitEditing) {
-        setIsEditing(false);
-      }
-
+      if (exitEditing) setEditMode(null);
       return false;
     }
 
-    if (nextValue === entry.content) {
-      if (exitEditing) {
-        setIsEditing(false);
-      }
+    const patch: EntryUpdate = {};
 
+    if (nextContent !== entry.content) patch.content = nextContent;
+    if (nextNote !== entry.note) patch.note = nextNote;
+
+    if (Object.keys(patch).length === 0) {
+      if (exitEditing) setEditMode(null);
       return true;
     }
 
     setIsSaving(true);
 
     try {
-      await onUpdate(entry.id, nextValue);
-
-      if (exitEditing) {
-        setIsEditing(false);
-      }
-
+      await onUpdate(entry.id, patch);
+      if (exitEditing) setEditMode(null);
       return true;
     } finally {
       setIsSaving(false);
@@ -131,12 +150,14 @@ export function EntryItem({
   };
 
   const save = async () => {
-    await persistCurrentValue(true);
+    await persist(true);
   };
 
   const cancel = () => {
     setValue(entry.content);
-    setIsEditing(false);
+    setNoteValue(entry.note);
+    setShowNoteEditor(Boolean(entry.note.trim()));
+    setEditMode(null);
   };
 
   const canRunStructureShortcut = (shortcut: StructureShortcut): boolean => {
@@ -166,27 +187,15 @@ export function EntryItem({
     structureActionInFlightRef.current = true;
 
     try {
-      const canContinue = await persistCurrentValue(false);
-
+      const canContinue = await persist(false);
       if (!canContinue) return;
 
-      if (shortcut === "indent") {
-        await onIndent(entry.id);
-      }
+      if (shortcut === "indent") await onIndent(entry.id);
+      if (shortcut === "outdent") await onOutdent(entry.id);
+      if (shortcut === "move-up") await onMove(entry.id, "up");
+      if (shortcut === "move-down") await onMove(entry.id, "down");
 
-      if (shortcut === "outdent") {
-        await onOutdent(entry.id);
-      }
-
-      if (shortcut === "move-up") {
-        await onMove(entry.id, "up");
-      }
-
-      if (shortcut === "move-down") {
-        await onMove(entry.id, "down");
-      }
-
-      window.requestAnimationFrame(() => inputRef.current?.focus());
+      window.requestAnimationFrame(() => contentInputRef.current?.focus());
     } finally {
       structureActionInFlightRef.current = false;
     }
@@ -200,15 +209,12 @@ export function EntryItem({
   ): StructureShortcut | null => {
     if (!isHierarchical || disabled) return null;
 
-    if (event.key === "Tab") {
-      return event.shiftKey ? "outdent" : "indent";
-    }
+    if (event.key === "Tab") return event.shiftKey ? "outdent" : "indent";
 
     const hasShiftedModifier =
       event.shiftKey && (event.ctrlKey || event.metaKey || event.altKey);
 
     if (!hasShiftedModifier) return null;
-
     if (event.key === "ArrowRight") return "indent";
     if (event.key === "ArrowLeft") return "outdent";
     if (event.key === "ArrowUp") return "move-up";
@@ -219,20 +225,17 @@ export function EntryItem({
 
   const handleStructureShortcut = (event: KeyboardEvent<Element>): boolean => {
     const shortcut = getStructureShortcut(event);
-
     if (!shortcut) return false;
 
     event.preventDefault();
     void runStructureShortcut(shortcut);
-
     return true;
   };
 
-  const handleKeyDown = (
+  const handleContentKeyDown = (
     event: KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>,
   ) => {
     if (event.nativeEvent.isComposing || isComposing) return;
-
     if (handleStructureShortcut(event)) return;
 
     if (event.key === "Escape") {
@@ -257,13 +260,37 @@ export function EntryItem({
     }
   };
 
+  const handleNoteKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.nativeEvent.isComposing || isComposing) return;
+
+    if (event.key === "Escape") {
+      event.preventDefault();
+      cancel();
+      return;
+    }
+
+    if (
+      event.key === "Enter" &&
+      (event.metaKey || event.ctrlKey)
+    ) {
+      event.preventDefault();
+      void save();
+    }
+  };
+
   const handleReadOnlyKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
     void handleStructureShortcut(event);
   };
 
+  const handleEditorBlur = (event: FocusEvent<HTMLElement>) => {
+    if (!isEditing || isSaving) return;
 
-  const handleContentClick = () => {
-    setIsEditing(true);
+    const nextFocusedElement = event.relatedTarget as Node | null;
+    if (nextFocusedElement && event.currentTarget.contains(nextFocusedElement)) {
+      return;
+    }
+
+    void save();
   };
 
   const setCopyResult = (result: CopyFeedback) => {
@@ -283,11 +310,7 @@ export function EntryItem({
     if (disabled) return;
 
     try {
-      await copyToClipboard(
-        showEntryNumbers
-          ? `${entry.outline_number} ${entry.content}`
-          : entry.content,
-      );
+      await copyToClipboard(formatEntryCopyText(entry, showEntryNumbers));
       setCopyResult("copied");
     } catch {
       setCopyResult("failed");
@@ -295,8 +318,6 @@ export function EntryItem({
   };
 
   const remove = async () => {
-    // 子を持つ親だけ、EntryColumn側で確認する。
-    // 子を持たない項目は即時削除し、Undoトーストで戻せる。
     await onDelete(entry.id);
   };
 
@@ -324,46 +345,98 @@ export function EntryItem({
           isHierarchical ? "entry-item--hierarchical" : ""
         } ${entry.depth > 0 ? "entry-item--nested" : ""}`}
         style={style}
+        onBlur={handleEditorBlur}
       >
         <div className="entry-item__editor-control">
           {showEntryNumbers ? (
-            <span className="entry-item__number entry-item__number--editing" aria-hidden="true">
+            <span
+              className="entry-item__number entry-item__number--editing"
+              aria-hidden="true"
+            >
               {entry.outline_number}
             </span>
           ) : null}
 
-          {isParagraph ? (
-            <textarea
-              ref={(element) => {
-                inputRef.current = element;
-              }}
-              value={value}
-              disabled={disabled || isSaving}
-              onChange={(event) => setValue(event.target.value)}
-              onKeyDown={handleKeyDown}
-              onCompositionStart={() => setIsComposing(true)}
-              onCompositionEnd={() => setIsComposing(false)}
-              onBlur={() => void save()}
-              rows={4}
-              aria-label="段落を編集"
-            />
+          {editMode === "content" ? (
+            isParagraph ? (
+              <textarea
+                ref={(element) => {
+                  contentInputRef.current = element;
+                }}
+                value={value}
+                disabled={disabled || isSaving}
+                onChange={(event) => setValue(event.target.value)}
+                onKeyDown={handleContentKeyDown}
+                onCompositionStart={() => setIsComposing(true)}
+                onCompositionEnd={() => setIsComposing(false)}
+                rows={4}
+                aria-label="段落を編集"
+              />
+            ) : (
+              <input
+                ref={(element) => {
+                  contentInputRef.current = element;
+                }}
+                value={value}
+                disabled={disabled || isSaving}
+                onChange={(event) => setValue(event.target.value)}
+                onKeyDown={handleContentKeyDown}
+                onCompositionStart={() => setIsComposing(true)}
+                onCompositionEnd={() => setIsComposing(false)}
+                aria-label="項目を編集"
+                aria-keyshortcuts={hierarchyKeyShortcuts}
+              />
+            )
           ) : (
-            <input
-              ref={(element) => {
-                inputRef.current = element;
-              }}
-              value={value}
-              disabled={disabled || isSaving}
-              onChange={(event) => setValue(event.target.value)}
-              onKeyDown={handleKeyDown}
-              onCompositionStart={() => setIsComposing(true)}
-              onCompositionEnd={() => setIsComposing(false)}
-              onBlur={() => void save()}
-              aria-label="項目を編集"
-              aria-keyshortcuts={hierarchyKeyShortcuts}
-            />
+            <p className="entry-item__editing-content">{entry.content}</p>
           )}
         </div>
+
+        {showNoteEditor ? (
+          <div className="entry-item__note-editor">
+            <div className="entry-item__note-editor-header">
+              <label htmlFor={`entry-note-${entry.id}`}>備考</label>
+              <button
+                type="button"
+                className="text-button entry-item__remove-note"
+                disabled={disabled || isSaving}
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => {
+                  setNoteValue("");
+                  setShowNoteEditor(false);
+                }}
+              >
+                備考を消す
+              </button>
+            </div>
+            <textarea
+              id={`entry-note-${entry.id}`}
+              ref={noteInputRef}
+              value={noteValue}
+              disabled={disabled || isSaving}
+              onChange={(event) => setNoteValue(event.target.value)}
+              onKeyDown={handleNoteKeyDown}
+              onCompositionStart={() => setIsComposing(true)}
+              onCompositionEnd={() => setIsComposing(false)}
+              rows={3}
+              placeholder="補足を書く"
+              aria-label="備考を編集"
+            />
+          </div>
+        ) : (
+          <button
+            type="button"
+            className="entry-item__add-note"
+            disabled={disabled || isSaving}
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => {
+              setShowNoteEditor(true);
+              setEditMode("note");
+            }}
+          >
+            ＋ 備考を追加
+          </button>
+        )}
 
         {showCreatedAt ? (
           <time
@@ -386,7 +459,6 @@ export function EntryItem({
           >
             削除
           </button>
-
           <button
             type="button"
             className="text-button"
@@ -397,7 +469,6 @@ export function EntryItem({
           >
             取り消す
           </button>
-
           <button
             type="button"
             className="text-button text-button--strong"
@@ -427,7 +498,7 @@ export function EntryItem({
           <button
             type="button"
             className="entry-item__content"
-            onClick={handleContentClick}
+            onClick={beginContentEdit}
             onKeyDown={handleReadOnlyKeyDown}
             disabled={disabled}
             aria-label={
@@ -444,6 +515,19 @@ export function EntryItem({
             ) : null}
             <span className="entry-item__content-text">{entry.content}</span>
           </button>
+
+          {hasNote ? (
+            <button
+              type="button"
+              className="entry-item__note"
+              onClick={beginNoteEdit}
+              disabled={disabled}
+              aria-label="備考を編集"
+            >
+              <span className="entry-item__note-label">備考</span>
+              <span className="entry-item__note-text">{entry.note}</span>
+            </button>
+          ) : null}
 
           {showCreatedAt ? (
             <time
@@ -466,6 +550,17 @@ export function EntryItem({
             title={copyLabel}
           >
             {copyFeedback === "copied" ? "✓" : copyFeedback === "failed" ? "!" : "⧉"}
+          </button>
+
+          <button
+            type="button"
+            className="entry-item__note-trigger"
+            onClick={beginNoteEdit}
+            disabled={disabled}
+            aria-label={hasNote ? "備考を編集" : "備考を追加"}
+            title={hasNote ? "備考を編集" : "備考を追加"}
+          >
+            {hasNote ? "備考" : "＋備考"}
           </button>
 
           {isHierarchical ? (
@@ -517,7 +612,6 @@ export function EntryItem({
           >
             ＋ 下に追加
           </button>
-
           <button
             type="button"
             className="structure-action"
@@ -527,7 +621,6 @@ export function EntryItem({
           >
             ↑ 上へ移動
           </button>
-
           <button
             type="button"
             className="structure-action"
@@ -537,7 +630,6 @@ export function EntryItem({
           >
             ↓ 下へ移動
           </button>
-
           <button
             type="button"
             className="structure-action"
@@ -547,7 +639,6 @@ export function EntryItem({
           >
             ← 左へ戻す
           </button>
-
           <button
             type="button"
             className="structure-action"
@@ -557,7 +648,6 @@ export function EntryItem({
           >
             → 右へ下げる
           </button>
-
           <button
             type="button"
             className="structure-action structure-action--danger"

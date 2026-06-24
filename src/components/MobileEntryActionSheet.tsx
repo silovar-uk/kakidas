@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { copyToClipboard } from "../lib/clipboard";
+import { formatEntryCopyText } from "../lib/entryText";
 import { lockBodyScroll } from "../lib/bodyScrollLock";
 import { type EntryKind, type EntryTreeNode } from "../types/memo";
 
@@ -109,11 +110,7 @@ export function MobileEntryActionSheet({
     if (disabled || isWorking) return;
 
     try {
-      await copyToClipboard(
-        showEntryNumbers
-          ? `${entry.outline_number} ${entry.content}`
-          : entry.content,
-      );
+      await copyToClipboard(formatEntryCopyText(entry, showEntryNumbers));
       setCopyStatus("コピーしました");
     } catch {
       setCopyStatus("コピーできませんでした");

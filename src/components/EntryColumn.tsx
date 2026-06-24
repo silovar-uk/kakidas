@@ -9,6 +9,7 @@ import { UndoToast } from "./UndoToast";
 import {
   type EntryDeletionResult,
   type EntryKind,
+  type EntryUpdate,
   type EntryTreeNode,
   ENTRY_KIND_LABEL,
   supportsHierarchy,
@@ -31,7 +32,7 @@ type EntryColumnProps = {
     content: string,
     parentId?: string | null,
   ) => Promise<unknown>;
-  onUpdate: (entryId: string, content: string) => Promise<unknown>;
+  onUpdate: (entryId: string, patch: EntryUpdate) => Promise<unknown>;
   onDelete: (entryId: string) => Promise<EntryDeletionResult>;
   onRestore: (entryIds: string[]) => Promise<void>;
   onDeleteAll: (kind: EntryKind) => Promise<number>;

@@ -2840,3 +2840,164 @@ a:focus-visible {
     font-size: 10px;
   }
 }
+
+/* --------------------------------------------------------------------------
+   v0.5.11 — optional entry notes
+   備考が空の項目では .entry-item__note 自体を描画しない。
+   -------------------------------------------------------------------------- */
+.entry-item__note {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 7px;
+  width: 100%;
+  margin: 5px 0 0;
+  padding: 5px 0 0;
+  border: 0;
+  border-top: 1px solid rgba(222, 216, 207, 0.8);
+  color: #70685f;
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.55;
+  text-align: left;
+}
+
+.entry-item__note:hover:not(:disabled) {
+  color: #554c43;
+}
+
+.entry-item__note-label {
+  padding-top: 1px;
+  color: #9a7a64;
+  font-size: 10px;
+  font-weight: 760;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+
+.entry-item__note-text {
+  min-width: 0;
+  white-space: pre-wrap;
+}
+
+.entry-item__note-trigger {
+  display: inline-flex;
+  min-height: 30px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 6px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: #86796d;
+  background: transparent;
+  font-size: 10px;
+  font-weight: 720;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.entry-item__note-trigger:hover:not(:disabled) {
+  border-color: #d8c9bb;
+  color: #76523c;
+  background: #fff5ec;
+}
+
+.entry-item__note-editor {
+  margin-top: 10px;
+  padding: 9px 10px 10px;
+  border: 1px solid #e1d9d0;
+  border-radius: 10px;
+  background: #fffdfa;
+}
+
+.entry-item__note-editor-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+.entry-item__note-editor-header label {
+  color: #806b5d;
+  font-size: 11px;
+  font-weight: 760;
+}
+
+.entry-item__remove-note {
+  min-height: 25px;
+  padding: 3px 5px;
+  color: #a05b4c;
+  font-size: 11px;
+}
+
+.entry-item__note-editor textarea {
+  min-height: 74px;
+  padding: 8px 9px;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.entry-item__add-note {
+  margin-top: 9px;
+  padding: 3px 2px;
+  border: 0;
+  color: #8a7668;
+  background: transparent;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.entry-item__add-note:hover:not(:disabled) {
+  color: #874526;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.entry-item__editing-content {
+  width: 100%;
+  margin: 8px 0 0;
+  color: #4c463f;
+  font-size: 14px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+.entry-column--word .entry-item__note {
+  margin-top: 3px;
+  padding-top: 3px;
+  font-size: 11px;
+}
+
+.entry-column--word .entry-item__note-label {
+  font-size: 9px;
+}
+
+@media (max-width: 920px) {
+  .entry-item__note-trigger {
+    min-height: 36px;
+    padding-inline: 7px;
+    border-color: #e2d7cd;
+    border-radius: 10px;
+    background: #fffefa;
+    font-size: 10px;
+  }
+
+  .entry-item__note {
+    margin-top: 6px;
+    padding-top: 6px;
+    font-size: 12px;
+  }
+
+  .entry-item__note-editor textarea {
+    min-height: 90px;
+    font-size: 16px;
+  }
+}
+
+@media (max-width: 370px) {
+  .entry-item__note-trigger {
+    padding-inline: 5px;
+    font-size: 9px;
+  }
+}

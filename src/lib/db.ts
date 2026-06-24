@@ -1,5 +1,5 @@
 const DB_NAME = "kakidasu-db";
-const DB_VERSION = 4;
+const DB_VERSION = 5;
 
 export const STORE_NAMES = {
   memos: "memos",
@@ -111,6 +111,25 @@ function openDatabase(): Promise<IDBDatabase> {
           };
 
           cursor.update(next);
+          cursor.continue();
+        };
+      }
+
+      // v0.5.11: 各項目の任意の備考を、旧レコードにも空文字で補完する。
+      // 表示側は空文字を出さないため、既存メモの見た目は変えない。
+      if (oldVersion < 5) {
+        const cursorRequest = entryStore.openCursor();
+
+        cursorRequest.onsuccess = () => {
+          const cursor = cursorRequest.result;
+          if (!cursor) return;
+
+          const value = cursor.value as Record<string, unknown>;
+
+          if (typeof value.note !== "string") {
+            cursor.update({ ...value, note: "" });
+          }
+
           cursor.continue();
         };
       }

@@ -23,11 +23,18 @@ create table if not exists public.entries (
   kind text not null check (kind in ('word', 'sentence', 'paragraph')),
   parent_id uuid references public.entries(id) on delete cascade,
   content text not null,
+  -- 任意の備考。空文字ならアプリ画面には表示しない。
+  note text not null default '',
   sort_order integer not null default 0,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   deleted_at timestamptz
 );
+
+
+-- v0.5.11: 既存プロジェクトにも任意の備考カラムを追加する。
+alter table public.entries
+  add column if not exists note text not null default '';
 
 create index if not exists entries_memo_kind_parent_order_idx
   on public.entries (memo_id, kind, parent_id, sort_order, created_at)

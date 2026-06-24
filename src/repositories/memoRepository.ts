@@ -519,6 +519,7 @@ class IndexedDbMemoRepository implements MemoRepository {
       kind: input.kind,
       parent_id: parentId,
       content,
+      note: input.note?.trim() ?? "",
       sort_order: input.sort_order ?? siblings.length,
       created_at: timestamp,
       updated_at: timestamp,
@@ -557,6 +558,7 @@ class IndexedDbMemoRepository implements MemoRepository {
 
     const current = await this.requireActiveEntry(entryStore, entryId, transaction);
     const content = patch.content === undefined ? current.content : patch.content.trim();
+    const note = patch.note === undefined ? current.note : patch.note.trim();
 
     if (!content && patch.deleted_at === undefined) {
       transaction.abort();
@@ -569,6 +571,7 @@ class IndexedDbMemoRepository implements MemoRepository {
       ...current,
       ...patch,
       content: content || current.content,
+      note,
       updated_at: timestamp,
     };
 

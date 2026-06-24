@@ -53,6 +53,8 @@ export type EntryRow = {
   kind: EntryKind;
   parent_id: string | null;
   content: string;
+  /** 任意の補足。空文字なら画面に余白を作らない。 */
+  note: string;
   sort_order: number;
   created_at: string;
   updated_at: string;
@@ -63,8 +65,10 @@ export type EntryRow = {
  * v1バックアップや既存IndexedDBには parent_id が存在しないことがある。
  * 読み込み時は null として補完する。
  */
-export type LegacyEntryRow = Omit<EntryRow, "parent_id"> & {
+export type LegacyEntryRow = Omit<EntryRow, "parent_id" | "note"> & {
   parent_id?: string | null;
+  /** v0.5.10以前は備考カラムがないため、読み込み時に空文字へ補完する。 */
+  note?: string | null;
 };
 
 export type EntryInsert = {
@@ -74,6 +78,7 @@ export type EntryInsert = {
   kind: EntryKind;
   parent_id?: string | null;
   content: string;
+  note?: string;
   sort_order?: number;
   created_at?: string;
   updated_at?: string;
@@ -81,7 +86,7 @@ export type EntryInsert = {
 };
 
 export type EntryUpdate = Partial<
-  Pick<EntryRow, "content" | "sort_order" | "updated_at" | "deleted_at" | "user_id">
+  Pick<EntryRow, "content" | "note" | "sort_order" | "updated_at" | "deleted_at" | "user_id">
 >;
 
 /**
@@ -334,6 +339,7 @@ export function normalizeEntryRow(entry: LegacyEntryRow): EntryRow {
   return {
     ...entry,
     parent_id: entry.parent_id ?? null,
+    note: typeof entry.note === "string" ? entry.note : "",
   };
 }
 

@@ -50,12 +50,26 @@ function buildMarkdown(
           ? ""
           : "- ";
 
+      const noteLines = entry.note.trim().split(/\r?\n/).filter(Boolean);
+
       if (kind === "paragraph") {
         parts.push(`\n${prefix}${entry.content}`);
+
+        if (noteLines.length > 0) {
+          parts.push(`備考：${noteLines[0]}`);
+          noteLines.slice(1).forEach((line) => parts.push(`  ${line}`));
+        }
+
         continue;
       }
 
       parts.push(`${indentation}${prefix}${entry.content}`);
+
+      if (noteLines.length > 0) {
+        const noteIndentation = `${indentation}  `;
+        parts.push(`${noteIndentation}備考：${noteLines[0]}`);
+        noteLines.slice(1).forEach((line) => parts.push(`${noteIndentation}${line}`));
+      }
     }
   }
 
@@ -503,7 +517,7 @@ export function MemoEditorPage() {
             }
             onAutoFocusHandled={handleComposerAutoFocusHandled}
             onCreate={createEntry}
-            onUpdate={(entryId, content) => updateEntry(entryId, { content })}
+            onUpdate={(entryId, patch) => updateEntry(entryId, patch)}
             onDelete={deleteEntry}
             onRestore={restoreEntries}
             onDeleteAll={deleteEntriesByKind}
