@@ -2,6 +2,10 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthProvider";
 import { copyToClipboard } from "../lib/clipboard";
+import {
+  readCopyIncludeCompleted,
+  writeCopyIncludeCompleted,
+} from "../lib/copyPreferences";
 import { formatMemoText } from "../lib/memoText";
 import { CloudAccountDialog } from "../components/CloudAccountDialog";
 import { CloudImportDialog } from "../components/CloudImportDialog";
@@ -22,6 +26,7 @@ import {
   type CloudState,
   type MemoCloudSnapshot,
   type MemoListItem,
+  type MemoWithEntries,
   formatUpdatedAt,
 } from "../types/memo";
 
@@ -72,6 +77,13 @@ export function MemoListPage() {
   const [isUploading, setIsUploading] = useState(false);
   const [isApplyingCloudUpdate, setIsApplyingCloudUpdate] = useState(false);
   const [copyingMemoId, setCopyingMemoId] = useState<string | null>(null);
+  /** 区分コピーと共通の、端末ごとの出力設定。初期値は完了を除外。 */
+  const [includeCompletedInCopy, setIncludeCompletedInCopy] = useState(
+    readCopyIncludeCompleted,
+  );
+  // 一覧表示の間に本文を温めておく。スマホでも、コピーのタップ操作中に
+  // Clipboard API を呼べるため、Safariの「The request is not allowed」を避けやすい。
+  const memoCopyCacheRef = useRef<Map<string, MemoWithEntries>>(new Map());
   const [conflictSnapshot, setConflictSnapshot] =
     useState<MemoCloudSnapshot | null>(null);
 
@@ -93,6 +105,54 @@ export function MemoListPage() {
     prepareImport,
     importSnapshot,
   } = useCloudMemos(user?.id ?? null);
+
+  useEffect(() => {
+    writeCopyIncludeCompleted(includeCompletedInCopy);
+  }, [includeCompletedInCopy]);
+
+  const primeMemoCopy = (memoId: string) => {
+    if (memoCopyCacheRef.current.has(memoId)) return;
+
+    void memoRepository
+      .getMemo(memoId)
+      .then((detail) => {
+        if (detail) memoCopyCacheRef.current.set(memoId, detail);
+      })
+      .catch(() => {
+        // コピー時に改めて取得して、通常のエラー表示へ任せる。
+      });
+  };
+
+  // 先読み済みの内容があれば、スマホのコピー操作で非同期処理をまたがない。
+  // 一覧が更新されたらキャッシュも作り直し、古い本文をコピーしない。
+  useEffect(() => {
+    let cancelled = false;
+    const cache = memoCopyCacheRef.current;
+    cache.clear();
+
+    const warmCopyCache = async () => {
+      const details = await Promise.all(
+        memos.map(async (memo) => ({
+          id: memo.id,
+          detail: await memoRepository.getMemo(memo.id),
+        })),
+      );
+
+      if (cancelled) return;
+
+      for (const { id, detail } of details) {
+        if (detail) cache.set(id, detail);
+      }
+    };
+
+    void warmCopyCache().catch(() => {
+      // 先読み失敗時も、コピーを押した時の通常取得はできる。
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [memos]);
 
   // ログイン済みなら、一覧を開いた時にだけクラウドの更新状態を照合する。
   // 入力中に自動通信はしない。
@@ -224,7 +284,13 @@ export function MemoListPage() {
     setNotice(null);
 
     try {
-      const detail = await memoRepository.getMemo(memo.id);
+      let detail = memoCopyCacheRef.current.get(memo.id) ?? null;
+      const wasPrepared = detail !== null;
+
+      if (!detail) {
+        detail = await memoRepository.getMemo(memo.id);
+        if (detail) memoCopyCacheRef.current.set(memo.id, detail);
+      }
 
       if (!detail) {
         throw new Error("コピーするメモが見つかりません。");
@@ -245,15 +311,20 @@ export function MemoListPage() {
       await copyToClipboard(
         formatMemoText(detail, {
           includeEntryNumbers,
-          excludeCompleted: true,
+          excludeCompleted: !includeCompletedInCopy,
         }),
+        // 先読みが間に合わなかった初回タップでも、選択コピーを優先して
+        // モバイルSafariのクリップボード権限制約を回避する。
+        { preferSelectionFallback: !wasPrepared },
       );
 
-      setNotice(
-        completedCount > 0
-          ? `「${memo.title}」をコピーしました。完了済み${completedCount}件は含めていません。`
-          : `「${memo.title}」をコピーしました。`,
-      );
+      const completionNotice = includeCompletedInCopy && completedCount > 0
+        ? `完了済み${completedCount}件も含めました。`
+        : !includeCompletedInCopy && completedCount > 0
+          ? `完了済み${completedCount}件は含めていません。`
+          : "";
+
+      setNotice(`「${memo.title}」をコピーしました。${completionNotice}`);
     } catch (copyError) {
       setNotice(
         copyError instanceof Error
@@ -517,6 +588,20 @@ export function MemoListPage() {
               onChange={(event) => void handleImport(event.target.files?.[0])}
             />
           </div>
+
+          <div className="memo-list-toolbar__copy-options">
+            <label className="timestamp-visibility-toggle">
+              <input
+                type="checkbox"
+                checked={includeCompletedInCopy}
+                onChange={(event) => setIncludeCompletedInCopy(event.target.checked)}
+              />
+              <span className="timestamp-visibility-toggle__track" aria-hidden="true">
+                <span className="timestamp-visibility-toggle__thumb" />
+              </span>
+              <span>コピーに完了を含める</span>
+            </label>
+          </div>
         </section>
       )}
 
@@ -597,9 +682,12 @@ export function MemoListPage() {
                       type="button"
                       className="memo-card__copy"
                       disabled={copyingMemoId !== null}
+                      onPointerEnter={() => primeMemoCopy(memo.id)}
+                      onPointerDown={() => primeMemoCopy(memo.id)}
+                      onFocus={() => primeMemoCopy(memo.id)}
                       onClick={() => void handleCopyMemo(memo)}
                       aria-label={`「${memo.title}」をコピー`}
-                      title="完了済みを除いてコピー"
+                      title={includeCompletedInCopy ? "完了済みを含めてコピー" : "完了済みを除いてコピー"}
                     >
                       {copyingMemoId === memo.id ? "コピー中…" : "コピー"}
                     </button>

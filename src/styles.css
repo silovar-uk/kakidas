@@ -3513,3 +3513,98 @@ a:focus-visible {
   }
 }
 
+
+/* --------------------------------------------------------------------------
+   v0.5.17 — section copy / resilient mobile memo copy
+   -------------------------------------------------------------------------- */
+/* 区分ごとのコピーは、見出し右側に小さく置く。
+   完了済みを除いた内容だけをコピーするため、作業中の出力が軽く保たれる。 */
+.entry-column__copy {
+  display: inline-flex;
+  min-height: 30px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 8px;
+  border: 1px solid #d9d1c7;
+  border-radius: 8px;
+  color: #655e55;
+  background: #fffefa;
+  font-size: 11px;
+  font-weight: 720;
+  line-height: 1;
+  white-space: nowrap;
+  transition: border-color 120ms ease, background-color 120ms ease, color 120ms ease;
+}
+
+.entry-column__copy:hover:not(:disabled) {
+  border-color: #bfa184;
+  color: #85452d;
+  background: #fff6f0;
+}
+
+.entry-column__copy:disabled {
+  color: #b1aca4;
+  border-color: #e8e4de;
+  background: #faf9f7;
+}
+
+@media (max-width: 920px) {
+  .entry-column__header {
+    align-items: flex-start;
+  }
+
+  .entry-column__header-actions {
+    display: grid;
+    grid-template-columns: auto auto;
+    align-items: center;
+    justify-items: end;
+    gap: 5px 6px;
+  }
+
+  .entry-column__copy {
+    min-height: 32px;
+    padding-inline: 9px;
+    border-radius: 9px;
+    font-size: 11px;
+  }
+
+  .entry-column__delete-all {
+    grid-column: 1 / -1;
+    justify-self: end;
+    min-height: 32px;
+  }
+}
+
+
+/* --------------------------------------------------------------------------
+   v0.5.18 — choose whether completed entries are included in copies
+   -------------------------------------------------------------------------- */
+/* メモ一覧でも、コピー対象を明示してからコピーできる。
+   既存のトグルと同じ小さな見た目にして、操作領域を増やしすぎない。 */
+.memo-list-toolbar {
+  flex-wrap: wrap;
+}
+
+.memo-list-toolbar__copy-options {
+  display: flex;
+  flex: 1 0 100%;
+  justify-content: flex-end;
+}
+
+.memo-list-toolbar__copy-options .timestamp-visibility-toggle {
+  min-height: 30px;
+  padding-block: 4px;
+  font-size: 11px;
+}
+
+@media (max-width: 560px) {
+  .memo-list-toolbar__copy-options {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .memo-list-toolbar__copy-options .timestamp-visibility-toggle {
+    min-height: 36px;
+    font-size: 12px;
+  }
+}

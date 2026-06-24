@@ -36,6 +36,13 @@ type EntryColumnProps = {
   onDelete: (entryId: string) => Promise<EntryDeletionResult>;
   onRestore: (entryIds: string[]) => Promise<void>;
   onDeleteAll: (kind: EntryKind) => Promise<number>;
+  /** 現在のコピー設定に応じた、区分単位のコピー対象件数。 */
+  copyableEntryCount: number;
+  /** 完了済みもコピー対象に含めるか。 */
+  copyIncludesCompleted: boolean;
+  /** 単語 / 文 / 段落ごとのテキストをコピーする。 */
+  onCopy: (kind: EntryKind) => Promise<void>;
+  isCopying?: boolean;
   onIndent: (entryId: string) => Promise<unknown>;
   onOutdent: (entryId: string) => Promise<unknown>;
   onMove: (entryId: string, direction: "up" | "down") => Promise<unknown>;
@@ -66,6 +73,10 @@ export function EntryColumn({
   onDelete,
   onRestore,
   onDeleteAll,
+  copyableEntryCount,
+  copyIncludesCompleted,
+  onCopy,
+  isCopying = false,
   onIndent,
   onOutdent,
   onMove,
@@ -233,6 +244,14 @@ export function EntryColumn({
     }
   };
 
+  const handleCopy = async () => {
+    if (disabled || isDeletingAll || isCopying || copyableEntryCount === 0) {
+      return;
+    }
+
+    await onCopy(kind);
+  };
+
   const handleDeleteAll = async () => {
     if (entries.length === 0 || disabled || isDeletingAll) return;
 
@@ -291,6 +310,21 @@ ${entries.length}件が削除されます。${hierarchyNotice}
 
         <div className="entry-column__header-actions">
           <span className="entry-column__count">{entries.length}</span>
+          <button
+            type="button"
+            className="entry-column__copy"
+            onClick={() => void handleCopy()}
+            disabled={
+              disabled ||
+              isDeletingAll ||
+              isCopying ||
+              copyableEntryCount === 0
+            }
+            aria-label={`${ENTRY_KIND_LABEL[kind]}をコピー`}
+            title={copyIncludesCompleted ? "完了済みを含めてコピー" : "完了済みを除いてコピー"}
+          >
+            {isCopying ? "コピー中…" : "コピー"}
+          </button>
           <button
             type="button"
             className="entry-column__delete-all"

@@ -1,5 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { resetBodyScrollLock } from "../lib/bodyScrollLock";
+import { copyToClipboard } from "../lib/clipboard";
+import {
+  readCopyIncludeCompleted,
+  writeCopyIncludeCompleted,
+} from "../lib/copyPreferences";
 import { formatMemoText } from "../lib/memoText";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../auth/AuthProvider";
@@ -108,6 +113,7 @@ export function MemoEditorPage() {
   const [title, setTitle] = useState("");
   const [activeKind, setActiveKind] = useState<EntryKind>("word");
   const [notice, setNotice] = useState<string | null>(null);
+  const [copyingKind, setCopyingKind] = useState<EntryKind | null>(null);
   const [isCloudDialogOpen, setIsCloudDialogOpen] = useState(false);
   const [isUploadDialogOpen, setIsUploadDialogOpen] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
@@ -119,6 +125,10 @@ export function MemoEditorPage() {
   );
   const [hideCompletedEntries, setHideCompletedEntries] = useState(
     readHideCompletedEntries,
+  );
+  /** コピーだけに適用する設定。完了の表示／非表示とは独立させる。 */
+  const [includeCompletedInCopy, setIncludeCompletedInCopy] = useState(
+    readCopyIncludeCompleted,
   );
 
   // 表示設定は端末ごとに記憶する。クラウドへは送らないUI設定。
@@ -154,6 +164,10 @@ export function MemoEditorPage() {
       // 表示設定の保存に失敗しても、その場での表示切り替えは維持する。
     }
   }, [hideCompletedEntries]);
+
+  useEffect(() => {
+    writeCopyIncludeCompleted(includeCompletedInCopy);
+  }, [includeCompletedInCopy]);
 
   // メモ画面を離れた後に、モバイル操作シート等のスクロールロックを残さない。
   useEffect(() => {
@@ -218,6 +232,60 @@ export function MemoEditorPage() {
     setNotice("テキストを書き出しました。");
   };
 
+  const handleCopyKind = async (kind: EntryKind) => {
+    if (!memo || copyingKind !== null) return;
+
+    const copyableCount = memo.entries.filter(
+      (entry) =>
+        entry.kind === kind &&
+        (includeCompletedInCopy || !entry.is_completed),
+    ).length;
+
+    if (copyableCount === 0) {
+      setNotice(
+        includeCompletedInCopy
+          ? `「${ENTRY_KIND_LABEL[kind]}」にコピーできる項目はありません。`
+          : `「${ENTRY_KIND_LABEL[kind]}」にコピーできる未完了の項目はありません。`,
+      );
+      return;
+    }
+
+    setCopyingKind(kind);
+    setNotice(null);
+
+    try {
+      const completedCount = memo.entries.filter(
+        (entry) => entry.kind === kind && entry.is_completed,
+      ).length;
+
+      // メモ内容はすでに画面へ読み込み済み。タップ操作の同期中に
+      // Clipboard API を呼ぶことで、スマホでもコピー許可を保ちやすい。
+      await copyToClipboard(
+        formatMemoText(memo, {
+          includeEntryNumbers: showEntryNumbers,
+          excludeCompleted: !includeCompletedInCopy,
+          onlyKind: kind,
+        }),
+      );
+
+      const completionNotice = includeCompletedInCopy && completedCount > 0
+        ? `完了済み${completedCount}件も含めました。`
+        : !includeCompletedInCopy && completedCount > 0
+          ? `完了済み${completedCount}件は含めていません。`
+          : "";
+
+      setNotice(`「${ENTRY_KIND_LABEL[kind]}」をコピーしました。${completionNotice}`);
+    } catch (copyError) {
+      setNotice(
+        copyError instanceof Error
+          ? copyError.message
+          : "コピーできませんでした。",
+      );
+    } finally {
+      setCopyingKind(null);
+    }
+  };
+
   const handleDeleteMemo = async () => {
     const confirmed = window.confirm(
       "このメモを削除しますか？\n削除後はバックアップ以外から復元できません。",
@@ -266,6 +334,29 @@ export function MemoEditorPage() {
   const completedEntryCount = useMemo(
     () => memo?.entries.filter((entry) => entry.is_completed).length ?? 0,
     [memo?.entries],
+  );
+
+  const copyableEntryCountsByKind = useMemo(
+    () => ({
+      word: memo?.entries.filter(
+        (entry) =>
+          entry.kind === "word" &&
+          (includeCompletedInCopy || !entry.is_completed),
+      ).length ?? 0,
+      sentence:
+        memo?.entries.filter(
+          (entry) =>
+            entry.kind === "sentence" &&
+            (includeCompletedInCopy || !entry.is_completed),
+        ).length ?? 0,
+      paragraph:
+        memo?.entries.filter(
+          (entry) =>
+            entry.kind === "paragraph" &&
+            (includeCompletedInCopy || !entry.is_completed),
+        ).length ?? 0,
+    }),
+    [includeCompletedInCopy, memo?.entries],
   );
 
   const entriesByKind = useMemo(() => {
@@ -441,6 +532,18 @@ export function MemoEditorPage() {
             <span>完了を非表示</span>
           </label>
 
+          <label className="timestamp-visibility-toggle">
+            <input
+              type="checkbox"
+              checked={includeCompletedInCopy}
+              onChange={(event) => setIncludeCompletedInCopy(event.target.checked)}
+            />
+            <span className="timestamp-visibility-toggle__track" aria-hidden="true">
+              <span className="timestamp-visibility-toggle__thumb" />
+            </span>
+            <span>コピーに完了を含める</span>
+          </label>
+
           <button
             type="button"
             className="completed-entries-delete"
@@ -451,7 +554,11 @@ export function MemoEditorPage() {
             完了を削除{completedEntryCount > 0 ? `（${completedEntryCount}）` : ""}
           </button>
         </div>
-        <p>番号は一覧からのコピー・.txt出力にも反映されます。完了済みは一覧コピーに含めません。</p>
+        <p>
+          番号はコピー・.txt出力に反映されます。{includeCompletedInCopy
+            ? "コピーには完了済みも含めます。"
+            : "コピーでは完了済みを除きます。"}
+        </p>
       </section>
 
       <div className="editor-tabs" role="tablist" aria-label="入力する粒度">
@@ -504,6 +611,10 @@ export function MemoEditorPage() {
             onDelete={deleteEntry}
             onRestore={restoreEntries}
             onDeleteAll={deleteEntriesByKind}
+            copyableEntryCount={copyableEntryCountsByKind[kind]}
+            copyIncludesCompleted={includeCompletedInCopy}
+            onCopy={handleCopyKind}
+            isCopying={copyingKind === kind}
             onIndent={indentEntry}
             onOutdent={outdentEntry}
             onMove={moveEntry}
