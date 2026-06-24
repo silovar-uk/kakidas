@@ -117,6 +117,7 @@ export function MemoEditorPage() {
   const [isCloudDialogOpen, setIsCloudDialogOpen] = useState(false);
   const [isUploadDialogOpen, setIsUploadDialogOpen] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [isDisplayOptionsOpen, setIsDisplayOptionsOpen] = useState(false);
   const [showEntryTimestamps, setShowEntryTimestamps] = useState(
     readEntryTimestampVisibility,
   );
@@ -494,71 +495,88 @@ export function MemoEditorPage() {
         </div>
       </section>
 
-      <section className="editor-display-options" aria-label="表示設定">
-        <div className="editor-display-options__toggles">
-          <label className="timestamp-visibility-toggle">
-            <input
-              type="checkbox"
-              checked={showEntryTimestamps}
-              onChange={(event) => setShowEntryTimestamps(event.target.checked)}
-            />
-            <span className="timestamp-visibility-toggle__track" aria-hidden="true">
-              <span className="timestamp-visibility-toggle__thumb" />
-            </span>
-            <span>項目の日時を表示</span>
-          </label>
+      <section className="editor-utility-menu" aria-label="表示・整理">
+        <button
+          type="button"
+          className="editor-utility-menu__trigger"
+          onClick={() => setIsDisplayOptionsOpen((open) => !open)}
+          aria-expanded={isDisplayOptionsOpen}
+          aria-controls="editor-display-options-panel"
+        >
+          表示・整理 <span aria-hidden="true">{isDisplayOptionsOpen ? "⌃" : "⌄"}</span>
+        </button>
 
-          <label className="timestamp-visibility-toggle">
-            <input
-              type="checkbox"
-              checked={showEntryNumbers}
-              onChange={(event) => setShowEntryNumbers(event.target.checked)}
-            />
-            <span className="timestamp-visibility-toggle__track" aria-hidden="true">
-              <span className="timestamp-visibility-toggle__thumb" />
-            </span>
-            <span>番号を表示</span>
-          </label>
-
-          <label className="timestamp-visibility-toggle">
-            <input
-              type="checkbox"
-              checked={hideCompletedEntries}
-              onChange={(event) => setHideCompletedEntries(event.target.checked)}
-            />
-            <span className="timestamp-visibility-toggle__track" aria-hidden="true">
-              <span className="timestamp-visibility-toggle__thumb" />
-            </span>
-            <span>完了を非表示</span>
-          </label>
-
-          <label className="timestamp-visibility-toggle">
-            <input
-              type="checkbox"
-              checked={includeCompletedInCopy}
-              onChange={(event) => setIncludeCompletedInCopy(event.target.checked)}
-            />
-            <span className="timestamp-visibility-toggle__track" aria-hidden="true">
-              <span className="timestamp-visibility-toggle__thumb" />
-            </span>
-            <span>コピーに完了を含める</span>
-          </label>
-
-          <button
-            type="button"
-            className="completed-entries-delete"
-            onClick={() => void handleDeleteCompleted()}
-            disabled={isSaving || completedEntryCount === 0}
-            title="完了済み項目をまとめて削除"
+        {isDisplayOptionsOpen ? (
+          <div
+            id="editor-display-options-panel"
+            className="editor-display-options"
           >
-            完了を削除{completedEntryCount > 0 ? `（${completedEntryCount}）` : ""}
-          </button>
-        </div>
-        <p>
-          番号はコピー・.txt出力に反映されます。{includeCompletedInCopy
-            ? "コピーには完了済みも含めます。"
-            : "コピーでは完了済みを除きます。"}
-        </p>
+            <div className="editor-display-options__toggles">
+              <label className="timestamp-visibility-toggle">
+                <input
+                  type="checkbox"
+                  checked={showEntryTimestamps}
+                  onChange={(event) => setShowEntryTimestamps(event.target.checked)}
+                />
+                <span className="timestamp-visibility-toggle__track" aria-hidden="true">
+                  <span className="timestamp-visibility-toggle__thumb" />
+                </span>
+                <span>項目の日時を表示</span>
+              </label>
+
+              <label className="timestamp-visibility-toggle">
+                <input
+                  type="checkbox"
+                  checked={showEntryNumbers}
+                  onChange={(event) => setShowEntryNumbers(event.target.checked)}
+                />
+                <span className="timestamp-visibility-toggle__track" aria-hidden="true">
+                  <span className="timestamp-visibility-toggle__thumb" />
+                </span>
+                <span>番号を表示</span>
+              </label>
+
+              <label className="timestamp-visibility-toggle">
+                <input
+                  type="checkbox"
+                  checked={hideCompletedEntries}
+                  onChange={(event) => setHideCompletedEntries(event.target.checked)}
+                />
+                <span className="timestamp-visibility-toggle__track" aria-hidden="true">
+                  <span className="timestamp-visibility-toggle__thumb" />
+                </span>
+                <span>完了を非表示</span>
+              </label>
+
+              <label className="timestamp-visibility-toggle">
+                <input
+                  type="checkbox"
+                  checked={includeCompletedInCopy}
+                  onChange={(event) => setIncludeCompletedInCopy(event.target.checked)}
+                />
+                <span className="timestamp-visibility-toggle__track" aria-hidden="true">
+                  <span className="timestamp-visibility-toggle__thumb" />
+                </span>
+                <span>コピーに完了を含める</span>
+              </label>
+
+              <button
+                type="button"
+                className="completed-entries-delete"
+                onClick={() => void handleDeleteCompleted()}
+                disabled={isSaving || completedEntryCount === 0}
+                title="完了済み項目をまとめて削除"
+              >
+                完了を削除{completedEntryCount > 0 ? `（${completedEntryCount}）` : ""}
+              </button>
+            </div>
+            <p>
+              番号はコピー・.txt出力に反映されます。{includeCompletedInCopy
+                ? "コピーには完了済みも含めます。"
+                : "コピーでは完了済みを除きます。"}
+            </p>
+          </div>
+        ) : null}
       </section>
 
       <div className="editor-tabs" role="tablist" aria-label="入力する粒度">
@@ -632,6 +650,10 @@ export function MemoEditorPage() {
               : `「${title}」をこの端末へ取り込みました。`,
           )
         }
+        onCloudDeleted={async ({ title }) => {
+          await reload();
+          setNotice(`「${title}」をクラウドから削除しました。端末のメモは残っています。`);
+        }}
       />
       <CloudUploadDialog
         open={isUploadDialogOpen}

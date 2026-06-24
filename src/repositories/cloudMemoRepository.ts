@@ -270,6 +270,51 @@ export async function uploadMemosToCloud(
 }
 
 /**
+ * クラウドにあるメモだけを完全に削除する。
+ * この端末のIndexedDBにあるメモ本文は削除しない。メモに紐づくentriesは
+ * DB側の ON DELETE CASCADE で同時に削除される。
+ */
+export async function deleteCloudMemo(
+  memoId: string,
+  userId: string,
+): Promise<void> {
+  const client = ensureSupabase();
+
+  const { data, error } = await client
+    .from("memos")
+    .delete()
+    .eq("id", memoId)
+    .eq("user_id", userId)
+    .select("id");
+
+  if (error) throw error;
+
+  if (!data || data.length === 0) {
+    throw new Error("クラウド上のメモが見つかりません。画面を更新してください。");
+  }
+
+  // 同じIDのローカルメモがある場合は、クラウド連携済み表示を外す。
+  // ローカル本文・項目はそのまま残し、必要なら改めて送れる状態に戻す。
+  const localMemo = await memoRepository.getMemo(memoId);
+  if (!localMemo) return;
+
+  const currentMeta = await memoRepository.getSyncMeta(memoId);
+  if (currentMeta.cloud_user_id !== userId) return;
+
+  await memoRepository.saveSyncMeta({
+    ...currentMeta,
+    cloud_state: "local_only",
+    cloud_user_id: null,
+    last_uploaded_at: null,
+    last_downloaded_at: null,
+    last_cloud_updated_at: null,
+    last_uploaded_hash: null,
+    last_error: null,
+    updated_at: nowIso(),
+  });
+}
+
+/**
  * ログイン中のユーザーがクラウドへ送ったメモだけを返す。
  * RLSに加え、user_idでも絞り込むため、他人のメモを混ぜない。
  */

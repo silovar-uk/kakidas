@@ -6,6 +6,7 @@ import type {
   MemoCloudSnapshot,
 } from "../types/memo";
 import {
+  deleteCloudMemo as deleteCloudMemoFromRepository,
   getCloudMemoSnapshot,
   refreshCloudSyncStates,
 } from "../repositories/cloudMemoRepository";
@@ -30,6 +31,7 @@ export function useCloudMemos(userId: string | null) {
   const [memos, setMemos] = useState<CloudMemoListItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
@@ -105,13 +107,38 @@ export function useCloudMemos(userId: string | null) {
     [userId],
   );
 
+  const deleteCloudMemo = useCallback(
+    async (memoId: string): Promise<void> => {
+      if (!userId) {
+        throw new Error("クラウドのメモを削除するにはログインが必要です。");
+      }
+
+      setIsDeleting(true);
+      setError(null);
+
+      try {
+        await deleteCloudMemoFromRepository(memoId, userId);
+        setMemos((current) => current.filter((memo) => memo.id !== memoId));
+      } catch (caught) {
+        const message = toErrorMessage(caught);
+        setError(message);
+        throw new Error(message);
+      } finally {
+        setIsDeleting(false);
+      }
+    },
+    [userId],
+  );
+
   return {
     memos,
     isLoading,
     isImporting,
+    isDeleting,
     error,
     refresh,
     prepareImport,
     importSnapshot,
+    deleteCloudMemo,
   };
 }

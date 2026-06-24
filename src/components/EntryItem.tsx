@@ -511,6 +511,17 @@ export function EntryItem({
             </button>
           ) : null}
 
+          <button
+            type="button"
+            className="entry-item__note-trigger entry-item__note-trigger--inline"
+            onClick={beginNoteEdit}
+            disabled={disabled}
+            aria-label={hasNote ? "気持ち・備考を編集" : "気持ち・備考を追加"}
+            title={hasNote ? "気持ち・備考を編集" : "気持ち・備考を追加"}
+          >
+            {hasNote ? "気持ち・備考" : "＋ 気持ち・備考"}
+          </button>
+
           {showCreatedAt ? (
             <time
               className="entry-item__created-at"
@@ -531,6 +542,19 @@ export function EntryItem({
 
           <button
             type="button"
+            className={`entry-item__note-trigger entry-item__note-trigger--rail ${
+              hasNote ? "entry-item__note-trigger--active" : ""
+            }`}
+            onClick={beginNoteEdit}
+            disabled={disabled || isSaving}
+            aria-label={hasNote ? "気持ち・備考を編集" : "気持ち・備考を追加"}
+            title={hasNote ? "気持ち・備考を編集" : "気持ち・備考を追加"}
+          >
+            ＋
+          </button>
+
+          <button
+            type="button"
             className={`entry-item__complete ${
               entry.is_completed ? "entry-item__complete--active" : ""
             }`}
@@ -545,92 +569,72 @@ export function EntryItem({
 
           <button
             type="button"
-            className="entry-item__note-trigger"
-            onClick={beginNoteEdit}
+            className="icon-button entry-item__quick-action entry-item__structure-button"
+            onClick={() => onOpenStructure(entry.id)}
             disabled={disabled}
-            aria-label={hasNote ? "気持ち・備考を編集" : "気持ち・備考を追加"}
-            title={hasNote ? "気持ち・備考を編集" : "気持ち・備考を追加"}
+            aria-label={
+              isStructureOpen || isMobileActionOpen
+                ? "操作を閉じる"
+                : "操作を開く"
+            }
+            aria-expanded={isStructureOpen || isMobileActionOpen}
+            title="操作"
           >
-            {hasNote ? "気持ち" : "＋気持ち"}
-          </button>
-
-          {isHierarchical ? (
-            <button
-              type="button"
-              className="icon-button entry-item__quick-action entry-item__structure-button"
-              onClick={() => onOpenStructure(entry.id)}
-              disabled={disabled}
-              aria-label={
-                isStructureOpen || isMobileActionOpen
-                  ? "操作を閉じる"
-                  : "操作を開く"
-              }
-              aria-expanded={isStructureOpen || isMobileActionOpen}
-              title="追加・移動"
-            >
-              ⋯
-            </button>
-          ) : null}
-
-          <button
-            type="button"
-            className="icon-button entry-item__quick-action entry-item__delete"
-            onClick={() => void remove()}
-            disabled={disabled}
-            aria-label="この項目を削除"
-            title="この項目を削除"
-          >
-            ×
+            ⋯
           </button>
         </div>
       </div>
 
-      {isHierarchical && isStructureOpen ? (
+      {isStructureOpen ? (
         <div className="entry-item__structure-actions" aria-label="項目の操作">
-          <button
-            type="button"
-            className="structure-action structure-action--child"
-            onClick={() => onAddChild(entry.id)}
-            disabled={disabled}
-          >
-            ＋ 下に追加
-          </button>
-          <button
-            type="button"
-            className="structure-action"
-            onClick={() => void onMove(entry.id, "up")}
-            disabled={disabled || !entry.can_move_up}
-            title="上へ移動"
-          >
-            ↑ 上へ移動
-          </button>
-          <button
-            type="button"
-            className="structure-action"
-            onClick={() => void onMove(entry.id, "down")}
-            disabled={disabled || !entry.can_move_down}
-            title="下へ移動"
-          >
-            ↓ 下へ移動
-          </button>
-          <button
-            type="button"
-            className="structure-action"
-            onClick={() => void onOutdent(entry.id)}
-            disabled={disabled || !entry.can_outdent}
-            title="左へ戻す"
-          >
-            ← 左へ戻す
-          </button>
-          <button
-            type="button"
-            className="structure-action"
-            onClick={() => void onIndent(entry.id)}
-            disabled={disabled || !entry.can_indent}
-            title="右へ下げる"
-          >
-            → 右へ下げる
-          </button>
+          {isHierarchical ? (
+            <>
+              <button
+                type="button"
+                className="structure-action structure-action--child"
+                onClick={() => onAddChild(entry.id)}
+                disabled={disabled}
+              >
+                ＋ 下に追加
+              </button>
+              <button
+                type="button"
+                className="structure-action"
+                onClick={() => void onMove(entry.id, "up")}
+                disabled={disabled || !entry.can_move_up}
+                title="上へ移動"
+              >
+                ↑ 上へ移動
+              </button>
+              <button
+                type="button"
+                className="structure-action"
+                onClick={() => void onMove(entry.id, "down")}
+                disabled={disabled || !entry.can_move_down}
+                title="下へ移動"
+              >
+                ↓ 下へ移動
+              </button>
+              <button
+                type="button"
+                className="structure-action"
+                onClick={() => void onOutdent(entry.id)}
+                disabled={disabled || !entry.can_outdent}
+                title="左へ戻す"
+              >
+                ← 左へ戻す
+              </button>
+              <button
+                type="button"
+                className="structure-action"
+                onClick={() => void onIndent(entry.id)}
+                disabled={disabled || !entry.can_indent}
+                title="右へ下げる"
+              >
+                → 右へ下げる
+              </button>
+            </>
+          ) : null}
           <button
             type="button"
             className="structure-action structure-action--danger"

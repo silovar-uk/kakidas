@@ -86,6 +86,8 @@ export function EntryColumn({
   const [mobileActionEntryId, setMobileActionEntryId] = useState<string | null>(
     null,
   );
+  const [isHeaderMenuOpen, setIsHeaderMenuOpen] = useState(false);
+  const [isCompletedCollapsed, setIsCompletedCollapsed] = useState(false);
   const [isDeletingAll, setIsDeletingAll] = useState(false);
   const [pendingUndo, setPendingUndo] = useState<PendingUndo | null>(null);
   const [isUndoing, setIsUndoing] = useState(false);
@@ -102,6 +104,9 @@ export function EntryColumn({
   const mobileActionEntry = mobileActionEntryId
     ? entries.find((entry) => entry.id === mobileActionEntryId) ?? null
     : null;
+
+  const openEntries = entries.filter((entry) => !entry.is_completed);
+  const completedEntries = entries.filter((entry) => entry.is_completed);
 
   const clearUndo = () => {
     if (undoTimerRef.current !== null) {
@@ -125,11 +130,12 @@ export function EntryColumn({
     }
   }, [parentEntry, parentId]);
 
-  // タブ切替後に、非表示の列のボトムシートが前面へ残らないようにする。
+  // タブ切替後に、非表示の列のボトムシート・小メニューが前面へ残らないようにする。
   useEffect(() => {
     if (!isActiveOnMobile) {
       setMobileActionEntryId(null);
       setStructureEntryId(null);
+      setIsHeaderMenuOpen(false);
     }
   }, [isActiveOnMobile]);
 
@@ -156,8 +162,6 @@ export function EntryColumn({
 
     didAutoFocusRef.current = true;
 
-    // 新規作成ボタンのタップから最短で入力へ渡す。
-    // 通常フローの入力欄へ、画面遷移直後に渡す。
     const frame = window.requestAnimationFrame(() => {
       composerRef.current?.focus({ scroll: false, delay: 0 });
       onAutoFocusHandled?.();
@@ -209,12 +213,9 @@ export function EntryColumn({
 
     if (!target || disabled || isDeletingAll) return;
 
-    // ほかの項目も一緒に消える場合だけ、件数を明示して確認する。
     if (target.child_count > 0) {
       const confirmed = window.confirm(
-        `「${target.content}」の下には${target.child_count}件あります。
-合計${target.child_count + 1}件をまとめて削除しますか？
-削除後は［元に戻す］で戻せます。`,
+        `「${target.content}」の下には${target.child_count}件あります。\n合計${target.child_count + 1}件をまとめて削除しますか？\n削除後は［元に戻す］で戻せます。`,
       );
 
       if (!confirmed) return;
@@ -260,13 +261,12 @@ export function EntryColumn({
       : "";
 
     const confirmed = window.confirm(
-      `${ENTRY_KIND_LABEL[kind]}をすべて削除しますか？
-${entries.length}件が削除されます。${hierarchyNotice}
-この操作は元に戻せません。`,
+      `${ENTRY_KIND_LABEL[kind]}をすべて削除しますか？\n${entries.length}件が削除されます。${hierarchyNotice}\nこの操作は元に戻せません。`,
     );
 
     if (!confirmed) return;
 
+    setIsHeaderMenuOpen(false);
     setIsDeletingAll(true);
 
     try {
@@ -298,6 +298,28 @@ ${entries.length}件が削除されます。${hierarchyNotice}
     setMobileActionEntryId(null);
   };
 
+  const renderEntry = (entry: EntryTreeNode) => (
+    <EntryItem
+      key={entry.id}
+      entry={entry}
+      kind={kind}
+      isStructureOpen={structureEntryId === entry.id}
+      isMobileActionOpen={mobileActionEntryId === entry.id}
+      showCreatedAt={showCreatedAt}
+      showEntryNumbers={showEntryNumbers}
+      disabled={disabled || isDeletingAll}
+      onOpenStructure={openStructureActions}
+      onAddChild={selectParent}
+      onIndent={(entryId) => runStructureAction(onIndent, entryId)}
+      onOutdent={(entryId) => runStructureAction(onOutdent, entryId)}
+      onMove={(entryId, direction) =>
+        runStructureAction((id) => onMove(id, direction), entryId)
+      }
+      onUpdate={onUpdate}
+      onDelete={requestDelete}
+    />
+  );
+
   return (
     <section
       className={`entry-column entry-column--${kind} ${
@@ -323,19 +345,34 @@ ${entries.length}件が削除されます。${hierarchyNotice}
             aria-label={`${ENTRY_KIND_LABEL[kind]}をコピー`}
             title={copyIncludesCompleted ? "完了済みを含めてコピー" : "完了済みを除いてコピー"}
           >
-            {isCopying ? "コピー中…" : "コピー"}
+            {isCopying ? "…" : "⧉"}
           </button>
-          <button
-            type="button"
-            className="entry-column__delete-all"
-            onClick={() => void handleDeleteAll()}
-            disabled={disabled || isDeletingAll || entries.length === 0}
-            aria-label={`${ENTRY_KIND_LABEL[kind]}をすべて削除`}
-            title={`${ENTRY_KIND_LABEL[kind]}をすべて削除`}
-          >
-            <span aria-hidden="true">⌫</span>
-            すべて削除
-          </button>
+          <div className="entry-column__header-menu">
+            <button
+              type="button"
+              className="entry-column__more"
+              onClick={() => setIsHeaderMenuOpen((open) => !open)}
+              disabled={disabled || isDeletingAll || entries.length === 0}
+              aria-label={`${ENTRY_KIND_LABEL[kind]}の整理メニュー`}
+              aria-expanded={isHeaderMenuOpen}
+              title="整理"
+            >
+              ⋯
+            </button>
+            {isHeaderMenuOpen ? (
+              <div className="entry-column__menu" role="menu">
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="entry-column__menu-delete"
+                  onClick={() => void handleDeleteAll()}
+                  disabled={disabled || isDeletingAll || entries.length === 0}
+                >
+                  すべて削除
+                </button>
+              </div>
+            ) : null}
+          </div>
         </div>
       </div>
 
@@ -352,31 +389,32 @@ ${entries.length}件が削除されます。${hierarchyNotice}
         {entries.length === 0 ? (
           <p className="entry-list__empty">まだありません。</p>
         ) : (
-          entries.map((entry) => (
-            <EntryItem
-              key={entry.id}
-              entry={entry}
-              kind={kind}
-              isStructureOpen={structureEntryId === entry.id}
-              isMobileActionOpen={mobileActionEntryId === entry.id}
-              showCreatedAt={showCreatedAt}
-              showEntryNumbers={showEntryNumbers}
-              disabled={disabled || isDeletingAll}
-              onOpenStructure={openStructureActions}
-              onAddChild={selectParent}
-              onIndent={(entryId) => runStructureAction(onIndent, entryId)}
-              onOutdent={(entryId) => runStructureAction(onOutdent, entryId)}
-              onMove={(entryId, direction) =>
-                runStructureAction((id) => onMove(id, direction), entryId)
-              }
-              onUpdate={onUpdate}
-              onDelete={requestDelete}
-            />
-          ))
+          <>
+            {openEntries.map(renderEntry)}
+
+            {completedEntries.length > 0 ? (
+              <section className="entry-list__completed-section" aria-label="完了済み">
+                <button
+                  type="button"
+                  className="entry-list__completed-toggle"
+                  onClick={() => setIsCompletedCollapsed((collapsed) => !collapsed)}
+                  aria-expanded={!isCompletedCollapsed}
+                >
+                  <span>完了 {completedEntries.length}件</span>
+                  <span aria-hidden="true">{isCompletedCollapsed ? "›" : "⌄"}</span>
+                </button>
+                {!isCompletedCollapsed ? (
+                  <div className="entry-list__completed-items">
+                    {completedEntries.map(renderEntry)}
+                  </div>
+                ) : null}
+              </section>
+            ) : null}
+          </>
         )}
       </div>
 
-      {isHierarchical && isActiveOnMobile ? (
+      {isActiveOnMobile ? (
         <MobileEntryActionSheet
           entry={mobileActionEntry}
           kind={kind}

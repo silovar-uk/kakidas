@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { lockBodyScroll } from "../lib/bodyScrollLock";
-import { type EntryKind, type EntryTreeNode } from "../types/memo";
+import { type EntryKind, type EntryTreeNode, supportsHierarchy } from "../types/memo";
 
 type MobileEntryActionSheetProps = {
   entry: EntryTreeNode | null;
@@ -24,7 +24,7 @@ type MobileEntryActionSheetProps = {
  */
 export function MobileEntryActionSheet({
   entry,
-  kind: _kind,
+  kind,
   showEntryNumbers,
   disabled = false,
   onClose,
@@ -83,6 +83,7 @@ export function MobileEntryActionSheet({
 
   if (!entry || typeof document === "undefined") return null;
 
+  const isHierarchical = supportsHierarchy(kind);
   const close = () => onCloseRef.current();
 
   const run = async (action: () => Promise<unknown> | unknown) => {
@@ -149,57 +150,61 @@ export function MobileEntryActionSheet({
           {entry.is_completed ? "未完了に戻す" : "完了にする"}
         </button>
 
-        <button
-          type="button"
-          className="mobile-action-sheet__primary"
-          onClick={() => void run(() => onAddChild(entry.id))}
-          disabled={disabled || isWorking}
-        >
-          <span aria-hidden="true">＋</span>
-          下に追加
-        </button>
+        {isHierarchical ? (
+          <>
+            <button
+              type="button"
+              className="mobile-action-sheet__primary"
+              onClick={() => void run(() => onAddChild(entry.id))}
+              disabled={disabled || isWorking}
+            >
+              <span aria-hidden="true">＋</span>
+              下に追加
+            </button>
 
-        <div className="mobile-action-sheet__grid mobile-action-sheet__grid--operations">
-          <button
-            type="button"
-            className="mobile-action-sheet__tile"
-            onClick={() => void run(() => onMove(entry.id, "up"))}
-            disabled={disabled || isWorking || !entry.can_move_up}
-          >
-            <span aria-hidden="true">↑</span>
-            上へ移動
-          </button>
+            <div className="mobile-action-sheet__grid mobile-action-sheet__grid--operations">
+              <button
+                type="button"
+                className="mobile-action-sheet__tile"
+                onClick={() => void run(() => onMove(entry.id, "up"))}
+                disabled={disabled || isWorking || !entry.can_move_up}
+              >
+                <span aria-hidden="true">↑</span>
+                上へ移動
+              </button>
 
-          <button
-            type="button"
-            className="mobile-action-sheet__tile"
-            onClick={() => void run(() => onMove(entry.id, "down"))}
-            disabled={disabled || isWorking || !entry.can_move_down}
-          >
-            <span aria-hidden="true">↓</span>
-            下へ移動
-          </button>
+              <button
+                type="button"
+                className="mobile-action-sheet__tile"
+                onClick={() => void run(() => onMove(entry.id, "down"))}
+                disabled={disabled || isWorking || !entry.can_move_down}
+              >
+                <span aria-hidden="true">↓</span>
+                下へ移動
+              </button>
 
-          <button
-            type="button"
-            className="mobile-action-sheet__tile"
-            onClick={() => void run(() => onOutdent(entry.id))}
-            disabled={disabled || isWorking || !entry.can_outdent}
-          >
-            <span aria-hidden="true">←</span>
-            左へ戻す
-          </button>
+              <button
+                type="button"
+                className="mobile-action-sheet__tile"
+                onClick={() => void run(() => onOutdent(entry.id))}
+                disabled={disabled || isWorking || !entry.can_outdent}
+              >
+                <span aria-hidden="true">←</span>
+                左へ戻す
+              </button>
 
-          <button
-            type="button"
-            className="mobile-action-sheet__tile"
-            onClick={() => void run(() => onIndent(entry.id))}
-            disabled={disabled || isWorking || !entry.can_indent}
-          >
-            <span aria-hidden="true">→</span>
-            右へ下げる
-          </button>
-        </div>
+              <button
+                type="button"
+                className="mobile-action-sheet__tile"
+                onClick={() => void run(() => onIndent(entry.id))}
+                disabled={disabled || isWorking || !entry.can_indent}
+              >
+                <span aria-hidden="true">→</span>
+                右へ下げる
+              </button>
+            </div>
+          </>
+        ) : null}
 
         <button
           type="button"

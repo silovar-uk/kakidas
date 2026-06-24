@@ -11,6 +11,8 @@ type CloudAccountDialogProps = {
   onClose: () => void;
   /** 取り込み完了後に、親画面のローカル一覧を更新して通知する。 */
   onImported?: (result: { title: string; wasCopy: boolean }) => Promise<void> | void;
+  /** クラウドから削除した後、親画面のローカル同期表示を更新する。 */
+  onCloudDeleted?: (result: { title: string }) => Promise<void> | void;
 };
 
 type CloudTab = "account" | "library";
@@ -19,6 +21,7 @@ export function CloudAccountDialog({
   open,
   onClose,
   onImported,
+  onCloudDeleted,
 }: CloudAccountDialogProps) {
   const { isConfigured, isLoading, user, error, signInWithGoogle, signOut } =
     useAuth();
@@ -26,10 +29,12 @@ export function CloudAccountDialog({
     memos,
     isLoading: isCloudLoading,
     isImporting,
+    isDeleting,
     error: cloudError,
     refresh,
     prepareImport,
     importSnapshot,
+    deleteCloudMemo,
   } = useCloudMemos(user?.id ?? null);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -150,6 +155,24 @@ export function CloudAccountDialog({
     await finishImported(result.memo.title, true);
   };
 
+  const handleDeleteCloudMemo = async (cloudMemo: CloudMemoListItem) => {
+    const confirmed = window.confirm(
+      `「${cloudMemo.title}」をクラウドから削除しますか？\nこの端末にあるメモは削除されません。`,
+    );
+
+    if (!confirmed) return;
+
+    setNotice(null);
+
+    try {
+      await deleteCloudMemo(cloudMemo.id);
+      await Promise.resolve(onCloudDeleted?.({ title: cloudMemo.title }));
+      setNotice(`「${cloudMemo.title}」をクラウドから削除しました。端末のメモは残っています。`);
+    } catch {
+      // Hook側で表示用のerrorを更新する。
+    }
+  };
+
   const renderAccount = () => (
     <>
       <p className="cloud-dialog__eyebrow">SIGNED IN</p>
@@ -193,7 +216,7 @@ export function CloudAccountDialog({
         <button
           type="button"
           className="text-button cloud-dialog__refresh"
-          disabled={isCloudLoading || isImporting}
+          disabled={isCloudLoading || isImporting || isDeleting}
           onClick={() => void refresh()}
         >
           {isCloudLoading ? "更新中…" : "更新"}
@@ -221,14 +244,24 @@ export function CloudAccountDialog({
                   単語 {cloudMemo.entry_counts.word}件 ／ 文 {cloudMemo.entry_counts.sentence}件 ／ 段落 {cloudMemo.entry_counts.paragraph}件
                 </small>
               </div>
-              <button
-                type="button"
-                className="secondary-button"
-                disabled={isImporting}
-                onClick={() => void handleImportRequest(cloudMemo)}
-              >
-                {isImporting ? "確認中…" : "この端末へ取り込む"}
-              </button>
+              <div className="cloud-library-card__actions">
+                <button
+                  type="button"
+                  className="secondary-button"
+                  disabled={isImporting || isDeleting}
+                  onClick={() => void handleImportRequest(cloudMemo)}
+                >
+                  {isImporting ? "確認中…" : "この端末へ取り込む"}
+                </button>
+                <button
+                  type="button"
+                  className="cloud-library-card__delete"
+                  disabled={isImporting || isDeleting}
+                  onClick={() => void handleDeleteCloudMemo(cloudMemo)}
+                >
+                  {isDeleting ? "削除中…" : "クラウドから削除"}
+                </button>
+              </div>
             </li>
           ))}
         </ul>

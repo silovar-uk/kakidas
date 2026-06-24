@@ -738,6 +738,10 @@ export function MemoListPage() {
               : `「${title}」をこの端末へ取り込みました。`,
           );
         }}
+        onCloudDeleted={async ({ title }) => {
+          await refresh();
+          setNotice(`「${title}」をクラウドから削除しました。端末のメモは残っています。`);
+        }}
       />
       <CloudUploadDialog
         open={isUploadDialogOpen}
