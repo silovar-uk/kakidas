@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { resetBodyScrollLock } from "../lib/bodyScrollLock";
+import { formatMemoText } from "../lib/memoText";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../auth/AuthProvider";
 import { CloudAccountDialog } from "../components/CloudAccountDialog";
@@ -18,80 +19,7 @@ import {
   ENTRY_KIND_LABEL,
   formatDefaultMemoTitle,
   getEntryTree,
-  supportsHierarchy,
 } from "../types/memo";
-
-function buildMarkdown(
-  memo: MemoWithEntries,
-  onlyKind?: EntryKind,
-  includeEntryNumbers = false,
-): string {
-  const kinds = onlyKind ? [onlyKind] : ENTRY_KINDS;
-  const parts = [`# ${memo.title}`];
-
-  for (const kind of kinds) {
-    const entries = getEntryTree(memo.entries, kind);
-    const heading = ENTRY_KIND_LABEL[kind];
-
-    parts.push(`\n## ${heading}`);
-
-    if (entries.length === 0) {
-      parts.push("- ");
-      continue;
-    }
-
-    for (const entry of entries) {
-      const indentation = supportsHierarchy(kind)
-        ? "  ".repeat(entry.depth)
-        : "";
-      const prefix = includeEntryNumbers
-        ? `${entry.outline_number} `
-        : kind === "paragraph"
-          ? ""
-          : "- ";
-
-      const noteLines = entry.note.trim().split(/\r?\n/).filter(Boolean);
-
-      if (kind === "paragraph") {
-        parts.push(`\n${prefix}${entry.content}`);
-
-        if (noteLines.length > 0) {
-          parts.push(`備考：${noteLines[0]}`);
-          noteLines.slice(1).forEach((line) => parts.push(`  ${line}`));
-        }
-
-        continue;
-      }
-
-      parts.push(`${indentation}${prefix}${entry.content}`);
-
-      if (noteLines.length > 0) {
-        const noteIndentation = `${indentation}  `;
-        parts.push(`${noteIndentation}備考：${noteLines[0]}`);
-        noteLines.slice(1).forEach((line) => parts.push(`${noteIndentation}${line}`));
-      }
-    }
-  }
-
-  return parts.join("\n").replace(/\n{3,}/g, "\n\n").trimEnd() + "\n";
-}
-
-async function copyText(text: string): Promise<void> {
-  if (navigator.clipboard?.writeText && window.isSecureContext) {
-    await navigator.clipboard.writeText(text);
-    return;
-  }
-
-  const textarea = document.createElement("textarea");
-  textarea.value = text;
-  textarea.style.position = "fixed";
-  textarea.style.opacity = "0";
-
-  document.body.appendChild(textarea);
-  textarea.select();
-  document.execCommand("copy");
-  textarea.remove();
-}
 
 function downloadText(filename: string, content: string) {
   const blob = new Blob([content], {
@@ -117,6 +45,7 @@ type EditorNavigationState = {
 
 const ENTRY_TIMESTAMP_VISIBILITY_STORAGE_KEY = "kakidas.show-entry-timestamps";
 const ENTRY_NUMBER_VISIBILITY_STORAGE_KEY = "kakidas.show-entry-numbers";
+const HIDE_COMPLETED_ENTRIES_STORAGE_KEY = "kakidas.hide-completed-entries";
 
 function readEntryTimestampVisibility(): boolean {
   try {
@@ -134,6 +63,15 @@ function readEntryTimestampVisibility(): boolean {
 function readEntryNumberVisibility(): boolean {
   try {
     return window.localStorage.getItem(ENTRY_NUMBER_VISIBILITY_STORAGE_KEY) === "true";
+  } catch {
+    return false;
+  }
+}
+
+/** 完了済みは初期状態では見せる。必要な端末だけ非表示を記憶する。 */
+function readHideCompletedEntries(): boolean {
+  try {
+    return window.localStorage.getItem(HIDE_COMPLETED_ENTRIES_STORAGE_KEY) === "true";
   } catch {
     return false;
   }
@@ -160,6 +98,7 @@ export function MemoEditorPage() {
     deleteEntry,
     restoreEntries,
     deleteEntriesByKind,
+    deleteCompletedEntries,
     indentEntry,
     outdentEntry,
     moveEntry,
@@ -177,6 +116,9 @@ export function MemoEditorPage() {
   );
   const [showEntryNumbers, setShowEntryNumbers] = useState(
     readEntryNumberVisibility,
+  );
+  const [hideCompletedEntries, setHideCompletedEntries] = useState(
+    readHideCompletedEntries,
   );
 
   // 表示設定は端末ごとに記憶する。クラウドへは送らないUI設定。
@@ -201,6 +143,17 @@ export function MemoEditorPage() {
       // private modeなどで保存できない場合でも、現在の画面では切り替えられる。
     }
   }, [showEntryNumbers]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(
+        HIDE_COMPLETED_ENTRIES_STORAGE_KEY,
+        String(hideCompletedEntries),
+      );
+    } catch {
+      // 表示設定の保存に失敗しても、その場での表示切り替えは維持する。
+    }
+  }, [hideCompletedEntries]);
 
   // メモ画面を離れた後に、モバイル操作シート等のスクロールロックを残さない。
   useEffect(() => {
@@ -250,28 +203,17 @@ export function MemoEditorPage() {
     return () => window.clearTimeout(timer);
   }, [memo, saveTitle, title]);
 
-  const handleCopy = async (kind?: EntryKind) => {
-    if (!memo) return;
-
-    try {
-      await copyText(buildMarkdown(memo, kind, showEntryNumbers));
-
-      setNotice(
-        `${kind ? ENTRY_KIND_LABEL[kind] : "すべて"}をコピーしました。`,
-      );
-    } catch {
-      setNotice(
-        "コピーできませんでした。ブラウザの権限を確認してください。",
-      );
-    }
-  };
-
   const handleDownload = () => {
     if (!memo) return;
 
     const safeTitle = memo.title.replace(/[\\/:*?"<>|]/g, "_");
 
-    downloadText(`${safeTitle}.txt`, buildMarkdown(memo, undefined, showEntryNumbers));
+    downloadText(
+      `${safeTitle}.txt`,
+      formatMemoText(memo, {
+        includeEntryNumbers: showEntryNumbers,
+      }),
+    );
 
     setNotice("テキストを書き出しました。");
   };
@@ -291,15 +233,55 @@ export function MemoEditorPage() {
     }
   };
 
+  const handleDeleteCompleted = async () => {
+    if (completedEntryCount === 0 || isSaving) return;
+
+    const confirmed = window.confirm(
+      `完了済みの${completedEntryCount}件を削除しますか？\n未完了の項目は残ります。\nこの操作は元に戻せません。`,
+    );
+
+    if (!confirmed) return;
+
+    try {
+      const result = await deleteCompletedEntries();
+      if (result.deleted_count === 0) {
+        setNotice("削除する完了済み項目はありません。");
+        return;
+      }
+
+      setNotice(
+        result.reparented_count > 0
+          ? `完了済み${result.deleted_count}件を削除しました。未完了${result.reparented_count}件は残しています。`
+          : `完了済み${result.deleted_count}件を削除しました。`,
+      );
+    } catch (caught) {
+      setNotice(
+        caught instanceof Error
+          ? caught.message
+          : "完了済み項目を削除できませんでした。",
+      );
+    }
+  };
+
+  const completedEntryCount = useMemo(
+    () => memo?.entries.filter((entry) => entry.is_completed).length ?? 0,
+    [memo?.entries],
+  );
+
   const entriesByKind = useMemo(() => {
-    const entries = memo?.entries ?? [];
+    const allEntries = memo?.entries ?? [];
+    // 完了を隠すときは、完了項目を木の計算前に除外する。
+    // そのため未完了の下位項目は、見えない親の下にぶら下がらず安全に表示される。
+    const entries = hideCompletedEntries
+      ? allEntries.filter((entry) => !entry.is_completed)
+      : allEntries;
 
     return {
       word: getEntryTree(entries, "word"),
       sentence: getEntryTree(entries, "sentence"),
       paragraph: getEntryTree(entries, "paragraph"),
     };
-  }, [memo?.entries]);
+  }, [hideCompletedEntries, memo?.entries]);
 
   const cloudUploadTarget = useMemo<CloudUploadTarget[]>(() => {
     if (!memo) return [];
@@ -406,14 +388,6 @@ export function MemoEditorPage() {
           <button
             type="button"
             className="secondary-button"
-            onClick={() => void handleCopy()}
-          >
-            すべてコピー
-          </button>
-
-          <button
-            type="button"
-            className="secondary-button"
             onClick={handleDownload}
           >
             .txt出力
@@ -427,19 +401,6 @@ export function MemoEditorPage() {
             削除
           </button>
         </div>
-      </section>
-
-      <section className="copy-actions" aria-label="パートごとのコピー">
-        {ENTRY_KINDS.map((kind) => (
-          <button
-            key={kind}
-            type="button"
-            className="text-button"
-            onClick={() => void handleCopy(kind)}
-          >
-            {ENTRY_KIND_LABEL[kind]}をコピー
-          </button>
-        ))}
       </section>
 
       <section className="editor-display-options" aria-label="表示設定">
@@ -467,8 +428,30 @@ export function MemoEditorPage() {
             </span>
             <span>番号を表示</span>
           </label>
+
+          <label className="timestamp-visibility-toggle">
+            <input
+              type="checkbox"
+              checked={hideCompletedEntries}
+              onChange={(event) => setHideCompletedEntries(event.target.checked)}
+            />
+            <span className="timestamp-visibility-toggle__track" aria-hidden="true">
+              <span className="timestamp-visibility-toggle__thumb" />
+            </span>
+            <span>完了を非表示</span>
+          </label>
+
+          <button
+            type="button"
+            className="completed-entries-delete"
+            onClick={() => void handleDeleteCompleted()}
+            disabled={isSaving || completedEntryCount === 0}
+            title="完了済み項目をまとめて削除"
+          >
+            完了を削除{completedEntryCount > 0 ? `（${completedEntryCount}）` : ""}
+          </button>
         </div>
-        <p>番号はコピー・.txt出力にも反映されます。</p>
+        <p>番号は一覧からのコピー・.txt出力にも反映されます。完了済みは一覧コピーに含めません。</p>
       </section>
 
       <div className="editor-tabs" role="tablist" aria-label="入力する粒度">

@@ -3095,3 +3095,196 @@ a:focus-visible {
     min-width: 32px;
   }
 }
+
+/* --------------------------------------------------------------------------
+   v0.5.14 — completion state and list-level copy
+   -------------------------------------------------------------------------- */
+.entry-item--completed {
+  border-color: #e2dfd8;
+  background: #f1f0ec;
+}
+
+.entry-item--completed:hover {
+  border-color: #dad6cf;
+  background: #f3f2ee;
+}
+
+.entry-item--completed .entry-item__body {
+  opacity: 0.55;
+}
+
+.entry-item--completed .entry-item__content-text {
+  color: #77746e;
+  text-decoration: line-through;
+  text-decoration-color: #c8c3bb;
+  text-decoration-thickness: 1px;
+}
+
+.entry-item--completed .entry-item__note,
+.entry-item--completed .entry-item__created-at {
+  color: #8d8982;
+}
+
+.entry-item__complete {
+  display: inline-flex;
+  min-width: 38px;
+  min-height: 28px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 7px;
+  border: 1px solid #d8d4cc;
+  border-radius: 8px;
+  color: #69655e;
+  background: #faf9f6;
+  font-size: 10px;
+  font-weight: 760;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.entry-item__complete:hover:not(:disabled) {
+  border-color: #bdb8ae;
+  color: #4f4b45;
+  background: #f0efea;
+}
+
+.entry-item__complete--active {
+  border-color: #d7d4cd;
+  color: #89857e;
+  background: #ebeae6;
+}
+
+.entry-item__complete-text {
+  color: #6f6b64;
+}
+
+.entry-item__complete-text:hover:not(:disabled) {
+  color: #4f4b45;
+  background: #efede8;
+}
+
+.memo-card__copy {
+  display: inline-flex;
+  min-height: 32px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 9px;
+  border: 1px solid #d7cec2;
+  border-radius: 9px;
+  color: #655e55;
+  background: #fffefa;
+  font-size: 11px;
+  font-weight: 760;
+  white-space: nowrap;
+}
+
+.memo-card__copy:hover:not(:disabled) {
+  border-color: #b99077;
+  color: #914327;
+  background: #fff6f0;
+}
+
+.memo-card__copy:disabled {
+  cursor: wait;
+  opacity: 0.58;
+}
+
+.mobile-action-sheet__complete {
+  display: flex;
+  width: 100%;
+  min-height: 46px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  margin-bottom: 6px;
+  border: 1px solid #d9d5cd;
+  border-radius: 13px;
+  color: #5f5b54;
+  background: #f8f7f3;
+  font-size: 13px;
+  font-weight: 760;
+}
+
+.mobile-action-sheet__complete span {
+  color: #77726b;
+  font-size: 17px;
+  line-height: 1;
+}
+
+.mobile-action-sheet__complete:active:not(:disabled),
+.mobile-action-sheet__complete--active {
+  border-color: #cbc7bf;
+  color: #77736d;
+  background: #edebe7;
+}
+
+@media (max-width: 920px) {
+  .entry-item__complete {
+    min-width: 43px;
+    min-height: 36px;
+    padding: 0 8px;
+    border-radius: 10px;
+    background: #fffefa;
+    font-size: 10px;
+  }
+
+  .entry-item__complete--active {
+    background: #edebe7;
+  }
+
+  .memo-card__copy {
+    min-height: 34px;
+    padding: 0 8px;
+    font-size: 10px;
+  }
+}
+
+@media (max-width: 370px) {
+  .entry-item__complete {
+    min-width: 38px;
+    padding: 0 6px;
+    font-size: 9px;
+  }
+}
+
+
+/* --------------------------------------------------------------------------
+   v0.5.15 — completed-entry controls
+   -------------------------------------------------------------------------- */
+.completed-entries-delete {
+  display: inline-flex;
+  min-height: 30px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 8px;
+  border: 1px solid #e1d9d1;
+  border-radius: 8px;
+  color: #827b73;
+  background: #f8f7f4;
+  font-size: 11px;
+  font-weight: 720;
+  line-height: 1;
+  white-space: nowrap;
+  transition: border-color 120ms ease, background-color 120ms ease, color 120ms ease;
+}
+
+.completed-entries-delete:hover:not(:disabled) {
+  border-color: #d8c8c0;
+  color: #765c54;
+  background: #f4f0ec;
+}
+
+.completed-entries-delete:disabled {
+  color: #b6b1aa;
+  border-color: #ebe8e2;
+  background: #faf9f7;
+}
+
+@media (max-width: 920px) {
+  .completed-entries-delete {
+    min-height: 36px;
+    padding-inline: 10px;
+    border-radius: 10px;
+    font-size: 11px;
+  }
+}

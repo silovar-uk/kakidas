@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   type BackupPayload,
+  type CompletedEntriesDeletionResult,
   type EntryDeletionResult,
   type EntryKind,
   type EntryMoveDirection,
@@ -280,6 +281,21 @@ export function useMemoDetail(memoId: string | undefined) {
     [memoId, refreshAfterWrite, runWrite],
   );
 
+  const deleteCompletedEntries = useCallback(
+    async (): Promise<CompletedEntriesDeletionResult> => {
+      if (!memoId) {
+        throw new Error("メモIDがありません。");
+      }
+
+      return runWrite(async () => {
+        const result = await memoRepository.deleteCompletedEntries(memoId);
+        await refreshAfterWrite();
+        return result;
+      });
+    },
+    [memoId, refreshAfterWrite, runWrite],
+  );
+
   const indentEntry = useCallback(
     async (entryId: string): Promise<void> => {
       return runWrite(async () => {
@@ -333,6 +349,7 @@ export function useMemoDetail(memoId: string | undefined) {
     deleteEntry,
     restoreEntries,
     deleteEntriesByKind,
+    deleteCompletedEntries,
     indentEntry,
     outdentEntry,
     moveEntry,

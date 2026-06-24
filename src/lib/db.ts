@@ -1,5 +1,5 @@
 const DB_NAME = "kakidasu-db";
-const DB_VERSION = 6;
+const DB_VERSION = 7;
 
 export const STORE_NAMES = {
   memos: "memos",
@@ -152,6 +152,25 @@ function openDatabase(): Promise<IDBDatabase> {
 
           if (value.satisfaction !== satisfaction) {
             cursor.update({ ...value, satisfaction });
+          }
+
+          cursor.continue();
+        };
+      }
+
+      // v0.5.14: 完了状態をfalseで補完する。完了済みは表示順を末尾へ寄せるが、
+      // 既存の並び順や本文データは変更しない。
+      if (oldVersion < 7) {
+        const cursorRequest = entryStore.openCursor();
+
+        cursorRequest.onsuccess = () => {
+          const cursor = cursorRequest.result;
+          if (!cursor) return;
+
+          const value = cursor.value as Record<string, unknown>;
+
+          if (typeof value.is_completed !== "boolean") {
+            cursor.update({ ...value, is_completed: false });
           }
 
           cursor.continue();

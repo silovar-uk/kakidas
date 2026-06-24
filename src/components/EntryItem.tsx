@@ -6,9 +6,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { copyToClipboard } from "../lib/clipboard";
 import { EntrySatisfactionControl } from "./EntrySatisfactionControl";
-import { formatEntryCopyText } from "../lib/entryText";
 import { formatEntryCreatedAt } from "../lib/formatDate";
 import {
   type EntryKind,
@@ -18,7 +16,6 @@ import {
 } from "../types/memo";
 
 type StructureShortcut = "indent" | "outdent" | "move-up" | "move-down";
-type CopyFeedback = "copied" | "failed" | null;
 type EditMode = "content" | "note" | null;
 
 type EntryItemProps = {
@@ -27,7 +24,7 @@ type EntryItemProps = {
   isStructureOpen: boolean;
   isMobileActionOpen: boolean;
   showCreatedAt: boolean;
-  /** 表示・個別コピーに振り番を含めるか。 */
+  /** 表示に振り番を含めるか。 */
   showEntryNumbers: boolean;
   disabled?: boolean;
   onOpenStructure: (entryId: string) => void;
@@ -40,8 +37,8 @@ type EntryItemProps = {
 };
 
 /**
- * 本文と任意の備考をまとめて扱う項目。
- * 備考が空のときは表示用の行を一切出さない。
+ * 本文と、書いたときの気持ち・補足をまとめて扱う項目。
+ * 気持ち・備考が空のときは、表示用の行も余白も一切出さない。
  */
 export function EntryItem({
   entry,
@@ -65,17 +62,16 @@ export function EntryItem({
   const [showNoteEditor, setShowNoteEditor] = useState(Boolean(entry.note.trim()));
   const [isComposing, setIsComposing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [copyFeedback, setCopyFeedback] = useState<CopyFeedback>(null);
 
   const contentInputRef = useRef<HTMLInputElement | HTMLTextAreaElement | null>(null);
   const noteInputRef = useRef<HTMLTextAreaElement | null>(null);
   const structureActionInFlightRef = useRef(false);
-  const copyFeedbackTimerRef = useRef<number | null>(null);
 
   const isParagraph = kind === "paragraph";
   const isHierarchical = supportsHierarchy(kind);
   const hasNote = entry.note.trim().length > 0;
   const isEditing = editMode !== null;
+  const completionLabel = entry.is_completed ? "未完了に戻す" : "完了にする";
 
   useEffect(() => {
     if (!isEditing) {
@@ -94,14 +90,6 @@ export function EntryItem({
       noteInputRef.current?.focus();
     }
   }, [editMode]);
-
-  useEffect(() => {
-    return () => {
-      if (copyFeedbackTimerRef.current !== null) {
-        window.clearTimeout(copyFeedbackTimerRef.current);
-      }
-    };
-  }, []);
 
   const beginContentEdit = () => {
     if (disabled) return;
@@ -294,36 +282,22 @@ export function EntryItem({
     void save();
   };
 
-  const setCopyResult = (result: CopyFeedback) => {
-    setCopyFeedback(result);
-
-    if (copyFeedbackTimerRef.current !== null) {
-      window.clearTimeout(copyFeedbackTimerRef.current);
-    }
-
-    copyFeedbackTimerRef.current = window.setTimeout(() => {
-      setCopyFeedback(null);
-      copyFeedbackTimerRef.current = null;
-    }, 1600);
-  };
-
-  const copyEntry = async () => {
-    if (disabled) return;
-
-    try {
-      await copyToClipboard(formatEntryCopyText(entry, showEntryNumbers));
-      setCopyResult("copied");
-    } catch {
-      setCopyResult("failed");
-    }
-  };
-
   const remove = async () => {
     await onDelete(entry.id);
   };
 
   const advanceSatisfaction = async (nextValue: number) => {
     await onUpdate(entry.id, { satisfaction: nextValue });
+  };
+
+  const toggleCompletion = async () => {
+    if (disabled || isSaving) return;
+
+    const canContinue = isEditing ? await persist(false) : true;
+    if (!canContinue) return;
+
+    await onUpdate(entry.id, { is_completed: !entry.is_completed });
+    setEditMode(null);
   };
 
   const style = {
@@ -334,19 +308,13 @@ export function EntryItem({
     ? "Tab Shift+Tab Control+Shift+ArrowRight Control+Shift+ArrowLeft Control+Shift+ArrowUp Control+Shift+ArrowDown"
     : undefined;
 
-  const copyLabel =
-    copyFeedback === "copied"
-      ? "コピーしました"
-      : copyFeedback === "failed"
-        ? "コピーできませんでした"
-        : "この項目をコピー";
-
   const createdAtLabel = formatEntryCreatedAt(entry.created_at);
+  const completionClassName = entry.is_completed ? "entry-item--completed" : "";
 
   if (isEditing) {
     return (
       <article
-        className={`entry-item entry-item--editing ${
+        className={`entry-item entry-item--editing ${completionClassName} ${
           isHierarchical ? "entry-item--hierarchical" : ""
         } ${entry.depth > 0 ? "entry-item--nested" : ""}`}
         style={style}
@@ -400,7 +368,7 @@ export function EntryItem({
         {showNoteEditor ? (
           <div className="entry-item__note-editor">
             <div className="entry-item__note-editor-header">
-              <label htmlFor={`entry-note-${entry.id}`}>備考</label>
+              <label htmlFor={`entry-note-${entry.id}`}>気持ち・備考</label>
               <button
                 type="button"
                 className="text-button entry-item__remove-note"
@@ -411,7 +379,7 @@ export function EntryItem({
                   setShowNoteEditor(false);
                 }}
               >
-                備考を消す
+                消す
               </button>
             </div>
             <textarea
@@ -424,8 +392,8 @@ export function EntryItem({
               onCompositionStart={() => setIsComposing(true)}
               onCompositionEnd={() => setIsComposing(false)}
               rows={3}
-              placeholder="補足を書く"
-              aria-label="備考を編集"
+              placeholder="そのときの気持ち・補足"
+              aria-label="気持ち・備考を編集"
             />
           </div>
         ) : (
@@ -439,7 +407,7 @@ export function EntryItem({
               setEditMode("note");
             }}
           >
-            ＋ 備考を追加
+            ＋ 気持ち・備考
           </button>
         )}
 
@@ -454,6 +422,15 @@ export function EntryItem({
         ) : null}
 
         <div className="entry-item__edit-actions">
+          <button
+            type="button"
+            className="text-button entry-item__complete-text"
+            disabled={disabled || isSaving}
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => void toggleCompletion()}
+          >
+            {entry.is_completed ? "未完了に戻す" : "完了にする"}
+          </button>
           <button
             type="button"
             className="text-button text-button--danger"
@@ -491,7 +468,7 @@ export function EntryItem({
 
   return (
     <article
-      className={`entry-item ${
+      className={`entry-item ${completionClassName} ${
         isHierarchical ? "entry-item--hierarchical" : ""
       } ${entry.depth > 0 ? "entry-item--nested" : ""} ${
         isStructureOpen ? "entry-item--structure-open" : ""
@@ -527,9 +504,9 @@ export function EntryItem({
               className="entry-item__note"
               onClick={beginNoteEdit}
               disabled={disabled}
-              aria-label="備考を編集"
+              aria-label="気持ち・備考を編集"
             >
-              <span className="entry-item__note-label">備考</span>
+              <span className="entry-item__note-label">気持ち</span>
               <span className="entry-item__note-text">{entry.note}</span>
             </button>
           ) : null}
@@ -554,13 +531,16 @@ export function EntryItem({
 
           <button
             type="button"
-            className="icon-button entry-item__quick-action entry-item__copy"
-            onClick={() => void copyEntry()}
-            disabled={disabled}
-            aria-label={copyLabel}
-            title={copyLabel}
+            className={`entry-item__complete ${
+              entry.is_completed ? "entry-item__complete--active" : ""
+            }`}
+            onClick={() => void toggleCompletion()}
+            disabled={disabled || isSaving}
+            aria-pressed={entry.is_completed}
+            aria-label={completionLabel}
+            title={completionLabel}
           >
-            {copyFeedback === "copied" ? "✓" : copyFeedback === "failed" ? "!" : "⧉"}
+            {entry.is_completed ? "戻す" : "完了"}
           </button>
 
           <button
@@ -568,10 +548,10 @@ export function EntryItem({
             className="entry-item__note-trigger"
             onClick={beginNoteEdit}
             disabled={disabled}
-            aria-label={hasNote ? "備考を編集" : "備考を追加"}
-            title={hasNote ? "備考を編集" : "備考を追加"}
+            aria-label={hasNote ? "気持ち・備考を編集" : "気持ち・備考を追加"}
+            title={hasNote ? "気持ち・備考を編集" : "気持ち・備考を追加"}
           >
-            {hasNote ? "備考" : "＋備考"}
+            {hasNote ? "気持ち" : "＋気持ち"}
           </button>
 
           {isHierarchical ? (
@@ -604,14 +584,6 @@ export function EntryItem({
           </button>
         </div>
       </div>
-
-      <span className="visually-hidden" aria-live="polite">
-        {copyFeedback === "copied"
-          ? "この項目をコピーしました。"
-          : copyFeedback === "failed"
-            ? "コピーできませんでした。"
-            : ""}
-      </span>
 
       {isHierarchical && isStructureOpen ? (
         <div className="entry-item__structure-actions" aria-label="項目の操作">

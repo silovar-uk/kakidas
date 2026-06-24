@@ -1,17 +1,16 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { copyToClipboard } from "../lib/clipboard";
-import { formatEntryCopyText } from "../lib/entryText";
 import { lockBodyScroll } from "../lib/bodyScrollLock";
 import { type EntryKind, type EntryTreeNode } from "../types/memo";
 
 type MobileEntryActionSheetProps = {
   entry: EntryTreeNode | null;
   kind: EntryKind;
-  /** 個別コピー・見出しに振り番を含めるか。 */
+  /** 見出しに振り番を含めるか。 */
   showEntryNumbers: boolean;
   disabled?: boolean;
   onClose: () => void;
+  onToggleCompleted: (entryId: string) => Promise<unknown> | unknown;
   onAddChild: (entryId: string) => Promise<unknown> | unknown;
   onIndent: (entryId: string) => Promise<unknown> | unknown;
   onOutdent: (entryId: string) => Promise<unknown> | unknown;
@@ -20,18 +19,16 @@ type MobileEntryActionSheetProps = {
 };
 
 /**
- * Word / Sentenceのモバイル操作シート。
- *
- * - 画面の通常レイアウトから切り離して body 直下へ Portal 表示する
- * - 画面遷移・タブ切替・画面非表示・ブラウザ戻るで必ず閉じる
- * - 操作の失敗時でもシートだけが前面に残らないよう、finallyで閉じる
+ * 単語 / 文のモバイル操作シート。
+ * 個別コピーは置かず、完了・階層操作・削除だけへ絞る。
  */
 export function MobileEntryActionSheet({
   entry,
-  kind,
+  kind: _kind,
   showEntryNumbers,
   disabled = false,
   onClose,
+  onToggleCompleted,
   onAddChild,
   onIndent,
   onOutdent,
@@ -39,7 +36,6 @@ export function MobileEntryActionSheet({
   onDelete,
 }: MobileEntryActionSheetProps) {
   const [isWorking, setIsWorking] = useState(false);
-  const [copyStatus, setCopyStatus] = useState<string | null>(null);
   const dialogRef = useRef<HTMLElement | null>(null);
   const onCloseRef = useRef(onClose);
 
@@ -48,7 +44,6 @@ export function MobileEntryActionSheet({
   }, [onClose]);
 
   useEffect(() => {
-    setCopyStatus(null);
     setIsWorking(false);
   }, [entry?.id]);
 
@@ -99,21 +94,9 @@ export function MobileEntryActionSheet({
       await action();
     } catch {
       // 保存・削除処理側のエラー表示を妨げない。
-      // 重要なのは、エラー時にも操作シートを前面に残さないこと。
     } finally {
       close();
       setIsWorking(false);
-    }
-  };
-
-  const copyEntry = async () => {
-    if (disabled || isWorking) return;
-
-    try {
-      await copyToClipboard(formatEntryCopyText(entry, showEntryNumbers));
-      setCopyStatus("コピーしました");
-    } catch {
-      setCopyStatus("コピーできませんでした");
     }
   };
 
@@ -156,16 +139,15 @@ export function MobileEntryActionSheet({
 
         <button
           type="button"
-          className="mobile-action-sheet__copy"
-          onClick={() => void copyEntry()}
+          className={`mobile-action-sheet__complete ${
+            entry.is_completed ? "mobile-action-sheet__complete--active" : ""
+          }`}
+          onClick={() => void run(() => onToggleCompleted(entry.id))}
           disabled={disabled || isWorking}
         >
-          <span aria-hidden="true">⧉</span>
-          コピー
+          <span aria-hidden="true">✓</span>
+          {entry.is_completed ? "未完了に戻す" : "完了にする"}
         </button>
-        <p className="mobile-action-sheet__copy-status" aria-live="polite">
-          {copyStatus}
-        </p>
 
         <button
           type="button"

@@ -21,7 +21,7 @@ type EntryColumnProps = {
   isActiveOnMobile: boolean;
   /** 各項目の作成日時を表示するか。 */
   showCreatedAt: boolean;
-  /** 振り番を画面・個別コピーに含めるか。 */
+  /** 振り番を画面に含めるか。 */
   showEntryNumbers: boolean;
   /** 新規メモ作成直後、Wordの入力欄へ一度だけフォーカスする。 */
   autoFocusComposer?: boolean;
@@ -270,6 +270,15 @@ ${entries.length}件が削除されます。${hierarchyNotice}
     setMobileActionEntryId(null);
   };
 
+  const toggleCompleted = async (entryId: string) => {
+    const target = entries.find((entry) => entry.id === entryId);
+    if (!target) return;
+
+    await onUpdate(entryId, { is_completed: !target.is_completed });
+    setStructureEntryId(null);
+    setMobileActionEntryId(null);
+  };
+
   return (
     <section
       className={`entry-column entry-column--${kind} ${
@@ -340,6 +349,7 @@ ${entries.length}件が削除されます。${hierarchyNotice}
           showEntryNumbers={showEntryNumbers}
           disabled={disabled || isDeletingAll}
           onClose={() => setMobileActionEntryId(null)}
+          onToggleCompleted={toggleCompleted}
           onAddChild={selectParent}
           onIndent={(entryId) => runStructureAction(onIndent, entryId)}
           onOutdent={(entryId) => runStructureAction(onOutdent, entryId)}

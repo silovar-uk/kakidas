@@ -2,6 +2,7 @@ import {
   type BackupPayload,
   type CloudImportMode,
   type CloudImportResult,
+  type CompletedEntriesDeletionResult,
   type EntryDeletionResult,
   type EntryInsert,
   type EntryKind,
@@ -25,6 +26,7 @@ import {
   normalizeMemoSyncMeta,
   normalizeEntryRow,
   normalizeSatisfaction,
+  normalizeCompletion,
   nowIso,
 } from "../types/memo";
 import {
@@ -64,6 +66,8 @@ export interface MemoRepository {
   restoreEntries(entryIds: string[]): Promise<void>;
   /** 指定したWord / Sentence / Paragraphの内容をまとめてソフト削除する。 */
   deleteEntriesByKind(memoId: string, kind: EntryKind): Promise<number>;
+  /** 完了済みだけをまとめてソフト削除する。未完了の子孫は残す。 */
+  deleteCompletedEntries(memoId: string): Promise<CompletedEntriesDeletionResult>;
 
   /** 直前の同階層項目の子にする。 */
   indentEntry(entryId: string): Promise<void>;
@@ -85,6 +89,14 @@ function compareEntries(a: EntryRow, b: EntryRow): number {
   }
 
   return a.created_at.localeCompare(b.created_at);
+}
+
+function compareEntriesForDisplay(a: EntryRow, b: EntryRow): number {
+  if (a.is_completed !== b.is_completed) {
+    return Number(a.is_completed) - Number(b.is_completed);
+  }
+
+  return compareEntries(a, b);
 }
 
 function getEmptyCounts(): MemoEntryCounts {
@@ -522,6 +534,7 @@ class IndexedDbMemoRepository implements MemoRepository {
       content,
       note: input.note?.trim() ?? "",
       satisfaction: normalizeSatisfaction(input.satisfaction),
+      is_completed: normalizeCompletion(input.is_completed),
       sort_order: input.sort_order ?? siblings.length,
       created_at: timestamp,
       updated_at: timestamp,
@@ -565,6 +578,10 @@ class IndexedDbMemoRepository implements MemoRepository {
       patch.satisfaction === undefined
         ? current.satisfaction
         : normalizeSatisfaction(patch.satisfaction);
+    const isCompleted =
+      patch.is_completed === undefined
+        ? current.is_completed
+        : normalizeCompletion(patch.is_completed);
 
     if (!content && patch.deleted_at === undefined) {
       transaction.abort();
@@ -579,6 +596,7 @@ class IndexedDbMemoRepository implements MemoRepository {
       content: content || current.content,
       note,
       satisfaction,
+      is_completed: isCompleted,
       updated_at: timestamp,
     };
 
@@ -694,6 +712,144 @@ class IndexedDbMemoRepository implements MemoRepository {
     );
 
     await transactionToPromise(transaction);
+  }
+
+  /**
+   * 完了済みの項目だけを整理する。
+   * 完了した親の下に未完了の項目が残っている場合、未完了の項目を
+   * 直近の未完了の親（なければルート）へ戻すため、未完了の内容は消えない。
+   */
+  async deleteCompletedEntries(
+    memoId: string,
+  ): Promise<CompletedEntriesDeletionResult> {
+    const db = await getDatabase();
+
+    const transaction = db.transaction(
+      [STORE_NAMES.memos, STORE_NAMES.entries, STORE_NAMES.memoSyncMeta],
+      "readwrite",
+    );
+
+    const memoStore = transaction.objectStore(STORE_NAMES.memos);
+    const entryStore = transaction.objectStore(STORE_NAMES.entries);
+    const syncMetaStore = transaction.objectStore(STORE_NAMES.memoSyncMeta);
+
+    const memo = await requestToPromise(
+      memoStore.get(memoId) as IDBRequest<MemoRow | undefined>,
+    );
+
+    if (!memo || memo.deleted_at !== null) {
+      transaction.abort();
+      throw new Error("対象のメモが見つかりません。");
+    }
+
+    const allEntries = await this.getEntriesForMemo(entryStore, memoId);
+    const activeEntries = allEntries.filter((entry) => entry.deleted_at === null);
+    const completedIds = new Set(
+      activeEntries.filter((entry) => entry.is_completed).map((entry) => entry.id),
+    );
+
+    if (completedIds.size === 0) {
+      await transactionToPromise(transaction);
+      return { memo_id: memoId, deleted_count: 0, reparented_count: 0 };
+    }
+
+    const activeById = new Map(activeEntries.map((entry) => [entry.id, entry]));
+    const timestamp = nowIso();
+    // ルート階層は kind ごとに別の並び順を持つため、kind + parent_id で分ける。
+    const reparentCandidates = new Map<
+      string,
+      { kind: EntryKind; parent_id: string | null; entries: EntryRow[] }
+    >();
+
+    const findNearestRemainingParent = (entry: EntryRow): string | null => {
+      let parentId = entry.parent_id;
+      const seen = new Set<string>([entry.id]);
+
+      while (parentId) {
+        if (seen.has(parentId)) return null;
+        seen.add(parentId);
+
+        const parent = activeById.get(parentId);
+        if (!parent || parent.kind !== entry.kind) return null;
+        if (!completedIds.has(parent.id)) return parent.id;
+        parentId = parent.parent_id;
+      }
+
+      return null;
+    };
+
+    // 直上の親が消える未完了項目だけを、消えない階層へ移す。
+    for (const entry of activeEntries) {
+      if (completedIds.has(entry.id) || !entry.parent_id) continue;
+      if (!completedIds.has(entry.parent_id)) continue;
+
+      const nextParentId = findNearestRemainingParent(entry);
+      const groupKey = `${entry.kind}::${nextParentId ?? "__root__"}`;
+      const group = reparentCandidates.get(groupKey) ?? {
+        kind: entry.kind,
+        parent_id: nextParentId,
+        entries: [],
+      };
+      group.entries.push(entry);
+      reparentCandidates.set(groupKey, group);
+    }
+
+    let reparentedCount = 0;
+
+    for (const { kind, parent_id: nextParentId, entries: candidates } of reparentCandidates.values()) {
+      const candidateIds = new Set(candidates.map((entry) => entry.id));
+      const survivingSiblings = activeEntries
+        .filter(
+          (entry) =>
+            !completedIds.has(entry.id) &&
+            !candidateIds.has(entry.id) &&
+            entry.kind === kind &&
+            entry.parent_id === nextParentId,
+        )
+        .sort(compareEntries);
+
+      const nextSortOrderStart =
+        survivingSiblings.length === 0
+          ? 0
+          : Math.max(...survivingSiblings.map((entry) => entry.sort_order)) + 1;
+
+      candidates
+        .sort(compareEntries)
+        .forEach((entry, index) => {
+          entryStore.put({
+            ...entry,
+            parent_id: nextParentId,
+            sort_order: nextSortOrderStart + index,
+            updated_at: timestamp,
+          } satisfies EntryRow);
+          reparentedCount += 1;
+        });
+    }
+
+    for (const entry of activeEntries) {
+      if (!completedIds.has(entry.id)) continue;
+
+      entryStore.put({
+        ...entry,
+        updated_at: timestamp,
+        deleted_at: timestamp,
+      } satisfies EntryRow);
+    }
+
+    await this.touchMemoWithinTransaction(memoStore, memoId, timestamp);
+    await this.markMemoChangedWithinTransaction(
+      syncMetaStore,
+      memoId,
+      timestamp,
+    );
+
+    await transactionToPromise(transaction);
+
+    return {
+      memo_id: memoId,
+      deleted_count: completedIds.size,
+      reparented_count: reparentedCount,
+    };
   }
 
   async deleteEntriesByKind(
@@ -948,7 +1104,7 @@ class IndexedDbMemoRepository implements MemoRepository {
     );
 
     return {
-      version: 3,
+      version: 4,
       exported_at: nowIso(),
       memos,
       entries: entries.map(normalizeEntryRow),
@@ -957,7 +1113,10 @@ class IndexedDbMemoRepository implements MemoRepository {
 
   async importBackup(payload: BackupPayload): Promise<void> {
     if (
-      (payload.version !== 1 && payload.version !== 2 && payload.version !== 3) ||
+      (payload.version !== 1 &&
+        payload.version !== 2 &&
+        payload.version !== 3 &&
+        payload.version !== 4) ||
       !Array.isArray(payload.memos) ||
       !Array.isArray(payload.entries)
     ) {
@@ -1057,7 +1216,7 @@ class IndexedDbMemoRepository implements MemoRepository {
           entry.kind === kind &&
           entry.parent_id === parentId,
       )
-      .sort(compareEntries);
+      .sort(compareEntriesForDisplay);
   }
 
   private getSubtreeIds(entries: EntryRow[], rootId: string): Set<string> {

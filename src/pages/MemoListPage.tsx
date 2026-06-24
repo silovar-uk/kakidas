@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthProvider";
+import { copyToClipboard } from "../lib/clipboard";
+import { formatMemoText } from "../lib/memoText";
 import { CloudAccountDialog } from "../components/CloudAccountDialog";
 import { CloudImportDialog } from "../components/CloudImportDialog";
 import {
@@ -14,6 +16,7 @@ import {
   refreshCloudSyncStates,
   uploadMemosToCloud,
 } from "../repositories/cloudMemoRepository";
+import { memoRepository } from "../repositories/memoRepository";
 import {
   type BackupPayload,
   type CloudState,
@@ -68,6 +71,7 @@ export function MemoListPage() {
   const [isUploadDialogOpen, setIsUploadDialogOpen] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [isApplyingCloudUpdate, setIsApplyingCloudUpdate] = useState(false);
+  const [copyingMemoId, setCopyingMemoId] = useState<string | null>(null);
   const [conflictSnapshot, setConflictSnapshot] =
     useState<MemoCloudSnapshot | null>(null);
 
@@ -210,6 +214,54 @@ export function MemoListPage() {
           ? deleteError.message
           : "メモを削除できませんでした。",
       );
+    }
+  };
+
+  const handleCopyMemo = async (memo: MemoListItem) => {
+    if (copyingMemoId) return;
+
+    setCopyingMemoId(memo.id);
+    setNotice(null);
+
+    try {
+      const detail = await memoRepository.getMemo(memo.id);
+
+      if (!detail) {
+        throw new Error("コピーするメモが見つかりません。");
+      }
+
+      let includeEntryNumbers = false;
+      try {
+        includeEntryNumbers =
+          window.localStorage.getItem("kakidas.show-entry-numbers") === "true";
+      } catch {
+        // ストレージに触れない環境では、番号なしで安全にコピーする。
+      }
+
+      const completedCount = detail.entries.filter(
+        (entry) => entry.is_completed,
+      ).length;
+
+      await copyToClipboard(
+        formatMemoText(detail, {
+          includeEntryNumbers,
+          excludeCompleted: true,
+        }),
+      );
+
+      setNotice(
+        completedCount > 0
+          ? `「${memo.title}」をコピーしました。完了済み${completedCount}件は含めていません。`
+          : `「${memo.title}」をコピーしました。`,
+      );
+    } catch (copyError) {
+      setNotice(
+        copyError instanceof Error
+          ? copyError.message
+          : "メモをコピーできませんでした。",
+      );
+    } finally {
+      setCopyingMemoId(null);
     }
   };
 
@@ -541,6 +593,16 @@ export function MemoListPage() {
                   </Link>
                 ) : (
                   <div className="memo-card__actions">
+                    <button
+                      type="button"
+                      className="memo-card__copy"
+                      disabled={copyingMemoId !== null}
+                      onClick={() => void handleCopyMemo(memo)}
+                      aria-label={`「${memo.title}」をコピー`}
+                      title="完了済みを除いてコピー"
+                    >
+                      {copyingMemoId === memo.id ? "コピー中…" : "コピー"}
+                    </button>
                     {cloudAction ? (
                       <button
                         type="button"

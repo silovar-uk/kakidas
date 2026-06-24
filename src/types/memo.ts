@@ -57,6 +57,8 @@ export type EntryRow = {
   note: string;
   /** 0〜5の満足度。0が初期値で、画面上ではタップごとに1ずつ進む。 */
   satisfaction: number;
+  /** 完了済みなら一覧の末尾へ寄せ、コピー対象から除外できる。 */
+  is_completed: boolean;
   sort_order: number;
   created_at: string;
   updated_at: string;
@@ -67,12 +69,17 @@ export type EntryRow = {
  * v1バックアップや既存IndexedDBには parent_id が存在しないことがある。
  * 読み込み時は null として補完する。
  */
-export type LegacyEntryRow = Omit<EntryRow, "parent_id" | "note" | "satisfaction"> & {
+export type LegacyEntryRow = Omit<
+  EntryRow,
+  "parent_id" | "note" | "satisfaction" | "is_completed"
+> & {
   parent_id?: string | null;
   /** v0.5.10以前は備考カラムがないため、読み込み時に空文字へ補完する。 */
   note?: string | null;
   /** v0.5.13以前は満足度がないため、読み込み時に0へ補完する。 */
   satisfaction?: number | null;
+  /** v0.5.14以前は完了状態がないため、読み込み時にfalseへ補完する。 */
+  is_completed?: boolean | number | string | null;
 };
 
 export type EntryInsert = {
@@ -84,6 +91,7 @@ export type EntryInsert = {
   content: string;
   note?: string;
   satisfaction?: number;
+  is_completed?: boolean;
   sort_order?: number;
   created_at?: string;
   updated_at?: string;
@@ -93,7 +101,7 @@ export type EntryInsert = {
 export type EntryUpdate = Partial<
   Pick<
     EntryRow,
-    "content" | "note" | "satisfaction" | "sort_order" | "updated_at" | "deleted_at" | "user_id"
+    "content" | "note" | "satisfaction" | "is_completed" | "sort_order" | "updated_at" | "deleted_at" | "user_id"
   >
 >;
 
@@ -198,6 +206,17 @@ export type EntryDeletionResult = {
 };
 
 /**
+ * 完了済みの項目をまとめて整理した結果。
+ * 完了済みの親の下に未完了項目がある場合は、未完了項目を残すため
+ * 近い未完了の階層へ戻してから完了項目だけを削除する。
+ */
+export type CompletedEntriesDeletionResult = {
+  memo_id: string;
+  deleted_count: number;
+  reparented_count: number;
+};
+
+/**
  * Supabaseの `Database` 型と同じ形。
  * 将来 `supabase gen types typescript` の生成物へ置き換えても、
  * Repositoryの呼び出し側を変えずに済むようにしている。
@@ -241,7 +260,7 @@ export type Database = {
 };
 
 export type BackupPayload = {
-  version: 1 | 2 | 3;
+  version: 1 | 2 | 3 | 4;
   exported_at: string;
   memos: MemoRow[];
   entries: LegacyEntryRow[];
@@ -355,12 +374,17 @@ export function normalizeSatisfaction(value: unknown): number {
   return Math.min(5, Math.max(0, Math.round(numeric)));
 }
 
+export function normalizeCompletion(value: unknown): boolean {
+  return value === true || value === 1 || value === "1" || value === "true";
+}
+
 export function normalizeEntryRow(entry: LegacyEntryRow): EntryRow {
   return {
     ...entry,
     parent_id: entry.parent_id ?? null,
     note: typeof entry.note === "string" ? entry.note : "",
     satisfaction: normalizeSatisfaction(entry.satisfaction),
+    is_completed: normalizeCompletion(entry.is_completed),
   };
 }
 
@@ -409,6 +433,15 @@ function compareEntries(a: EntryRow, b: EntryRow): number {
   return a.created_at.localeCompare(b.created_at);
 }
 
+/** 完了済みは各階層の末尾へ寄せつつ、同じ状態内の順番は sort_order で維持する。 */
+function compareEntriesForDisplay(a: EntryRow, b: EntryRow): number {
+  if (a.is_completed !== b.is_completed) {
+    return Number(a.is_completed) - Number(b.is_completed);
+  }
+
+  return compareEntries(a, b);
+}
+
 /**
  * parent_id + sort_order を読み、表示専用の深さつきリストへ変換する。
  * 壊れた親参照・循環参照があっても、親なしの項目として安全に表示する。
@@ -420,7 +453,7 @@ export function getEntryTree(
   const activeEntries = entries
     .filter((entry) => entry.kind === kind && entry.deleted_at === null)
     .map(normalizeEntryRow)
-    .sort(compareEntries);
+    .sort(compareEntriesForDisplay);
 
   const entryById = new Map(activeEntries.map((entry) => [entry.id, entry]));
   const childrenByParent = new Map<string | null, EntryRow[]>();
@@ -439,7 +472,7 @@ export function getEntryTree(
   }
 
   for (const siblings of childrenByParent.values()) {
-    siblings.sort(compareEntries);
+    siblings.sort(compareEntriesForDisplay);
   }
 
   const countDescendants = (entryId: string, seen: Set<string>): number => {
@@ -486,8 +519,11 @@ export function getEntryTree(
         has_children: children.length > 0,
         can_indent: index > 0,
         can_outdent: parentId !== null,
-        can_move_up: index > 0,
-        can_move_down: index < siblings.length - 1,
+        can_move_up:
+          index > 0 && siblings[index - 1]?.is_completed === entry.is_completed,
+        can_move_down:
+          index < siblings.length - 1 &&
+          siblings[index + 1]?.is_completed === entry.is_completed,
       });
 
       visit(entry.id, depth + 1, numberParts);
@@ -509,7 +545,7 @@ export function getEntryTree(
         (candidate.parent_id === entry.parent_id || candidate.id === entry.id),
     );
 
-    siblings.sort(compareEntries).forEach((orphan, index) => {
+    siblings.sort(compareEntriesForDisplay).forEach((orphan, index) => {
       if (visited.has(orphan.id)) return;
 
       visited.add(orphan.id);
@@ -525,8 +561,11 @@ export function getEntryTree(
         has_children: children.length > 0,
         can_indent: index > 0,
         can_outdent: false,
-        can_move_up: index > 0,
-        can_move_down: index < siblings.length - 1,
+        can_move_up:
+          index > 0 && siblings[index - 1]?.is_completed === orphan.is_completed,
+        can_move_down:
+          index < siblings.length - 1 &&
+          siblings[index + 1]?.is_completed === orphan.is_completed,
       });
 
       visit(orphan.id, 1, numberParts);
