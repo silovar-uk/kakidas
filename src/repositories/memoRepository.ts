@@ -27,6 +27,7 @@ import {
   isCloudLinked,
   normalizeMemoSyncMeta,
   normalizeEntryRow,
+  normalizeLinkUrlForSave,
   normalizeSatisfaction,
   normalizeCompletion,
   nowIso,
@@ -548,6 +549,7 @@ class IndexedDbMemoRepository implements MemoRepository {
       parent_id: parentId,
       content,
       note: input.note?.trim() ?? "",
+      link_url: normalizeLinkUrlForSave(input.link_url),
       satisfaction: normalizeSatisfaction(input.satisfaction),
       is_completed: normalizeCompletion(input.is_completed),
       sort_order: nextSortOrder,
@@ -589,6 +591,10 @@ class IndexedDbMemoRepository implements MemoRepository {
     const current = await this.requireActiveEntry(entryStore, entryId, transaction);
     const content = patch.content === undefined ? current.content : patch.content.trim();
     const note = patch.note === undefined ? current.note : patch.note.trim();
+    const linkUrl =
+      patch.link_url === undefined
+        ? current.link_url
+        : normalizeLinkUrlForSave(patch.link_url);
     const satisfaction =
       patch.satisfaction === undefined
         ? current.satisfaction
@@ -610,6 +616,7 @@ class IndexedDbMemoRepository implements MemoRepository {
       ...patch,
       content: content || current.content,
       note,
+      link_url: linkUrl,
       satisfaction,
       is_completed: isCompleted,
       updated_at: timestamp,
@@ -1192,7 +1199,7 @@ class IndexedDbMemoRepository implements MemoRepository {
     );
 
     return {
-      version: 4,
+      version: 5,
       exported_at: nowIso(),
       memos,
       entries: entries.map(normalizeEntryRow),
@@ -1204,7 +1211,8 @@ class IndexedDbMemoRepository implements MemoRepository {
       (payload.version !== 1 &&
         payload.version !== 2 &&
         payload.version !== 3 &&
-        payload.version !== 4) ||
+        payload.version !== 4 &&
+        payload.version !== 5) ||
       !Array.isArray(payload.memos) ||
       !Array.isArray(payload.entries)
     ) {

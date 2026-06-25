@@ -76,6 +76,8 @@ export type EntryRow = {
   content: string;
   /** 任意の補足。空文字なら画面に余白を作らない。 */
   note: string;
+  /** 任意の外部リンク。空文字ならリンクボタンは追加用として扱う。 */
+  link_url: string;
   /** 0〜5の満足度。0が初期値で、画面上ではタップごとに1ずつ進む。 */
   satisfaction: number;
   /** 完了済みなら一覧の末尾へ寄せ、コピー対象から除外できる。 */
@@ -92,11 +94,13 @@ export type EntryRow = {
  */
 export type LegacyEntryRow = Omit<
   EntryRow,
-  "parent_id" | "note" | "satisfaction" | "is_completed"
+  "parent_id" | "note" | "link_url" | "satisfaction" | "is_completed"
 > & {
   parent_id?: string | null;
   /** v0.5.10以前は備考カラムがないため、読み込み時に空文字へ補完する。 */
   note?: string | null;
+  /** v0.5.31以前はリンクカラムがないため、読み込み時に空文字へ補完する。 */
+  link_url?: string | null;
   /** v0.5.13以前は満足度がないため、読み込み時に0へ補完する。 */
   satisfaction?: number | null;
   /** v0.5.14以前は完了状態がないため、読み込み時にfalseへ補完する。 */
@@ -111,6 +115,7 @@ export type EntryInsert = {
   parent_id?: string | null;
   content: string;
   note?: string;
+  link_url?: string;
   satisfaction?: number;
   is_completed?: boolean;
   sort_order?: number;
@@ -122,7 +127,7 @@ export type EntryInsert = {
 export type EntryUpdate = Partial<
   Pick<
     EntryRow,
-    "content" | "note" | "satisfaction" | "is_completed" | "sort_order" | "updated_at" | "deleted_at" | "user_id"
+    "content" | "note" | "link_url" | "satisfaction" | "is_completed" | "sort_order" | "updated_at" | "deleted_at" | "user_id"
   >
 >;
 
@@ -281,7 +286,7 @@ export type Database = {
 };
 
 export type BackupPayload = {
-  version: 1 | 2 | 3 | 4;
+  version: 1 | 2 | 3 | 4 | 5;
   exported_at: string;
   memos: MemoRow[];
   entries: LegacyEntryRow[];
@@ -422,9 +427,50 @@ export function normalizeEntryRow(entry: LegacyEntryRow): EntryRow {
     ...entry,
     parent_id: entry.parent_id ?? null,
     note: typeof entry.note === "string" ? entry.note : "",
+    link_url: typeof entry.link_url === "string" ? entry.link_url.trim() : "",
     satisfaction: normalizeSatisfaction(entry.satisfaction),
     is_completed: normalizeCompletion(entry.is_completed),
   };
+}
+
+/**
+ * リンク入力を保存向けに整える。
+ * `example.com` のような貼り付けには https を補い、HTTP(S)以外は受け付けない。
+ */
+export function normalizeLinkUrlForSave(value: unknown): string {
+  const raw = typeof value === "string" ? value.trim() : "";
+
+  if (!raw) return "";
+
+  const candidate = /^[a-z][a-z\d+.-]*:\/\//i.test(raw)
+    ? raw
+    : `https://${raw}`;
+
+  let parsed: URL;
+
+  try {
+    parsed = new URL(candidate);
+  } catch {
+    throw new Error("リンクのURLを確認してください。");
+  }
+
+  if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
+    throw new Error("リンクには http:// または https:// のURLを入れてください。");
+  }
+
+  return parsed.href;
+}
+
+/**
+ * 既存データに不正な値が混ざっていても、表示やリンク遷移で例外を出さない。
+ */
+export function getOpenableLinkUrl(value: unknown): string | null {
+  try {
+    const normalized = normalizeLinkUrlForSave(value);
+    return normalized || null;
+  } catch {
+    return null;
+  }
 }
 
 /**

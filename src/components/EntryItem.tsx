@@ -14,11 +14,22 @@ import {
   type EntryUpdate,
   ENTRY_KIND_LABEL,
   ENTRY_KIND_MOVE_TARGETS,
+  getOpenableLinkUrl,
+  normalizeLinkUrlForSave,
   supportsHierarchy,
 } from "../types/memo";
 
 type StructureShortcut = "indent" | "outdent" | "move-up" | "move-down";
-type EditMode = "content" | "note" | null;
+type EditMode = "content" | "note" | "link" | null;
+
+function LinkIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path d="M10.4 13.6a4.3 4.3 0 0 0 6.1 0l2.3-2.3a4.3 4.3 0 0 0-6.1-6.1l-1.3 1.3" />
+      <path d="M13.6 10.4a4.3 4.3 0 0 0-6.1 0l-2.3 2.3a4.3 4.3 0 0 0 6.1 6.1l1.3-1.3" />
+    </svg>
+  );
+}
 
 type EntryItemProps = {
   entry: EntryTreeNode;
@@ -66,17 +77,22 @@ export function EntryItem({
   const [editMode, setEditMode] = useState<EditMode>(null);
   const [value, setValue] = useState(entry.content);
   const [noteValue, setNoteValue] = useState(entry.note);
+  const [linkValue, setLinkValue] = useState(entry.link_url);
   const [showNoteEditor, setShowNoteEditor] = useState(Boolean(entry.note.trim()));
+  const [showLinkEditor, setShowLinkEditor] = useState(Boolean(entry.link_url.trim()));
+  const [linkError, setLinkError] = useState<string | null>(null);
   const [isComposing, setIsComposing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
   const contentInputRef = useRef<HTMLInputElement | HTMLTextAreaElement | null>(null);
   const noteInputRef = useRef<HTMLTextAreaElement | null>(null);
+  const linkInputRef = useRef<HTMLInputElement | null>(null);
   const structureActionInFlightRef = useRef(false);
 
   const isParagraph = kind === "paragraph";
   const isHierarchical = supportsHierarchy(kind);
   const hasNote = entry.note.trim().length > 0;
+  const openableLinkUrl = getOpenableLinkUrl(entry.link_url);
   const isEditing = editMode !== null;
   const completionLabel = entry.is_completed ? "未完了に戻す" : "完了にする";
   const moveTargets = ENTRY_KIND_MOVE_TARGETS[kind];
@@ -85,9 +101,12 @@ export function EntryItem({
     if (!isEditing) {
       setValue(entry.content);
       setNoteValue(entry.note);
+      setLinkValue(entry.link_url);
       setShowNoteEditor(Boolean(entry.note.trim()));
+      setShowLinkEditor(Boolean(entry.link_url.trim()));
+      setLinkError(null);
     }
-  }, [entry.content, entry.note, isEditing]);
+  }, [entry.content, entry.note, entry.link_url, isEditing]);
 
   useEffect(() => {
     if (editMode === "content") {
@@ -97,13 +116,20 @@ export function EntryItem({
     if (editMode === "note") {
       noteInputRef.current?.focus();
     }
+
+    if (editMode === "link") {
+      linkInputRef.current?.focus();
+    }
   }, [editMode]);
 
   const beginContentEdit = () => {
     if (disabled) return;
     setValue(entry.content);
     setNoteValue(entry.note);
+    setLinkValue(entry.link_url);
     setShowNoteEditor(Boolean(entry.note.trim()));
+    setShowLinkEditor(Boolean(entry.link_url.trim()));
+    setLinkError(null);
     setEditMode("content");
   };
 
@@ -111,13 +137,37 @@ export function EntryItem({
     if (disabled) return;
     setValue(entry.content);
     setNoteValue(entry.note);
+    setLinkValue(entry.link_url);
     setShowNoteEditor(true);
+    setShowLinkEditor(false);
+    setLinkError(null);
     setEditMode("note");
+  };
+
+  const beginLinkEdit = () => {
+    if (disabled) return;
+    setValue(entry.content);
+    setNoteValue(entry.note);
+    setLinkValue(entry.link_url);
+    setShowNoteEditor(false);
+    setShowLinkEditor(true);
+    setLinkError(null);
+    setEditMode("link");
   };
 
   const persist = async (exitEditing = true): Promise<boolean> => {
     const nextContent = value.trim();
     const nextNote = noteValue.trim();
+    let nextLinkUrl = "";
+
+    try {
+      nextLinkUrl = normalizeLinkUrlForSave(linkValue);
+      setLinkError(null);
+    } catch (error) {
+      setShowLinkEditor(true);
+      setLinkError(error instanceof Error ? error.message : "リンクのURLを確認してください。");
+      return false;
+    }
 
     if (!nextContent) {
       setValue(entry.content);
@@ -129,6 +179,7 @@ export function EntryItem({
 
     if (nextContent !== entry.content) patch.content = nextContent;
     if (nextNote !== entry.note) patch.note = nextNote;
+    if (nextLinkUrl !== entry.link_url) patch.link_url = nextLinkUrl;
 
     if (Object.keys(patch).length === 0) {
       if (exitEditing) setEditMode(null);
@@ -153,7 +204,10 @@ export function EntryItem({
   const cancel = () => {
     setValue(entry.content);
     setNoteValue(entry.note);
+    setLinkValue(entry.link_url);
     setShowNoteEditor(Boolean(entry.note.trim()));
+    setShowLinkEditor(Boolean(entry.link_url.trim()));
+    setLinkError(null);
     setEditMode(null);
   };
 
@@ -270,6 +324,21 @@ export function EntryItem({
       event.key === "Enter" &&
       (event.metaKey || event.ctrlKey)
     ) {
+      event.preventDefault();
+      void save();
+    }
+  };
+
+  const handleLinkKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.nativeEvent.isComposing || isComposing) return;
+
+    if (event.key === "Escape") {
+      event.preventDefault();
+      cancel();
+      return;
+    }
+
+    if (event.key === "Enter") {
       event.preventDefault();
       void save();
     }
@@ -419,7 +488,7 @@ export function EntryItem({
               aria-label="気持ち・備考を編集"
             />
           </div>
-        ) : (
+        ) : editMode !== "link" ? (
           <button
             type="button"
             className="entry-item__add-note"
@@ -432,7 +501,51 @@ export function EntryItem({
           >
             ＋ 気持ち・備考
           </button>
-        )}
+        ) : null}
+
+        {showLinkEditor ? (
+          <div className="entry-item__link-editor">
+            <div className="entry-item__link-editor-control">
+              <LinkIcon />
+              <input
+                id={`entry-link-${entry.id}`}
+                ref={linkInputRef}
+                type="url"
+                inputMode="url"
+                autoCapitalize="off"
+                autoCorrect="off"
+                spellCheck={false}
+                value={linkValue}
+                disabled={disabled || isSaving}
+                onChange={(event) => {
+                  setLinkValue(event.target.value);
+                  setLinkError(null);
+                }}
+                onKeyDown={handleLinkKeyDown}
+                placeholder="https://..."
+                aria-label="リンクURLを編集"
+                aria-invalid={linkError ? true : undefined}
+              />
+              {linkValue ? (
+                <button
+                  type="button"
+                  className="entry-item__remove-link"
+                  disabled={disabled || isSaving}
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => {
+                    setLinkValue("");
+                    setLinkError(null);
+                  }}
+                  aria-label="リンクを外す"
+                  title="リンクを外す"
+                >
+                  ×
+                </button>
+              ) : null}
+            </div>
+            {linkError ? <p className="entry-item__link-error">{linkError}</p> : null}
+          </div>
+        ) : null}
 
         {showCreatedAt ? (
           <time
@@ -534,16 +647,42 @@ export function EntryItem({
             </button>
           ) : null}
 
-          <button
-            type="button"
-            className="entry-item__note-trigger entry-item__note-trigger--inline"
-            onClick={beginNoteEdit}
-            disabled={disabled}
-            aria-label={hasNote ? "気持ち・備考を編集" : "気持ち・備考を追加"}
-            title={hasNote ? "気持ち・備考を編集" : "気持ち・備考を追加"}
-          >
-            ＋
-          </button>
+          <div className="entry-item__inline-actions">
+            <button
+              type="button"
+              className="entry-item__note-trigger entry-item__note-trigger--inline"
+              onClick={beginNoteEdit}
+              disabled={disabled}
+              aria-label={hasNote ? "気持ち・備考を編集" : "気持ち・備考を追加"}
+              title={hasNote ? "気持ち・備考を編集" : "気持ち・備考を追加"}
+            >
+              ＋
+            </button>
+
+            {openableLinkUrl ? (
+              <a
+                className="entry-item__link-trigger"
+                href={openableLinkUrl}
+                target="_blank"
+                rel="noreferrer"
+                aria-label="リンクを開く"
+                title="リンクを開く"
+              >
+                <LinkIcon />
+              </a>
+            ) : (
+              <button
+                type="button"
+                className="entry-item__link-trigger"
+                onClick={beginLinkEdit}
+                disabled={disabled}
+                aria-label="リンクを追加"
+                title="リンクを追加"
+              >
+                <LinkIcon />
+              </button>
+            )}
+          </div>
 
           {showCreatedAt ? (
             <time

@@ -25,6 +25,8 @@ create table if not exists public.entries (
   content text not null,
   -- 任意の気持ち・備考。空文字ならアプリ画面には表示しない。
   note text not null default '',
+  -- 任意の外部リンク。通常時はURL文字列を出さず、リンクアイコンとして扱う。
+  link_url text not null default '',
   -- 0〜5の満足度。画面ではタップごとに1ずつ進める。
   satisfaction smallint not null default 0 check (satisfaction between 0 and 5),
   -- 完了済みなら一覧の末尾へ寄せ、コピー対象から除外できる。
@@ -48,6 +50,10 @@ alter table public.entries
 -- v0.5.14: 既存プロジェクトにも完了状態を追加する。
 alter table public.entries
   add column if not exists is_completed boolean not null default false;
+
+-- v0.5.31: 既存プロジェクトにも項目ごとの外部リンクを追加する。
+alter table public.entries
+  add column if not exists link_url text not null default '';
 
 create index if not exists entries_memo_kind_parent_order_idx
   on public.entries (memo_id, kind, parent_id, sort_order, created_at)

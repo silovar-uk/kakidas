@@ -1,5 +1,5 @@
 const DB_NAME = "kakidasu-db";
-const DB_VERSION = 7;
+const DB_VERSION = 8;
 
 export const STORE_NAMES = {
   memos: "memos",
@@ -171,6 +171,25 @@ function openDatabase(): Promise<IDBDatabase> {
 
           if (typeof value.is_completed !== "boolean") {
             cursor.update({ ...value, is_completed: false });
+          }
+
+          cursor.continue();
+        };
+      }
+
+      // v0.5.31: 各項目に任意のリンクを追加する。空文字は「リンクなし」。
+      // 既存項目の見た目は変えず、リンクボタンだけが追加用として使える。
+      if (oldVersion < 8) {
+        const cursorRequest = entryStore.openCursor();
+
+        cursorRequest.onsuccess = () => {
+          const cursor = cursorRequest.result;
+          if (!cursor) return;
+
+          const value = cursor.value as Record<string, unknown>;
+
+          if (typeof value.link_url !== "string") {
+            cursor.update({ ...value, link_url: "" });
           }
 
           cursor.continue();

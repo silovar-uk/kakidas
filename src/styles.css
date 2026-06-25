@@ -4435,3 +4435,163 @@ a:focus-visible {
     color: #a25332;
   }
 }
+
+/* --------------------------------------------------------------------------
+   v0.5.31 — entry links
+   URL文字列は通常時に出さず、短い鎖アイコンだけで開く／追加する。
+   -------------------------------------------------------------------------- */
+.entry-item__inline-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-top: 4px;
+}
+
+.entry-item__inline-actions .entry-item__note-trigger--inline {
+  margin-top: 0;
+}
+
+.entry-item__link-trigger {
+  display: inline-grid;
+  width: 24px;
+  min-width: 24px;
+  height: 24px;
+  min-height: 24px;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  color: #827467;
+  background: transparent;
+  line-height: 1;
+  text-decoration: none;
+}
+
+.entry-item__link-trigger svg,
+.entry-item__link-editor-control > svg {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+}
+
+.entry-item__link-trigger:hover:not(:disabled),
+.entry-item__link-trigger:active:not(:disabled) {
+  color: #75462e;
+  background: #fff5ec;
+}
+
+.entry-item__link-trigger:focus-visible {
+  outline: 2px solid #cfad95;
+  outline-offset: 1px;
+}
+
+.entry-item__link-editor {
+  margin-top: 8px;
+}
+
+.entry-item__link-editor-control {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr) auto;
+  min-height: 36px;
+  align-items: center;
+  gap: 7px;
+  padding: 0 8px;
+  border: 1px solid #e1d9d0;
+  border-radius: 9px;
+  color: #806b5d;
+  background: #fffdfa;
+}
+
+.entry-item__link-editor-control input {
+  min-width: 0;
+  width: 100%;
+  height: 34px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  outline: 0;
+  color: #4f4942;
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+}
+
+.entry-item__link-editor-control input::placeholder {
+  color: #b0a69c;
+}
+
+.entry-item__link-editor-control:focus-within {
+  border-color: #bfa184;
+  box-shadow: 0 0 0 2px rgba(191, 161, 132, 0.14);
+}
+
+.entry-item__remove-link {
+  display: inline-grid;
+  width: 24px;
+  min-width: 24px;
+  height: 24px;
+  min-height: 24px;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  color: #9a675a;
+  background: transparent;
+  font-size: 16px;
+  line-height: 1;
+}
+
+.entry-item__remove-link:hover:not(:disabled) {
+  color: #8d423a;
+  background: #f9ebe7;
+}
+
+.entry-item__link-error {
+  margin: 5px 1px 0;
+  color: #a35349;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+@media (max-width: 920px) {
+  .entry-item__inline-actions {
+    margin-top: 6px;
+  }
+
+  .entry-item__link-trigger {
+    width: 32px;
+    min-width: 32px;
+    height: 32px;
+    min-height: 32px;
+    border: 1px solid #e2d7cd;
+    border-radius: 9px;
+    background: #fffefa;
+  }
+
+  .entry-item__link-trigger svg {
+    width: 16px;
+    height: 16px;
+  }
+
+  .entry-item__link-editor-control {
+    min-height: 42px;
+  }
+
+  .entry-item__link-editor-control input {
+    height: 40px;
+    font-size: 16px;
+  }
+}
+
+@media (max-width: 370px) {
+  .entry-item__link-trigger {
+    width: 30px;
+    min-width: 30px;
+    height: 30px;
+    min-height: 30px;
+  }
+}

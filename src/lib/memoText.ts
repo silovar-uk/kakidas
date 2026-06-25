@@ -57,6 +57,7 @@ export function formatMemoText(
           ? ""
           : "- ";
       const noteLines = entry.note.trim().split(/\r?\n/).filter(Boolean);
+      const linkUrl = entry.link_url.trim();
 
       if (kind === "paragraph") {
         parts.push(`\n${prefix}${entry.content}`);
@@ -66,17 +67,26 @@ export function formatMemoText(
           noteLines.slice(1).forEach((line) => parts.push(`  ${line}`));
         }
 
+        if (linkUrl) {
+          parts.push(`リンク：${linkUrl}`);
+        }
+
         continue;
       }
 
       parts.push(`${indentation}${prefix}${entry.content}`);
 
+      const detailIndentation = `${indentation}  `;
+
       if (noteLines.length > 0) {
-        const noteIndentation = `${indentation}  `;
-        parts.push(`${noteIndentation}気持ち・備考：${noteLines[0]}`);
+        parts.push(`${detailIndentation}気持ち・備考：${noteLines[0]}`);
         noteLines.slice(1).forEach((line) =>
-          parts.push(`${noteIndentation}${line}`),
+          parts.push(`${detailIndentation}${line}`),
         );
+      }
+
+      if (linkUrl) {
+        parts.push(`${detailIndentation}リンク：${linkUrl}`);
       }
     }
   }
