@@ -1,5 +1,6 @@
 import {
   type EntryKind,
+  type EntrySortMode,
   type MemoWithEntries,
   ENTRY_KINDS,
   ENTRY_KIND_LABEL,
@@ -14,6 +15,8 @@ type MemoTextOptions = {
   excludeCompleted?: boolean;
   /** 特定の区分だけを出力するか。 */
   onlyKind?: EntryKind;
+  /** 画面で選んだ並び順を、コピー・.txt出力にも反映する。 */
+  entrySortMode?: EntrySortMode;
 };
 
 /**
@@ -26,6 +29,7 @@ export function formatMemoText(
     includeEntryNumbers = false,
     excludeCompleted = false,
     onlyKind,
+    entrySortMode = "created_desc",
   }: MemoTextOptions = {},
 ): string {
   const sourceEntries = excludeCompleted
@@ -35,7 +39,7 @@ export function formatMemoText(
   const parts = [`# ${memo.title}`];
 
   for (const kind of kinds) {
-    const entries = getEntryTree(sourceEntries, kind);
+    const entries = getEntryTree(sourceEntries, kind, entrySortMode);
     parts.push(`\n## ${ENTRY_KIND_LABEL[kind]}`);
 
     if (entries.length === 0) {

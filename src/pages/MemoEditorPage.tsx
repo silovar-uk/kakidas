@@ -3,7 +3,9 @@ import { resetBodyScrollLock } from "../lib/bodyScrollLock";
 import { copyToClipboard } from "../lib/clipboard";
 import {
   readCopyIncludeCompleted,
+  readEntrySortMode,
   writeCopyIncludeCompleted,
+  writeEntrySortMode,
 } from "../lib/copyPreferences";
 import { formatMemoText } from "../lib/memoText";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
@@ -19,9 +21,12 @@ import { useMemoDetail } from "../hooks/useMemos";
 import { uploadMemoToCloud } from "../repositories/cloudMemoRepository";
 import {
   type EntryKind,
+  type EntrySortMode,
   type MemoWithEntries,
   ENTRY_KINDS,
   ENTRY_KIND_LABEL,
+  ENTRY_SORT_MODE_LABEL,
+  ENTRY_SORT_MODES,
   formatDefaultMemoTitle,
   getEntryTree,
 } from "../types/memo";
@@ -52,6 +57,7 @@ const ENTRY_TIMESTAMP_VISIBILITY_STORAGE_KEY = "kakidas.show-entry-timestamps";
 const ENTRY_NUMBER_VISIBILITY_STORAGE_KEY = "kakidas.show-entry-numbers";
 const HIDE_COMPLETED_ENTRIES_STORAGE_KEY = "kakidas.hide-completed-entries";
 const ADD_ENTRIES_AT_BOTTOM_STORAGE_KEY = "kakidas.add-entries-at-bottom";
+const COMPACT_ENTRY_VIEW_STORAGE_KEY = "kakidas.compact-entry-view";
 
 function readEntryTimestampVisibility(): boolean {
   try {
@@ -87,6 +93,15 @@ function readHideCompletedEntries(): boolean {
 function readAddEntriesAtBottom(): boolean {
   try {
     return window.localStorage.getItem(ADD_ENTRIES_AT_BOTTOM_STORAGE_KEY) === "true";
+  } catch {
+    return false;
+  }
+}
+
+/** 補助情報と操作を畳み、本文だけを密に眺める表示モード。 */
+function readCompactEntryView(): boolean {
+  try {
+    return window.localStorage.getItem(COMPACT_ENTRY_VIEW_STORAGE_KEY) === "true";
   } catch {
     return false;
   }
@@ -141,6 +156,13 @@ export function MemoEditorPage() {
   const [addEntriesAtBottom, setAddEntriesAtBottom] = useState(
     readAddEntriesAtBottom,
   );
+  const [compactEntryView, setCompactEntryView] = useState(
+    readCompactEntryView,
+  );
+  /** 画面と出力に共通で使う、端末ごとの並び順。 */
+  const [entrySortMode, setEntrySortMode] = useState<EntrySortMode>(
+    readEntrySortMode,
+  );
   /** コピーだけに適用する設定。完了の表示／非表示とは独立させる。 */
   const [includeCompletedInCopy, setIncludeCompletedInCopy] = useState(
     readCopyIncludeCompleted,
@@ -192,8 +214,23 @@ export function MemoEditorPage() {
   }, [addEntriesAtBottom]);
 
   useEffect(() => {
+    try {
+      window.localStorage.setItem(
+        COMPACT_ENTRY_VIEW_STORAGE_KEY,
+        String(compactEntryView),
+      );
+    } catch {
+      // 読むための表示設定なので、保存できなくてもその場の切り替えを優先する。
+    }
+  }, [compactEntryView]);
+
+  useEffect(() => {
     writeCopyIncludeCompleted(includeCompletedInCopy);
   }, [includeCompletedInCopy]);
+
+  useEffect(() => {
+    writeEntrySortMode(entrySortMode);
+  }, [entrySortMode]);
 
   // メモ画面を離れた後に、モバイル操作シート等のスクロールロックを残さない。
   useEffect(() => {
@@ -252,6 +289,7 @@ export function MemoEditorPage() {
       `${safeTitle}.txt`,
       formatMemoText(memo, {
         includeEntryNumbers: showEntryNumbers,
+        entrySortMode,
       }),
     );
 
@@ -291,6 +329,7 @@ export function MemoEditorPage() {
           includeEntryNumbers: showEntryNumbers,
           excludeCompleted: !includeCompletedInCopy,
           onlyKind: kind,
+          entrySortMode,
         }),
       );
 
@@ -394,11 +433,11 @@ export function MemoEditorPage() {
       : allEntries;
 
     return {
-      word: getEntryTree(entries, "word"),
-      sentence: getEntryTree(entries, "sentence"),
-      paragraph: getEntryTree(entries, "paragraph"),
+      word: getEntryTree(entries, "word", entrySortMode),
+      sentence: getEntryTree(entries, "sentence", entrySortMode),
+      paragraph: getEntryTree(entries, "paragraph", entrySortMode),
     };
-  }, [hideCompletedEntries, memo?.entries]);
+  }, [entrySortMode, hideCompletedEntries, memo?.entries]);
 
   const cloudUploadTarget = useMemo<CloudUploadTarget[]>(() => {
     if (!memo) return [];
@@ -470,7 +509,11 @@ export function MemoEditorPage() {
   }
 
   return (
-    <main className="app-shell editor-page">
+    <main
+      className={`app-shell editor-page ${
+        compactEntryView ? "editor-page--compact" : ""
+      }`}
+    >
       <header className="editor-header">
         <Link to="/" className="back-link">
           ← メモ一覧
@@ -564,6 +607,18 @@ export function MemoEditorPage() {
               <label className="timestamp-visibility-toggle">
                 <input
                   type="checkbox"
+                  checked={compactEntryView}
+                  onChange={(event) => setCompactEntryView(event.target.checked)}
+                />
+                <span className="timestamp-visibility-toggle__track" aria-hidden="true">
+                  <span className="timestamp-visibility-toggle__thumb" />
+                </span>
+                <span>本文だけ表示</span>
+              </label>
+
+              <label className="timestamp-visibility-toggle">
+                <input
+                  type="checkbox"
                   checked={hideCompletedEntries}
                   onChange={(event) => setHideCompletedEntries(event.target.checked)}
                 />
@@ -583,6 +638,23 @@ export function MemoEditorPage() {
                   <span className="timestamp-visibility-toggle__thumb" />
                 </span>
                 <span>新しい項目を一番下に追加</span>
+              </label>
+
+              <label className="entry-sort-control">
+                <span>並び順</span>
+                <select
+                  value={entrySortMode}
+                  onChange={(event) =>
+                    setEntrySortMode(event.target.value as EntrySortMode)
+                  }
+                  aria-label="項目の並び順"
+                >
+                  {ENTRY_SORT_MODES.map((mode) => (
+                    <option key={mode} value={mode}>
+                      {ENTRY_SORT_MODE_LABEL[mode]}
+                    </option>
+                  ))}
+                </select>
               </label>
 
               <label className="timestamp-visibility-toggle">
@@ -608,7 +680,7 @@ export function MemoEditorPage() {
               </button>
             </div>
             <p>
-              番号はコピー・.txt出力に反映されます。{includeCompletedInCopy
+              並び順と番号は、コピー・.txt出力にも反映されます。{includeCompletedInCopy
                 ? "コピーには完了済みも含めます。"
                 : "コピーでは完了済みを除きます。"}
             </p>
@@ -656,6 +728,7 @@ export function MemoEditorPage() {
             isActiveOnMobile={activeKind === kind}
             showCreatedAt={showEntryTimestamps}
             showEntryNumbers={showEntryNumbers}
+            compactView={compactEntryView}
             disabled={isSaving || isUploading}
             autoFocusComposer={
               kind === "word" && shouldFocusNewMemoComposer

@@ -24,6 +24,8 @@ type EntryColumnProps = {
   showCreatedAt: boolean;
   /** 振り番を画面に含めるか。 */
   showEntryNumbers: boolean;
+  /** 本文だけを密に眺める簡易表示か。 */
+  compactView?: boolean;
   /** 新規メモ作成直後、Wordの入力欄へ一度だけフォーカスする。 */
   autoFocusComposer?: boolean;
   /** trueなら新しい項目を同じ階層の末尾へ、falseなら先頭へ置く。 */
@@ -70,6 +72,7 @@ export function EntryColumn({
   isActiveOnMobile,
   showCreatedAt,
   showEntryNumbers,
+  compactView = false,
   autoFocusComposer = false,
   addAtBottom = false,
   onAutoFocusHandled,
@@ -145,6 +148,16 @@ export function EntryColumn({
       setIsHeaderMenuOpen(false);
     }
   }, [isActiveOnMobile]);
+
+  // 本文だけ表示中は、隠した操作シートや追加先の状態を残さない。
+  useEffect(() => {
+    if (!compactView) return;
+
+    setParentId(null);
+    setStructureEntryId(null);
+    setMobileActionEntryId(null);
+    setIsHeaderMenuOpen(false);
+  }, [compactView]);
 
   useEffect(() => {
     if (
@@ -348,6 +361,7 @@ export function EntryColumn({
       isMobileActionOpen={mobileActionEntryId === entry.id}
       showCreatedAt={showCreatedAt}
       showEntryNumbers={showEntryNumbers}
+      compactView={compactView}
       disabled={disabled || isDeletingAll}
       onOpenStructure={openStructureActions}
       onAddChild={selectParent}
@@ -366,7 +380,7 @@ export function EntryColumn({
     <section
       className={`entry-column entry-column--${kind} ${
         isActiveOnMobile ? "entry-column--active" : ""
-      }`}
+      } ${compactView ? "entry-column--compact" : ""}`}
       aria-labelledby={`${kind}-heading`}
     >
       <div className="entry-column__header">
@@ -374,62 +388,70 @@ export function EntryColumn({
 
         <div className="entry-column__header-actions">
           <span className="entry-column__count">{entries.length}</span>
-          <button
-            type="button"
-            className="entry-column__copy"
-            onClick={() => void handleCopy()}
-            disabled={
-              disabled ||
-              isDeletingAll ||
-              isCopying ||
-              copyableEntryCount === 0
-            }
-            aria-label={`${ENTRY_KIND_LABEL[kind]}をコピー`}
-            title={copyIncludesCompleted ? "完了済みを含めてコピー" : "完了済みを除いてコピー"}
-          >
-            {isCopying ? "…" : "⧉"}
-          </button>
-          <div className="entry-column__header-menu">
-            <button
-              type="button"
-              className="entry-column__more"
-              onClick={() => setIsHeaderMenuOpen((open) => !open)}
-              disabled={disabled || isDeletingAll || entries.length === 0}
-              aria-label={`${ENTRY_KIND_LABEL[kind]}の整理メニュー`}
-              aria-expanded={isHeaderMenuOpen}
-              title="整理"
-            >
-              ⋯
-            </button>
-            {isHeaderMenuOpen ? (
-              <div className="entry-column__menu" role="menu">
+          {!compactView ? (
+            <>
+              <button
+                type="button"
+                className="entry-column__copy"
+                onClick={() => void handleCopy()}
+                disabled={
+                  disabled ||
+                  isDeletingAll ||
+                  isCopying ||
+                  copyableEntryCount === 0
+                }
+                aria-label={`${ENTRY_KIND_LABEL[kind]}をコピー`}
+                title={copyIncludesCompleted ? "完了済みを含めてコピー" : "完了済みを除いてコピー"}
+              >
+                {isCopying ? "…" : "⧉"}
+              </button>
+              <div className="entry-column__header-menu">
                 <button
                   type="button"
-                  role="menuitem"
-                  className="entry-column__menu-delete"
-                  onClick={() => void handleDeleteAll()}
+                  className="entry-column__more"
+                  onClick={() => setIsHeaderMenuOpen((open) => !open)}
                   disabled={disabled || isDeletingAll || entries.length === 0}
+                  aria-label={`${ENTRY_KIND_LABEL[kind]}の整理メニュー`}
+                  aria-expanded={isHeaderMenuOpen}
+                  title="整理"
                 >
-                  すべて削除
+                  ⋯
                 </button>
+                {isHeaderMenuOpen ? (
+                  <div className="entry-column__menu" role="menu">
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="entry-column__menu-delete"
+                      onClick={() => void handleDeleteAll()}
+                      disabled={disabled || isDeletingAll || entries.length === 0}
+                    >
+                      すべて削除
+                    </button>
+                  </div>
+                ) : null}
               </div>
-            ) : null}
-          </div>
+            </>
+          ) : null}
         </div>
       </div>
 
-      <EntryComposer
-        ref={composerRef}
-        kind={kind}
-        disabled={disabled || isDeletingAll}
-        targetLabel={isHierarchical ? parentEntry?.content ?? null : null}
-        onClearTarget={() => setParentId(null)}
-        onSubmit={handleCreate}
-      />
+      {!compactView ? (
+        <EntryComposer
+          ref={composerRef}
+          kind={kind}
+          disabled={disabled || isDeletingAll}
+          targetLabel={isHierarchical ? parentEntry?.content ?? null : null}
+          onClearTarget={() => setParentId(null)}
+          onSubmit={handleCreate}
+        />
+      ) : null}
 
       <div className="entry-list" aria-live="polite">
         {entries.length === 0 ? (
           <p className="entry-list__empty">まだありません。</p>
+        ) : compactView ? (
+          entries.map(renderEntry)
         ) : (
           <>
             {openEntries.map(renderEntry)}
@@ -456,7 +478,7 @@ export function EntryColumn({
         )}
       </div>
 
-      {isActiveOnMobile ? (
+      {isActiveOnMobile && !compactView ? (
         <MobileEntryActionSheet
           entry={mobileActionEntry}
           kind={kind}
@@ -475,7 +497,7 @@ export function EntryColumn({
         />
       ) : null}
 
-      {pendingUndo ? (
+      {!compactView && pendingUndo ? (
         <UndoToast
           kind={kind}
           message={pendingUndo.message}

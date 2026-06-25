@@ -28,6 +28,8 @@ type EntryItemProps = {
   showCreatedAt: boolean;
   /** 表示に振り番を含めるか。 */
   showEntryNumbers: boolean;
+  /** 補助情報と操作を隠し、本文だけを密に表示するか。 */
+  compactView?: boolean;
   disabled?: boolean;
   onOpenStructure: (entryId: string) => void;
   onAddChild: (entryId: string) => void;
@@ -50,6 +52,7 @@ export function EntryItem({
   isMobileActionOpen,
   showCreatedAt,
   showEntryNumbers,
+  compactView = false,
   disabled = false,
   onOpenStructure,
   onAddChild,
@@ -315,6 +318,21 @@ export function EntryItem({
 
   const createdAtLabel = formatEntryCreatedAt(entry.created_at);
   const completionClassName = entry.is_completed ? "entry-item--completed" : "";
+
+  if (compactView) {
+    return (
+      <article
+        className={`entry-item entry-item--compact ${completionClassName} ${
+          isHierarchical ? "entry-item--hierarchical" : ""
+        } ${entry.depth > 0 ? "entry-item--nested" : ""}`}
+        style={style}
+      >
+        <p className="entry-item__compact-content" title={entry.content}>
+          {entry.content}
+        </p>
+      </article>
+    );
+  }
 
   if (isEditing) {
     return (

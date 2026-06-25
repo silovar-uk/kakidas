@@ -4182,3 +4182,146 @@ a:focus-visible {
     font-size: 12px;
   }
 }
+
+
+/* --------------------------------------------------------------------------
+   v0.5.26 — 本文だけ表示
+   補助情報・入力欄・操作を畳み、項目の本文だけを静かに見渡す。
+   表示設定なので、データやクラウド同期には触れない。
+   -------------------------------------------------------------------------- */
+.entry-column--compact .entry-column__header {
+  min-height: 28px;
+  padding-bottom: 4px;
+}
+
+.entry-column--compact .entry-list,
+.entry-column--compact.entry-column--word .entry-list {
+  margin-top: 4px;
+  border-top: 0;
+}
+
+.entry-column--compact .entry-item,
+.entry-column--compact.entry-column--word .entry-item {
+  min-height: 0;
+  padding: 6px 2px;
+  border-bottom-color: #eeeae4;
+  background: transparent;
+}
+
+.entry-column--compact .entry-item:hover,
+.entry-column--compact.entry-column--word .entry-item:hover {
+  border-bottom-color: #eeeae4;
+  background: transparent;
+}
+
+.entry-item--compact .entry-item__compact-content {
+  margin: 0;
+  padding-inline-start: calc(var(--entry-depth) * 14px);
+  color: #34312c;
+  font-size: 13px;
+  font-weight: 560;
+  line-height: 1.52;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.entry-column--compact.entry-column--paragraph .entry-item__compact-content {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.entry-column--compact .entry-item--completed {
+  border-bottom-color: #e0ddd7;
+  background: transparent;
+}
+
+.entry-column--compact .entry-item--completed .entry-item__compact-content {
+  color: #aaa59d;
+  text-decoration: line-through;
+  text-decoration-color: #c9c5bf;
+}
+
+.editor-page--compact .editor-grid {
+  margin-top: 2px;
+}
+
+@media (max-width: 920px) {
+  .editor-page--compact .editor-tabs {
+    margin-bottom: 12px;
+  }
+
+  .entry-column--compact .entry-column__header-actions {
+    gap: 0;
+  }
+
+  .entry-column--compact .entry-column__count {
+    min-width: 0;
+  }
+
+  .entry-column--compact .entry-item,
+  .entry-column--compact.entry-column--word .entry-item {
+    padding: 7px 1px;
+  }
+
+  .entry-item--compact .entry-item__compact-content {
+    font-size: 14px;
+    line-height: 1.55;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   v0.5.27 — entry sort preference
+   表示・整理の中で、追加日時または満足度による表示順を選ぶ。
+   -------------------------------------------------------------------------- */
+.entry-sort-control {
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 5px 4px 10px;
+  border: 1px solid #ded8ce;
+  border-radius: 10px;
+  color: #665f55;
+  background: rgba(255, 254, 250, 0.76);
+  font-size: 12px;
+  font-weight: 720;
+  line-height: 1;
+}
+
+.entry-sort-control select {
+  min-height: 26px;
+  max-width: 168px;
+  padding: 0 25px 0 7px;
+  border: 0;
+  border-radius: 7px;
+  color: #554c43;
+  background: #f7f3ed;
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.entry-sort-control select:hover {
+  background: #efe8df;
+}
+
+.entry-sort-control select:focus-visible {
+  outline: 3px solid rgba(185, 91, 48, 0.28);
+  outline-offset: 2px;
+}
+
+@media (max-width: 560px) {
+  .entry-sort-control {
+    min-height: 38px;
+    gap: 9px;
+    padding-left: 11px;
+  }
+
+  .entry-sort-control select {
+    min-height: 30px;
+    max-width: none;
+    font-size: 12px;
+  }
+}

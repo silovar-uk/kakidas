@@ -4,6 +4,7 @@ import { useAuth } from "../auth/AuthProvider";
 import { copyToClipboard } from "../lib/clipboard";
 import {
   readCopyIncludeCompleted,
+  readEntrySortMode,
   writeCopyIncludeCompleted,
 } from "../lib/copyPreferences";
 import { formatMemoText } from "../lib/memoText";
@@ -312,6 +313,7 @@ export function MemoListPage() {
         formatMemoText(detail, {
           includeEntryNumbers,
           excludeCompleted: !includeCompletedInCopy,
+          entrySortMode: readEntrySortMode(),
         }),
         // 先読みが間に合わなかった初回タップでも、選択コピーを優先して
         // モバイルSafariのクリップボード権限制約を回避する。

@@ -19,6 +19,24 @@ export type EntryInsertPosition = "top" | "bottom";
 
 export type EntryMoveDirection = "up" | "down";
 
+/**
+ * 項目の表示・出力に使う並び順。
+ * DBの sort_order や作成日時は書き換えず、画面とコピーの順番だけを切り替える。
+ */
+export const ENTRY_SORT_MODES = [
+  "created_asc",
+  "created_desc",
+  "satisfaction_desc",
+] as const;
+
+export type EntrySortMode = (typeof ENTRY_SORT_MODES)[number];
+
+export const ENTRY_SORT_MODE_LABEL: Record<EntrySortMode, string> = {
+  created_asc: "追加順（昇順）",
+  created_desc: "追加順（降順）",
+  satisfaction_desc: "評価順（高い順）",
+};
+
 export type CloudState =
   | "local_only"
   | "uploaded"
@@ -454,13 +472,33 @@ function compareEntries(a: EntryRow, b: EntryRow): number {
   return a.created_at.localeCompare(b.created_at);
 }
 
-/** 完了済みは各階層の末尾へ寄せつつ、同じ状態内の順番は sort_order で維持する。 */
-function compareEntriesForDisplay(a: EntryRow, b: EntryRow): number {
+/**
+ * 完了済みは各階層の末尾へ寄せたまま、未完了・完了それぞれの中だけを選択順に並べる。
+ * 表示順はローカルのUI設定であり、DBの sort_order / created_at は変更しない。
+ */
+function compareEntriesForDisplay(
+  a: EntryRow,
+  b: EntryRow,
+  sortMode: EntrySortMode,
+): number {
   if (a.is_completed !== b.is_completed) {
     return Number(a.is_completed) - Number(b.is_completed);
   }
 
-  return compareEntries(a, b);
+  if (sortMode === "created_asc") {
+    return a.created_at.localeCompare(b.created_at) || compareEntries(a, b);
+  }
+
+  if (sortMode === "created_desc") {
+    return b.created_at.localeCompare(a.created_at) || compareEntries(a, b);
+  }
+
+  // 評価順は高い方を先にし、同評価なら新しく追加した方を先に見せる。
+  return (
+    b.satisfaction - a.satisfaction ||
+    b.created_at.localeCompare(a.created_at) ||
+    compareEntries(a, b)
+  );
 }
 
 /**
@@ -470,11 +508,12 @@ function compareEntriesForDisplay(a: EntryRow, b: EntryRow): number {
 export function getEntryTree(
   entries: EntryRow[],
   kind: EntryKind,
+  sortMode: EntrySortMode = "created_desc",
 ): EntryTreeNode[] {
   const activeEntries = entries
     .filter((entry) => entry.kind === kind && entry.deleted_at === null)
     .map(normalizeEntryRow)
-    .sort(compareEntriesForDisplay);
+    .sort((a, b) => compareEntriesForDisplay(a, b, sortMode));
 
   const entryById = new Map(activeEntries.map((entry) => [entry.id, entry]));
   const childrenByParent = new Map<string | null, EntryRow[]>();
@@ -493,7 +532,7 @@ export function getEntryTree(
   }
 
   for (const siblings of childrenByParent.values()) {
-    siblings.sort(compareEntriesForDisplay);
+    siblings.sort((a, b) => compareEntriesForDisplay(a, b, sortMode));
   }
 
   const countDescendants = (entryId: string, seen: Set<string>): number => {
@@ -566,7 +605,7 @@ export function getEntryTree(
         (candidate.parent_id === entry.parent_id || candidate.id === entry.id),
     );
 
-    siblings.sort(compareEntriesForDisplay).forEach((orphan, index) => {
+    siblings.sort((a, b) => compareEntriesForDisplay(a, b, sortMode)).forEach((orphan, index) => {
       if (visited.has(orphan.id)) return;
 
       visited.add(orphan.id);
@@ -605,8 +644,9 @@ export function getEntryTree(
 export function getActiveEntries(
   entries: EntryRow[],
   kind: EntryKind,
+  sortMode: EntrySortMode = "created_desc",
 ): EntryRow[] {
-  return getEntryTree(entries, kind).map(
+  return getEntryTree(entries, kind, sortMode).map(
     ({
       outline_number: _outlineNumber,
       depth: _depth,
