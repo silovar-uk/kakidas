@@ -1,0 +1,77 @@
+Folder PATH listing
+
+.
+│   .env.example
+│   .gitignore
+│   .npmrc
+│   index.html
+│   kakidas_tree.txt
+│   package-lock.json
+│   package.json
+│   README.md
+│   RELEASE_NOTES_v0.5.5.md ～ RELEASE_NOTES_v0.5.34.md
+│   tsconfig.app.json
+│   tsconfig.json
+│   tsconfig.node.json
+│   vercel.json
+│   vite.config.ts
+│
+├───public
+│       android-chrome-192x192.png
+│       android-chrome-512x512.png
+│       apple-touch-icon.png
+│       browserconfig.xml
+│       favicon-16x16.png
+│       favicon-32x32.png
+│       favicon-48x48.png
+│       favicon-head.html
+│       favicon.ico
+│       mstile-150x150.png
+│       README.md
+│       site.webmanifest
+│
+├───src
+│   │   App.tsx
+│   │   main.tsx
+│   │   styles.css
+│   │   vite-env.d.ts
+│   │
+│   ├───auth
+│   │       AuthProvider.tsx
+│   ├───components
+│   │       CloudAccountDialog.tsx
+│   │       CloudImportDialog.tsx
+│   │       CloudStatusBadge.tsx
+│   │       CloudUploadDialog.tsx
+│   │       EntryColumn.tsx
+│   │       EntryComposer.tsx
+│   │       EntryItem.tsx
+│   │       EntrySatisfactionControl.tsx
+│   │       MobileEntryActionSheet.tsx
+│   │       UndoToast.tsx
+│   ├───hooks
+│   │       useCloudMemos.ts
+│   │       useMemos.ts
+│   ├───lib
+│   │       bodyScrollLock.ts
+│   │       clipboard.ts
+│   │       copyPreferences.ts
+│   │       db.ts
+│   │       formatDate.ts
+│   │       memoText.ts
+│   │       supabase.ts
+│   ├───pages
+│   │       MemoEditorPage.tsx
+│   │       MemoListPage.tsx
+│   ├───repositories
+│   │       cloudMemoRepository.ts
+│   │       memoRepository.ts
+│   └───types
+│           memo.ts
+│
+└───supabase
+        MIGRATE_v0.5.11.sql
+        MIGRATE_v0.5.13.sql
+        MIGRATE_v0.5.14.sql
+        MIGRATE_v0.5.31.sql
+        schema.sql

@@ -533,11 +533,6 @@ export function MemoEditorPage() {
       <main className="app-shell editor-page">
         <section className="empty-state">
           <p>{error ?? "メモが見つかりません。"}</p>
-          {error ? (
-            <button type="button" className="secondary-button" onClick={() => void reload()}>
-              もう一度読み込む
-            </button>
-          ) : null}
           <Link to="/" className="primary-button">
             メモ一覧へ戻る
           </Link>

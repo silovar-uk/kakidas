@@ -8,8 +8,21 @@ import "./styles.css";
 // 以前のオーバーレイが残したスクロール停止を、起動時に必ず初期化する。
 resetBodyScrollLock();
 
-// Safariの戻る／進むで古い画面がメモDBを握り続けないよう、画面を離れる時は接続を閉じる。
-window.addEventListener("pagehide", closeDatabaseConnection);
+// iPhone Safariでは、タブを切り替えただけでは pagehide が発火しない。
+// 背景に回ったタブはDB接続だけを手放し、戻った時は次の読み書きで自動再接続する。
+// これにより、別タブで起きるIndexedDBのアップグレードをブロックしにくくする。
+const releaseDatabaseConnection = () => {
+  closeDatabaseConnection();
+};
+
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "hidden") {
+    releaseDatabaseConnection();
+  }
+});
+
+// Safariの戻る／進むやタブ破棄でも、古い画面がメモDBを握り続けないようにする。
+window.addEventListener("pagehide", releaseDatabaseConnection);
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

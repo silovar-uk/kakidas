@@ -94,10 +94,11 @@ function openDatabase(): Promise<IDBDatabase> {
     };
 
     request.onblocked = () => {
-      fail(
-        new Error(
-          "別のkakidas画面が保存領域を使用しています。ほかのkakidasのタブを閉じてから、もう一度読み込んでください。",
-        ),
+      // 別タブの db.onversionchange が接続を閉じるまで待つ。
+      // ここで即座に reject すると、複数タブで正常に接続を譲る途中でも
+      // 「ほかのタブを閉じて」と誤判定してしまう。
+      console.info(
+        "kakidas: IndexedDB upgrade is waiting for another tab to release its connection.",
       );
     };
 

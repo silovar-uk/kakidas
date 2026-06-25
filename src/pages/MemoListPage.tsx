@@ -619,12 +619,9 @@ export function MemoListPage() {
       ) : null}
 
       {error ? (
-        <div className="load-error" role="alert">
-          <p className="error-message">{error}</p>
-          <button type="button" className="secondary-button" onClick={() => void refresh()}>
-            もう一度読み込む
-          </button>
-        </div>
+        <p className="error-message" role="alert">
+          {error}
+        </p>
       ) : null}
 
       {isLoading ? (
