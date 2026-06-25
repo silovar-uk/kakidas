@@ -1,5 +1,12 @@
 const DB_NAME = "kakidasu-db";
-const DB_VERSION = 8;
+/**
+ * v0.5.33:
+ * iPhone Safari では、アップグレード中に複数の cursor を同時に回すと
+ * IndexedDB の open が完了しないことがある。そのため、レコード単位の補完は
+ * 読み込み時の normalize 関数へ寄せ、DBアップグレードはストア／index準備だけにする。
+ */
+const DB_VERSION = 9;
+const OPEN_TIMEOUT_MS = 12_000;
 
 export const STORE_NAMES = {
   memos: "memos",
@@ -8,10 +15,35 @@ export const STORE_NAMES = {
 } as const;
 
 let databasePromise: Promise<IDBDatabase> | null = null;
+let activeDatabase: IDBDatabase | null = null;
+
+/**
+ * IndexedDB接続を閉じる。Safari の戻る／進むや、古いタブが残った状態での
+ * バージョン更新をブロックしにくくするために使う。
+ */
+export function closeDatabaseConnection(): void {
+  if (activeDatabase) {
+    activeDatabase.close();
+  }
+
+  activeDatabase = null;
+  databasePromise = null;
+}
 
 export function getDatabase(): Promise<IDBDatabase> {
   if (!databasePromise) {
-    databasePromise = openDatabase();
+    databasePromise = openDatabase()
+      .then((database) => {
+        activeDatabase = database;
+        return database;
+      })
+      .catch((error) => {
+        // 一度失敗した接続Promiseを握り続けない。再読み込みボタンなどから
+        // もう一度開き直せるようにする。
+        databasePromise = null;
+        activeDatabase = null;
+        throw error;
+      });
   }
 
   return databasePromise;
@@ -19,16 +51,59 @@ export function getDatabase(): Promise<IDBDatabase> {
 
 function openDatabase(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, DB_VERSION);
+    if (typeof indexedDB === "undefined") {
+      reject(new Error("このブラウザではメモの保存領域を利用できません。"));
+      return;
+    }
 
-    request.onerror = () => {
-      reject(request.error ?? new Error("IndexedDBを開けませんでした。"));
+    let settled = false;
+    let request: IDBOpenDBRequest;
+
+    const timeoutId = window.setTimeout(() => {
+      fail(
+        new Error(
+          "メモの保存領域を開くのに時間がかかっています。ほかのkakidasのタブを閉じて、もう一度読み込んでください。",
+        ),
+      );
+    }, OPEN_TIMEOUT_MS);
+
+    const finish = () => {
+      window.clearTimeout(timeoutId);
     };
 
-    request.onupgradeneeded = (event) => {
+    const fail = (error: Error) => {
+      if (settled) return;
+      settled = true;
+      finish();
+      reject(error);
+    };
+
+    try {
+      request = indexedDB.open(DB_NAME, DB_VERSION);
+    } catch (error) {
+      fail(
+        error instanceof Error
+          ? error
+          : new Error("IndexedDBを開けませんでした。"),
+      );
+      return;
+    }
+
+    request.onerror = () => {
+      fail(request.error ?? new Error("IndexedDBを開けませんでした。"));
+    };
+
+    request.onblocked = () => {
+      fail(
+        new Error(
+          "別のkakidas画面が保存領域を使用しています。ほかのkakidasのタブを閉じてから、もう一度読み込んでください。",
+        ),
+      );
+    };
+
+    request.onupgradeneeded = () => {
       const db = request.result;
       const transaction = request.transaction;
-      const oldVersion = (event as IDBVersionChangeEvent).oldVersion;
 
       if (!db.objectStoreNames.contains(STORE_NAMES.memos)) {
         const memoStore = db.createObjectStore(STORE_NAMES.memos, {
@@ -61,148 +136,40 @@ function openDatabase(): Promise<IDBDatabase> {
         ]);
       }
 
-      // v1で作られたentryには parent_id がないため、nullで補完する。
-      if (oldVersion < 2) {
-        const cursorRequest = entryStore.openCursor();
-
-        cursorRequest.onsuccess = () => {
-          const cursor = cursorRequest.result;
-          if (!cursor) return;
-
-          const value = cursor.value as Record<string, unknown>;
-
-          if (!("parent_id" in value)) {
-            cursor.update({ ...value, parent_id: null });
-          }
-
-          cursor.continue();
-        };
-      }
-
-      let syncMetaStore: IDBObjectStore;
-
       if (!db.objectStoreNames.contains(STORE_NAMES.memoSyncMeta)) {
-        syncMetaStore = db.createObjectStore(STORE_NAMES.memoSyncMeta, {
+        const syncMetaStore = db.createObjectStore(STORE_NAMES.memoSyncMeta, {
           keyPath: "memo_id",
         });
 
         syncMetaStore.createIndex("by_cloud_state", "cloud_state");
         syncMetaStore.createIndex("by_cloud_user_id", "cloud_user_id");
         syncMetaStore.createIndex("by_updated_at", "updated_at");
-      } else {
-        syncMetaStore = transaction!.objectStore(STORE_NAMES.memoSyncMeta);
       }
 
-      // v0.5.1: cloud_updated_at を last_cloud_updated_at へ移行し、
-      // 取り込み日時のフィールドも既存レコードへ補完する。
-      if (oldVersion < 4) {
-        const cursorRequest = syncMetaStore.openCursor();
-
-        cursorRequest.onsuccess = () => {
-          const cursor = cursorRequest.result;
-          if (!cursor) return;
-
-          const value = cursor.value as Record<string, unknown>;
-          const next = {
-            ...value,
-            last_downloaded_at: value.last_downloaded_at ?? null,
-            last_cloud_updated_at:
-              value.last_cloud_updated_at ?? value.cloud_updated_at ?? null,
-          };
-
-          cursor.update(next);
-          cursor.continue();
-        };
-      }
-
-      // v0.5.11: 各項目の任意の備考を、旧レコードにも空文字で補完する。
-      // 表示側は空文字を出さないため、既存メモの見た目は変えない。
-      if (oldVersion < 5) {
-        const cursorRequest = entryStore.openCursor();
-
-        cursorRequest.onsuccess = () => {
-          const cursor = cursorRequest.result;
-          if (!cursor) return;
-
-          const value = cursor.value as Record<string, unknown>;
-
-          if (typeof value.note !== "string") {
-            cursor.update({ ...value, note: "" });
-          }
-
-          cursor.continue();
-        };
-      }
-
-      // v0.5.13: 各項目の満足度を0で補完する。
-      // UI上は0〜5に制限し、既存の項目には余白や表示崩れを追加しない。
-      if (oldVersion < 6) {
-        const cursorRequest = entryStore.openCursor();
-
-        cursorRequest.onsuccess = () => {
-          const cursor = cursorRequest.result;
-          if (!cursor) return;
-
-          const value = cursor.value as Record<string, unknown>;
-          const raw = value.satisfaction;
-          const numeric = typeof raw === "number" ? raw : Number(raw);
-          const satisfaction = Number.isFinite(numeric)
-            ? Math.min(5, Math.max(0, Math.round(numeric)))
-            : 0;
-
-          if (value.satisfaction !== satisfaction) {
-            cursor.update({ ...value, satisfaction });
-          }
-
-          cursor.continue();
-        };
-      }
-
-      // v0.5.14: 完了状態をfalseで補完する。完了済みは表示順を末尾へ寄せるが、
-      // 既存の並び順や本文データは変更しない。
-      if (oldVersion < 7) {
-        const cursorRequest = entryStore.openCursor();
-
-        cursorRequest.onsuccess = () => {
-          const cursor = cursorRequest.result;
-          if (!cursor) return;
-
-          const value = cursor.value as Record<string, unknown>;
-
-          if (typeof value.is_completed !== "boolean") {
-            cursor.update({ ...value, is_completed: false });
-          }
-
-          cursor.continue();
-        };
-      }
-
-      // v0.5.31: 各項目に任意のリンクを追加する。空文字は「リンクなし」。
-      // 既存項目の見た目は変えず、リンクボタンだけが追加用として使える。
-      if (oldVersion < 8) {
-        const cursorRequest = entryStore.openCursor();
-
-        cursorRequest.onsuccess = () => {
-          const cursor = cursorRequest.result;
-          if (!cursor) return;
-
-          const value = cursor.value as Record<string, unknown>;
-
-          if (typeof value.link_url !== "string") {
-            cursor.update({ ...value, link_url: "" });
-          }
-
-          cursor.continue();
-        };
-      }
+      // 旧レコードの parent_id / note / satisfaction / is_completed / link_url は、
+      // Repositoryの normalizeEntryRow / normalizeMemoSyncMeta で安全に補完する。
+      // ここでcursorを使わないことで、Safariのupgrade transactionが止まりにくくなる。
     };
 
     request.onsuccess = () => {
       const db = request.result;
 
+      // タイムアウトまたはblockedで画面側へエラーを返した後に接続できても、
+      // 古い接続を残して次の再試行を妨げないよう即座に閉じる。
+      if (settled) {
+        db.close();
+        return;
+      }
+
+      settled = true;
+      finish();
+
       db.onversionchange = () => {
         db.close();
-        databasePromise = null;
+        if (activeDatabase === db) {
+          activeDatabase = null;
+          databasePromise = null;
+        }
       };
 
       resolve(db);

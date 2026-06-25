@@ -4489,6 +4489,18 @@ a:focus-visible {
   outline-offset: 1px;
 }
 
+/* 登録済みのリンクは、未登録の控えめな灰色と区別する。 */
+.entry-item__link-trigger--active {
+  color: #3d7485;
+  background: #edf7f9;
+}
+
+.entry-item__link-trigger--active:hover,
+.entry-item__link-trigger--active:active {
+  color: #245d70;
+  background: #dceff3;
+}
+
 .entry-item__link-editor {
   margin-top: 8px;
 }
@@ -4577,6 +4589,11 @@ a:focus-visible {
     height: 16px;
   }
 
+  .entry-item__link-trigger--active {
+    border-color: #9fc5cf;
+    background: #e6f4f6;
+  }
+
   .entry-item__link-editor-control {
     min-height: 42px;
   }
@@ -4593,5 +4610,27 @@ a:focus-visible {
     min-width: 30px;
     height: 30px;
     min-height: 30px;
+  }
+}
+
+
+/* v0.5.33 | Safariで保存領域を開けなかった時も、画面内で再試行できるようにする。 */
+.load-error {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 0 0 14px;
+}
+
+.load-error .error-message {
+  margin: 0;
+}
+
+@media (max-width: 640px) {
+  .load-error {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 8px;
   }
 }

@@ -661,7 +661,7 @@ export function EntryItem({
 
             {openableLinkUrl ? (
               <a
-                className="entry-item__link-trigger"
+                className="entry-item__link-trigger entry-item__link-trigger--active"
                 href={openableLinkUrl}
                 target="_blank"
                 rel="noreferrer"
