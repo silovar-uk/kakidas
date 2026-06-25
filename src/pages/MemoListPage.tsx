@@ -15,6 +15,7 @@ import {
   type CloudUploadTarget,
 } from "../components/CloudUploadDialog";
 import { CloudStatusBadge } from "../components/CloudStatusBadge";
+import { MemoDeleteDialog } from "../components/MemoDeleteDialog";
 import { useCloudMemos } from "../hooks/useCloudMemos";
 import { useMemos } from "../hooks/useMemos";
 import {
@@ -83,6 +84,9 @@ export function MemoListPage() {
   const [isUploading, setIsUploading] = useState(false);
   const [isApplyingCloudUpdate, setIsApplyingCloudUpdate] = useState(false);
   const [copyingMemoId, setCopyingMemoId] = useState<string | null>(null);
+  const [memoPendingDeletion, setMemoPendingDeletion] =
+    useState<MemoListItem | null>(null);
+  const [isDeletingMemo, setIsDeletingMemo] = useState(false);
   /** 区分コピーと共通の、端末ごとの出力設定。初期値は完了を除外。 */
   const [includeCompletedInCopy, setIncludeCompletedInCopy] = useState(
     readCopyIncludeCompleted,
@@ -264,22 +268,35 @@ export function MemoListPage() {
     }
   };
 
-  const handleDelete = async (memoId: string) => {
-    const confirmed = window.confirm(
-      "このメモを削除しますか？\n削除後はバックアップ以外から復元できません。",
-    );
+  // iPhone Safariの標準confirmに依存せず、確認はアプリ内ダイアログで行う。
+  // ×の寸法や配置は変えず、カードを開く操作から削除だけを明確に切り離す。
+  const requestMemoDeletion = (memo: MemoListItem) => {
+    if (isDeletingMemo) return;
+    setNotice(null);
+    setMemoPendingDeletion(memo);
+  };
 
-    if (!confirmed) return;
+  const confirmMemoDeletion = async () => {
+    const memo = memoPendingDeletion;
+    if (!memo || isDeletingMemo) return;
+
+    setIsDeletingMemo(true);
 
     try {
-      await deleteMemo(memoId);
+      await deleteMemo(memo.id);
+      memoCopyCacheRef.current.delete(memo.id);
+      setMemoPendingDeletion(null);
       setNotice("メモを削除しました。");
     } catch (deleteError) {
+      // ダイアログの背後にだけエラーを出さず、閉じてから一覧の通知として伝える。
+      setMemoPendingDeletion(null);
       setNotice(
         deleteError instanceof Error
           ? deleteError.message
           : "メモを削除できませんでした。",
       );
+    } finally {
+      setIsDeletingMemo(false);
     }
   };
 
@@ -619,9 +636,12 @@ export function MemoListPage() {
       ) : null}
 
       {error ? (
-        <p className="error-message" role="alert">
-          {error}
-        </p>
+        <div className="load-error" role="alert">
+          <p className="error-message">{error}</p>
+          <button type="button" className="secondary-button" onClick={() => void refresh()}>
+            もう一度読み込む
+          </button>
+        </div>
       ) : null}
 
       {isLoading ? (
@@ -715,7 +735,13 @@ export function MemoListPage() {
                     <button
                       type="button"
                       className="icon-button memo-card__delete"
-                      onClick={() => void handleDelete(memo.id)}
+                      onClick={(event) => {
+                        // 削除操作だけをカードを開く操作から切り離す。
+                        // 確認は Safari の標準 confirm ではなく、アプリ内ダイアログで行う。
+                        event.preventDefault();
+                        event.stopPropagation();
+                        requestMemoDeletion(memo);
+                      }}
                       aria-label={`${memo.title}を削除`}
                       title="削除する"
                     >
@@ -732,6 +758,15 @@ export function MemoListPage() {
       <footer className="app-footer">
         基本はこの端末のブラウザに自動保存。クラウドへ送るのは、あなたが選んだメモだけです。
       </footer>
+
+      <MemoDeleteDialog
+        memo={memoPendingDeletion}
+        isDeleting={isDeletingMemo}
+        onClose={() => {
+          if (!isDeletingMemo) setMemoPendingDeletion(null);
+        }}
+        onConfirm={confirmMemoDeletion}
+      />
 
       <CloudAccountDialog
         open={isCloudDialogOpen}

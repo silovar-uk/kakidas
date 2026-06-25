@@ -1,77 +1,116 @@
-Folder PATH listing
-
-.
-â”‚   .env.example
-â”‚   .gitignore
-â”‚   .npmrc
-â”‚   index.html
-â”‚   kakidas_tree.txt
-â”‚   package-lock.json
-â”‚   package.json
-â”‚   README.md
-â”‚   RELEASE_NOTES_v0.5.5.md ï½ž RELEASE_NOTES_v0.5.34.md
-â”‚   tsconfig.app.json
-â”‚   tsconfig.json
-â”‚   tsconfig.node.json
-â”‚   vercel.json
-â”‚   vite.config.ts
-â”‚
-â”œâ”€â”€â”€public
-â”‚       android-chrome-192x192.png
-â”‚       android-chrome-512x512.png
-â”‚       apple-touch-icon.png
-â”‚       browserconfig.xml
-â”‚       favicon-16x16.png
-â”‚       favicon-32x32.png
-â”‚       favicon-48x48.png
-â”‚       favicon-head.html
-â”‚       favicon.ico
-â”‚       mstile-150x150.png
-â”‚       README.md
-â”‚       site.webmanifest
-â”‚
-â”œâ”€â”€â”€src
-â”‚   â”‚   App.tsx
-â”‚   â”‚   main.tsx
-â”‚   â”‚   styles.css
-â”‚   â”‚   vite-env.d.ts
-â”‚   â”‚
-â”‚   â”œâ”€â”€â”€auth
-â”‚   â”‚       AuthProvider.tsx
-â”‚   â”œâ”€â”€â”€components
-â”‚   â”‚       CloudAccountDialog.tsx
-â”‚   â”‚       CloudImportDialog.tsx
-â”‚   â”‚       CloudStatusBadge.tsx
-â”‚   â”‚       CloudUploadDialog.tsx
-â”‚   â”‚       EntryColumn.tsx
-â”‚   â”‚       EntryComposer.tsx
-â”‚   â”‚       EntryItem.tsx
-â”‚   â”‚       EntrySatisfactionControl.tsx
-â”‚   â”‚       MobileEntryActionSheet.tsx
-â”‚   â”‚       UndoToast.tsx
-â”‚   â”œâ”€â”€â”€hooks
-â”‚   â”‚       useCloudMemos.ts
-â”‚   â”‚       useMemos.ts
-â”‚   â”œâ”€â”€â”€lib
-â”‚   â”‚       bodyScrollLock.ts
-â”‚   â”‚       clipboard.ts
-â”‚   â”‚       copyPreferences.ts
-â”‚   â”‚       db.ts
-â”‚   â”‚       formatDate.ts
-â”‚   â”‚       memoText.ts
-â”‚   â”‚       supabase.ts
-â”‚   â”œâ”€â”€â”€pages
-â”‚   â”‚       MemoEditorPage.tsx
-â”‚   â”‚       MemoListPage.tsx
-â”‚   â”œâ”€â”€â”€repositories
-â”‚   â”‚       cloudMemoRepository.ts
-â”‚   â”‚       memoRepository.ts
-â”‚   â””â”€â”€â”€types
-â”‚           memo.ts
-â”‚
-â””â”€â”€â”€supabase
+Folder PATH listing for volume TIH0526900A
+Volume serial number is 00000074 C0A0:BDF4
+C:.
+„    .env.example
+„    .gitignore
+„    .npmrc
+„    index.html
+„    kakidas_tree.txt
+„    package-lock.json
+„    package.json
+„    README.md
+„    RELEASE_NOTES_v0.5.10.md
+„    RELEASE_NOTES_v0.5.11.md
+„    RELEASE_NOTES_v0.5.12.md
+„    RELEASE_NOTES_v0.5.13.md
+„    RELEASE_NOTES_v0.5.14.md
+„    RELEASE_NOTES_v0.5.15.md
+„    RELEASE_NOTES_v0.5.16.md
+„    RELEASE_NOTES_v0.5.17.md
+„    RELEASE_NOTES_v0.5.18.md
+„    RELEASE_NOTES_v0.5.19.md
+„    RELEASE_NOTES_v0.5.20.md
+„    RELEASE_NOTES_v0.5.21.md
+„    RELEASE_NOTES_v0.5.22.md
+„    RELEASE_NOTES_v0.5.23.md
+„    RELEASE_NOTES_v0.5.24.md
+„    RELEASE_NOTES_v0.5.25.md
+„    RELEASE_NOTES_v0.5.26.md
+„    RELEASE_NOTES_v0.5.27.md
+„    RELEASE_NOTES_v0.5.28.md
+„    RELEASE_NOTES_v0.5.29.md
+„    RELEASE_NOTES_v0.5.30.md
+„    RELEASE_NOTES_v0.5.31.md
+„    RELEASE_NOTES_v0.5.32.md
+„    RELEASE_NOTES_v0.5.33.md
+„    RELEASE_NOTES_v0.5.34.md
+„    RELEASE_NOTES_v0.5.35.md
+„    RELEASE_NOTES_v0.5.36.md
+„    RELEASE_NOTES_v0.5.5.md
+„    RELEASE_NOTES_v0.5.6.md
+„    RELEASE_NOTES_v0.5.7.md
+„    RELEASE_NOTES_v0.5.8.md
+„    RELEASE_NOTES_v0.5.9.md
+„    tsconfig.app.json
+„    tsconfig.json
+„    tsconfig.node.json
+„    vercel.json
+„    vite.config.ts
+„    
+„¥„Ÿ„Ÿ„Ÿpublic
+„        android-chrome-192x192.png
+„        android-chrome-512x512.png
+„        apple-touch-icon.png
+„        browserconfig.xml
+„        favicon-16x16.png
+„        favicon-32x32.png
+„        favicon-48x48.png
+„        favicon-head.html
+„        favicon.ico
+„        mstile-150x150.png
+„        README.md
+„        site.webmanifest
+„        
+„¥„Ÿ„Ÿ„Ÿsrc
+„    „    App.tsx
+„    „    main.tsx
+„    „    styles.css
+„    „    vite-env.d.ts
+„    „    
+„    „¥„Ÿ„Ÿ„Ÿauth
+„    „        AuthProvider.tsx
+„    „        
+„    „¥„Ÿ„Ÿ„Ÿcomponents
+„    „        CloudAccountDialog.tsx
+„    „        CloudImportDialog.tsx
+„    „        CloudStatusBadge.tsx
+„    „        CloudUploadDialog.tsx
+„    „        EntryColumn.tsx
+„    „        EntryComposer.tsx
+„    „        EntryItem.tsx
+„    „        EntrySatisfactionControl.tsx
+„    „        MemoDeleteDialog.tsx
+„    „        MobileEntryActionSheet.tsx
+„    „        UndoToast.tsx
+„    „        
+„    „¥„Ÿ„Ÿ„Ÿhooks
+„    „        useCloudMemos.ts
+„    „        useMemos.ts
+„    „        
+„    „¥„Ÿ„Ÿ„Ÿlib
+„    „        bodyScrollLock.ts
+„    „        clipboard.ts
+„    „        copyPreferences.ts
+„    „        db.ts
+„    „        formatDate.ts
+„    „        memoText.ts
+„    „        supabase.ts
+„    „        
+„    „¥„Ÿ„Ÿ„Ÿpages
+„    „        MemoEditorPage.tsx
+„    „        MemoListPage.tsx
+„    „        
+„    „¥„Ÿ„Ÿ„Ÿrepositories
+„    „        cloudMemoRepository.ts
+„    „        memoRepository.ts
+„    „        
+„    „¤„Ÿ„Ÿ„Ÿtypes
+„            memo.ts
+„            
+„¤„Ÿ„Ÿ„Ÿsupabase
         MIGRATE_v0.5.11.sql
         MIGRATE_v0.5.13.sql
         MIGRATE_v0.5.14.sql
         MIGRATE_v0.5.31.sql
         schema.sql
+        

@@ -4634,3 +4634,63 @@ a:focus-visible {
     gap: 8px;
   }
 }
+
+
+/* --------------------------------------------------------------------------
+   v0.5.36 — list memo deletion, original icon restoration
+   ×の寸法・余白・一覧レイアウトは変えない。
+   -------------------------------------------------------------------------- */
+.memo-card__actions {
+  position: relative;
+  z-index: 1;
+}
+
+.memo-card__delete {
+  touch-action: manipulation;
+}
+
+.memo-delete-dialog__panel {
+  width: min(100%, 460px);
+}
+
+.memo-delete-dialog__eyebrow {
+  margin: 0 0 9px;
+  color: #a24b34;
+  font-size: 10px;
+  font-weight: 850;
+  letter-spacing: 0.13em;
+}
+
+.memo-delete-dialog__target {
+  margin-top: 17px;
+  padding: 12px;
+  border: 1px solid #ecd6ce;
+  border-radius: 11px;
+  background: #fff8f6;
+}
+
+.memo-delete-dialog__target strong {
+  display: block;
+  overflow: hidden;
+  color: #40342e;
+  font-size: 14px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.memo-delete-dialog__hint {
+  margin: 12px 0 0;
+  color: #80746b;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.memo-delete-dialog__confirm {
+  min-width: 98px;
+}
+
+@media (max-width: 560px) {
+  .memo-delete-dialog .cloud-dialog__panel {
+    max-height: min(76dvh, 620px);
+  }
+}
