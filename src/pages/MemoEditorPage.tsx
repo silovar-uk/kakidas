@@ -243,6 +243,18 @@ export function MemoEditorPage() {
     }
   }, [memo?.id, memo?.title]);
 
+  // Chromeなどのブラウザタブでは、今開いているメモをすぐ見分けられるようにする。
+  // 編集中のタイトルもそのまま反映し、空欄に戻した時だけ既定タイトルを使う。
+  useEffect(() => {
+    if (!memo) {
+      document.title = "kakidas";
+      return;
+    }
+
+    document.title =
+      title.trim() || formatDefaultMemoTitle(new Date(memo.created_at));
+  }, [memo?.created_at, memo?.id, title]);
+
   useEffect(() => {
     if (shouldFocusNewMemoComposer) {
       setActiveKind("word");
@@ -401,6 +413,27 @@ export function MemoEditorPage() {
     [memo?.entries],
   );
 
+  /**
+   * モバイルタブに添える未完了項目数。
+   * 表示設定（完了を非表示）とは独立して、完了済みだけを除外する。
+   */
+  const openEntryCountsByKind = useMemo<Record<EntryKind, number>>(
+    () => ({
+      word: memo?.entries.filter(
+        (entry) => entry.kind === "word" && !entry.is_completed,
+      ).length ?? 0,
+      sentence:
+        memo?.entries.filter(
+          (entry) => entry.kind === "sentence" && !entry.is_completed,
+        ).length ?? 0,
+      paragraph:
+        memo?.entries.filter(
+          (entry) => entry.kind === "paragraph" && !entry.is_completed,
+        ).length ?? 0,
+    }),
+    [memo?.entries],
+  );
+
   const copyableEntryCountsByKind = useMemo(
     () => ({
       word: memo?.entries.filter(
@@ -537,21 +570,22 @@ export function MemoEditorPage() {
         />
 
         <div className="editor-title-row__actions">
-          <button
-            type="button"
-            className="cloud-upload-button"
-            onClick={openUpload}
-          >
-            <span aria-hidden="true">☁</span>
-            クラウドへ送る
-          </button>
-          <button
-            type="button"
-            className="secondary-button"
-            onClick={handleDownload}
-          >
-            .txt出力
-          </button>
+          <label className="entry-sort-control entry-sort-control--editor">
+            <span>並び順</span>
+            <select
+              value={entrySortMode}
+              onChange={(event) =>
+                setEntrySortMode(event.target.value as EntrySortMode)
+              }
+              aria-label="項目の並び順"
+            >
+              {ENTRY_SORT_MODES.map((mode) => (
+                <option key={mode} value={mode}>
+                  {ENTRY_SORT_MODE_LABEL[mode]}
+                </option>
+              ))}
+            </select>
+          </label>
 
           <button
             type="button"
@@ -640,23 +674,6 @@ export function MemoEditorPage() {
                 <span>新しい項目を一番下に追加</span>
               </label>
 
-              <label className="entry-sort-control">
-                <span>並び順</span>
-                <select
-                  value={entrySortMode}
-                  onChange={(event) =>
-                    setEntrySortMode(event.target.value as EntrySortMode)
-                  }
-                  aria-label="項目の並び順"
-                >
-                  {ENTRY_SORT_MODES.map((mode) => (
-                    <option key={mode} value={mode}>
-                      {ENTRY_SORT_MODE_LABEL[mode]}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
               <label className="timestamp-visibility-toggle">
                 <input
                   type="checkbox"
@@ -679,6 +696,25 @@ export function MemoEditorPage() {
                 完了を削除{completedEntryCount > 0 ? `（${completedEntryCount}）` : ""}
               </button>
             </div>
+
+            <div className="editor-display-options__actions" aria-label="出力とクラウド">
+              <button
+                type="button"
+                className="cloud-upload-button"
+                onClick={openUpload}
+              >
+                <span aria-hidden="true">☁</span>
+                クラウドへ送る
+              </button>
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={handleDownload}
+              >
+                .txt出力
+              </button>
+            </div>
+
             <p>
               並び順と番号は、コピー・.txt出力にも反映されます。{includeCompletedInCopy
                 ? "コピーには完了済みも含めます。"
@@ -695,6 +731,7 @@ export function MemoEditorPage() {
             type="button"
             role="tab"
             aria-selected={activeKind === kind}
+            aria-label={`${ENTRY_KIND_LABEL[kind]}、未完了${openEntryCountsByKind[kind]}件`}
             className={
               activeKind === kind
                 ? "editor-tab editor-tab--active"
@@ -702,7 +739,10 @@ export function MemoEditorPage() {
             }
             onClick={() => setActiveKind(kind)}
           >
-            {ENTRY_KIND_LABEL[kind]}
+            <span>{ENTRY_KIND_LABEL[kind]}</span>
+            <span className="editor-tab__count" aria-hidden="true">
+              {openEntryCountsByKind[kind]}
+            </span>
           </button>
         ))}
       </div>

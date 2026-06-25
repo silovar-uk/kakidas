@@ -68,6 +68,11 @@ function getCloudAction(state: CloudState): CloudAction | null {
 
 export function MemoListPage() {
   const navigate = useNavigate();
+
+  // 一覧へ戻った時は、ブラウザタブ名もアプリ名へ戻す。
+  useEffect(() => {
+    document.title = "kakidas";
+  }, []);
   const importInputRef = useRef<HTMLInputElement | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);

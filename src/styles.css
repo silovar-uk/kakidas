@@ -4325,3 +4325,113 @@ a:focus-visible {
     font-size: 12px;
   }
 }
+
+
+/* --------------------------------------------------------------------------
+   v0.5.28 — action placement
+   出力・クラウドは「表示・整理」内へ。並び順はメモ削除の左で即座に切替。
+   -------------------------------------------------------------------------- */
+.editor-display-options__actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  width: 100%;
+  padding-top: 2px;
+  border-top: 1px solid #e5dfd7;
+}
+
+.editor-display-options__actions .cloud-upload-button,
+.editor-display-options__actions .secondary-button {
+  min-height: 34px;
+  padding-inline: 11px;
+  border-radius: 9px;
+  font-size: 12px;
+}
+
+.entry-sort-control--editor {
+  min-width: 0;
+  flex: 0 1 auto;
+}
+
+.entry-sort-control--editor select {
+  max-width: 160px;
+}
+
+.editor-title-row__actions .danger-button {
+  flex: 0 0 auto;
+}
+
+@media (max-width: 560px) {
+  .editor-title-row__actions {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: stretch;
+  }
+
+  .editor-title-row__actions .danger-button {
+    grid-column: auto;
+    min-height: 38px;
+    padding-inline: 12px;
+  }
+
+  .entry-sort-control--editor {
+    width: 100%;
+    min-height: 38px;
+  }
+
+  .entry-sort-control--editor select {
+    min-width: 0;
+    max-width: none;
+    flex: 1 1 auto;
+  }
+
+  .editor-display-options__actions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 7px;
+    padding-top: 9px;
+  }
+
+  .editor-display-options__actions .cloud-upload-button,
+  .editor-display-options__actions .secondary-button {
+    min-height: 38px;
+  }
+}
+
+@media (max-width: 370px) {
+  .entry-sort-control--editor > span {
+    display: none;
+  }
+
+  .entry-sort-control--editor {
+    padding-left: 7px;
+  }
+}
+
+
+/* --------------------------------------------------------------------------
+   v0.5.29 — mobile tab entry counts
+   完了済みを除いた件数だけを、タブ名の横に控えめに置く。
+   -------------------------------------------------------------------------- */
+@media (max-width: 920px) {
+  .editor-tab {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+  }
+
+  .editor-tab__count {
+    min-width: 1.2em;
+    color: #9a948a;
+    font-size: 10px;
+    font-variant-numeric: tabular-nums;
+    font-weight: 720;
+    line-height: 1;
+    text-align: center;
+  }
+
+  .editor-tab--active .editor-tab__count {
+    color: #a25332;
+  }
+}
