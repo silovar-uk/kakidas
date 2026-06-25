@@ -283,6 +283,24 @@ export const ENTRY_KIND_PLACEHOLDER: Record<EntryKind, string> = {
   paragraph: "少し長めに書く",
 };
 
+/**
+ * 内容をより長い粒度へ移すための遷移先。
+ * kind自体は既存のDB値をそのまま使い、表示上だけ日本語ラベルを使う。
+ * 段落から短い粒度へ戻す操作は、意図しない分割を避けるため用意しない。
+ */
+export const ENTRY_KIND_MOVE_TARGETS: Record<EntryKind, readonly EntryKind[]> = {
+  word: ["sentence", "paragraph"],
+  sentence: ["paragraph"],
+  paragraph: [],
+};
+
+export function canMoveEntryToKind(
+  from: EntryKind,
+  to: EntryKind,
+): boolean {
+  return ENTRY_KIND_MOVE_TARGETS[from].includes(to);
+}
+
 export const CLOUD_STATE_LABEL: Record<CloudState, string> = {
   local_only: "ローカルのみ",
   uploaded: "クラウド保存済み",

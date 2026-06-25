@@ -117,6 +117,7 @@ export function MemoEditorPage() {
     indentEntry,
     outdentEntry,
     moveEntry,
+    moveEntryToKind,
     deleteMemo,
   } = useMemoDetail(memoId);
 
@@ -673,6 +674,7 @@ export function MemoEditorPage() {
             onIndent={indentEntry}
             onOutdent={outdentEntry}
             onMove={moveEntry}
+            onMoveToKind={moveEntryToKind}
           />
         ))}
       </section>

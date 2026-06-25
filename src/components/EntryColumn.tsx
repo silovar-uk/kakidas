@@ -50,6 +50,7 @@ type EntryColumnProps = {
   onIndent: (entryId: string) => Promise<unknown>;
   onOutdent: (entryId: string) => Promise<unknown>;
   onMove: (entryId: string, direction: "up" | "down") => Promise<unknown>;
+  onMoveToKind: (entryId: string, targetKind: EntryKind) => Promise<unknown>;
 };
 
 type PendingUndo = {
@@ -85,6 +86,7 @@ export function EntryColumn({
   onIndent,
   onOutdent,
   onMove,
+  onMoveToKind,
 }: EntryColumnProps) {
   const [parentId, setParentId] = useState<string | null>(null);
   const [structureEntryId, setStructureEntryId] = useState<string | null>(null);
@@ -299,6 +301,35 @@ export function EntryColumn({
     setMobileActionEntryId(null);
   };
 
+  /**
+   * 種別移動の前に、下にぶら下がる項目がある場合だけ確認する。
+   * 本人の文章を勝手に別の区分へ変えず、下の項目は元の区分に残す。
+   */
+  const requestMoveToKind = async (
+    entryId: string,
+    targetKind: EntryKind,
+  ): Promise<boolean> => {
+    const target = entries.find((entry) => entry.id === entryId);
+
+    if (!target || disabled || isDeletingAll) return false;
+
+    if (target.child_count > 0) {
+      const confirmed = window.confirm(
+        `「${target.content}」には下の項目が${target.child_count}件あります。
+この項目だけを「${ENTRY_KIND_LABEL[targetKind]}」へ移動します。
+下の項目は元の区分に残ります。`,
+      );
+
+      if (!confirmed) return false;
+    }
+
+    await onMoveToKind(entryId, targetKind);
+    setParentId(null);
+    setStructureEntryId(null);
+    setMobileActionEntryId(null);
+    return true;
+  };
+
   const toggleCompleted = async (entryId: string) => {
     const target = entries.find((entry) => entry.id === entryId);
     if (!target) return;
@@ -325,6 +356,7 @@ export function EntryColumn({
       onMove={(entryId, direction) =>
         runStructureAction((id) => onMove(id, direction), entryId)
       }
+      onMoveToKind={requestMoveToKind}
       onUpdate={onUpdate}
       onDelete={requestDelete}
     />
@@ -438,6 +470,7 @@ export function EntryColumn({
           onMove={(entryId, direction) =>
             runStructureAction((id) => onMove(id, direction), entryId)
           }
+          onMoveToKind={requestMoveToKind}
           onDelete={requestDelete}
         />
       ) : null}

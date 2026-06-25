@@ -328,6 +328,16 @@ export function useMemoDetail(memoId: string | undefined) {
     [refreshAfterWrite, runWrite],
   );
 
+  const moveEntryToKind = useCallback(
+    async (entryId: string, targetKind: EntryKind): Promise<void> => {
+      return runWrite(async () => {
+        await memoRepository.moveEntryToKind(entryId, targetKind);
+        await refreshAfterWrite();
+      });
+    },
+    [refreshAfterWrite, runWrite],
+  );
+
   const deleteMemo = useCallback(async (): Promise<void> => {
     if (!memoId) {
       throw new Error("メモIDがありません。");
@@ -355,6 +365,7 @@ export function useMemoDetail(memoId: string | undefined) {
     indentEntry,
     outdentEntry,
     moveEntry,
+    moveEntryToKind,
     deleteMemo,
   };
 }

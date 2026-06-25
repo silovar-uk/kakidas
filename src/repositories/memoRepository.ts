@@ -10,6 +10,7 @@ import {
   type EntryMoveDirection,
   type EntryRow,
   type EntryUpdate,
+  canMoveEntryToKind,
   type LegacyEntryRow,
   type LegacyMemoSyncMetaRow,
   type MemoCloudSnapshot,
@@ -77,6 +78,8 @@ export interface MemoRepository {
   outdentEntry(entryId: string): Promise<void>;
   /** 同じ親の中で順序を入れ替える。 */
   moveEntry(entryId: string, direction: EntryMoveDirection): Promise<void>;
+  /** 単語→文 / 段落、文→段落へ移す。移動先ではルート項目になる。 */
+  moveEntryToKind(entryId: string, targetKind: EntryKind): Promise<void>;
 
   getSyncMeta(memoId: string): Promise<MemoSyncMetaRow>;
   saveSyncMeta(meta: MemoSyncMetaRow): Promise<MemoSyncMetaRow>;
@@ -1061,6 +1064,79 @@ class IndexedDbMemoRepository implements MemoRepository {
 
     const timestamp = nowIso();
     this.writeOrderedEntries(entryStore, reordered, timestamp);
+
+    await this.touchMemoWithinTransaction(memoStore, current.memo_id, timestamp);
+    await this.markMemoChangedWithinTransaction(
+      syncMetaStore,
+      current.memo_id,
+      timestamp,
+    );
+    await transactionToPromise(transaction);
+  }
+
+  /**
+   * 内容をより長い粒度へ移す。
+   * 種別をまたぐ親子関係は持たないため、移動する項目は移動先のルートへ置く。
+   * 下に項目がある場合は、元の種別に残し、元の親と同じ階層へ繰り上げる。
+   * UI側では事前に確認を出すため、ここではデータ整合性だけを守る。
+   */
+  async moveEntryToKind(entryId: string, targetKind: EntryKind): Promise<void> {
+    const db = await getDatabase();
+
+    const transaction = db.transaction(
+      [STORE_NAMES.memos, STORE_NAMES.entries, STORE_NAMES.memoSyncMeta],
+      "readwrite",
+    );
+
+    const memoStore = transaction.objectStore(STORE_NAMES.memos);
+    const entryStore = transaction.objectStore(STORE_NAMES.entries);
+    const syncMetaStore = transaction.objectStore(STORE_NAMES.memoSyncMeta);
+    const current = await this.requireActiveEntry(entryStore, entryId, transaction);
+
+    if (!canMoveEntryToKind(current.kind, targetKind)) {
+      transaction.abort();
+      throw new Error("この項目はその区分へ移動できません。");
+    }
+
+    const entries = await this.getEntriesForMemo(entryStore, current.memo_id);
+    const timestamp = nowIso();
+
+    // 移動元では、直下の項目を現在の位置へ繰り上げる。
+    // その下の階層は直下の項目に紐づいたままなので、構造を壊さない。
+    const sourceSiblings = this.getActiveSiblings(
+      entries,
+      current.kind,
+      current.parent_id,
+    );
+    const currentIndex = sourceSiblings.findIndex((entry) => entry.id === current.id);
+    const remainingSourceSiblings = sourceSiblings.filter(
+      (entry) => entry.id !== current.id,
+    );
+    const promotedChildren = this
+      .getActiveSiblings(entries, current.kind, current.id)
+      .map((entry) => ({
+        ...entry,
+        parent_id: current.parent_id,
+        updated_at: timestamp,
+      }));
+
+    const nextSourceSiblings = [...remainingSourceSiblings];
+    nextSourceSiblings.splice(
+      Math.max(0, currentIndex),
+      0,
+      ...promotedChildren,
+    );
+    this.writeOrderedEntries(entryStore, nextSourceSiblings, timestamp);
+
+    // 移動先では先頭に置く。完成済みは既存の表示ルールにより下側へまとまる。
+    const targetSiblings = this.getActiveSiblings(entries, targetKind, null);
+    const moved: EntryRow = {
+      ...current,
+      kind: targetKind,
+      parent_id: null,
+      updated_at: timestamp,
+    };
+    this.writeOrderedEntries(entryStore, [moved, ...targetSiblings], timestamp);
 
     await this.touchMemoWithinTransaction(memoStore, current.memo_id, timestamp);
     await this.markMemoChangedWithinTransaction(

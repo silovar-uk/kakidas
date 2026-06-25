@@ -3755,26 +3755,27 @@ a:focus-visible {
 
 /* いつでも気持ち・備考を書けるが、右側の操作レールは占有しない。 */
 .entry-item__note-trigger--inline {
-  display: inline-flex;
+  display: inline-grid;
+  width: 22px;
+  min-width: 22px;
   min-height: 22px;
-  align-items: center;
+  place-items: center;
   margin-top: 4px;
   padding: 0;
   border: 0;
-  border-radius: 0;
+  border-radius: 6px;
   color: #8a7668;
   background: transparent;
-  font-size: 10px;
-  font-weight: 700;
-  line-height: 1.3;
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 1;
 }
 
 .entry-item__note-trigger--inline:hover:not(:disabled) {
   border: 0;
   color: #75462e;
-  background: transparent;
-  text-decoration: underline;
-  text-underline-offset: 3px;
+  background: #fff5ec;
+  text-decoration: none;
 }
 
 .entry-list__completed-section {
@@ -3932,17 +3933,17 @@ a:focus-visible {
   }
 
   .entry-item__note-trigger--inline {
-    width: auto;
-    min-width: 0;
-    height: auto;
+    width: 22px;
+    min-width: 22px;
+    height: 22px;
     min-height: 22px;
     margin-top: 5px;
     padding: 0;
     border: 0;
-    border-radius: 0;
+    border-radius: 6px;
     color: #8a7668;
     background: transparent;
-    font-size: 10px;
+    font-size: 16px;
   }
 
   .entry-item__note-trigger--inline::before,
@@ -4028,7 +4029,7 @@ a:focus-visible {
   background: transparent;
 }
 
-/* PCでは従来どおり本文下の常設テキスト。モバイルだけ右側の＋へ置き換える。 */
+/* PCは本文下の小さな＋、モバイルは右側の＋で備考を開く。 */
 .entry-item__note-trigger--rail {
   display: none;
 }
@@ -4100,5 +4101,84 @@ a:focus-visible {
   .cloud-library-card .secondary-button,
   .cloud-library-card__delete {
     width: 100%;
+  }
+}
+
+
+/* --------------------------------------------------------------------------
+   v0.5.23 — 単語 → 文 / 段落、文 → 段落への移動
+   -------------------------------------------------------------------------- */
+.entry-item__kind-actions {
+  display: contents;
+}
+
+.structure-action--kind {
+  color: #6e5c4f;
+  background: #fbf8f3;
+}
+
+.structure-action--kind:hover:not(:disabled) {
+  border-color: #cab39f;
+  color: #75462e;
+  background: #fff4eb;
+}
+
+.mobile-action-sheet__tile--kind {
+  min-height: 52px;
+  color: #65584e;
+  background: #fbfaf7;
+}
+
+.mobile-action-sheet__tile--kind:active:not(:disabled) {
+  border-color: #caa98f;
+  color: #75462e;
+  background: #fff4eb;
+}
+
+
+/* --------------------------------------------------------------------------
+   v0.5.25 — make the display / organize control easier to find
+   -------------------------------------------------------------------------- */
+.editor-utility-menu__trigger {
+  min-height: 34px;
+  gap: 7px;
+  padding: 0 11px;
+  border: 1px solid #d8c6b7;
+  border-radius: 999px;
+  color: #6b4b38;
+  background: #fff9f4;
+  box-shadow: 0 1px 0 rgba(83, 60, 44, 0.06);
+  font-size: 12px;
+  font-weight: 760;
+  letter-spacing: 0.01em;
+}
+
+.editor-utility-menu__trigger:hover {
+  border-color: #bd8e70;
+  color: #563a29;
+  background: #fff2e8;
+}
+
+.editor-utility-menu__trigger[aria-expanded="true"] {
+  border-color: #bd7b55;
+  color: #693b24;
+  background: #f7dfce;
+}
+
+.editor-utility-menu__trigger:focus-visible {
+  outline: 3px solid rgba(189, 123, 85, 0.32);
+  outline-offset: 3px;
+}
+
+@media (max-width: 560px) {
+  .editor-utility-menu {
+    margin-top: 10px;
+    margin-bottom: 15px;
+  }
+
+  .editor-utility-menu__trigger {
+    min-height: 38px;
+    padding-inline: 13px;
+    font-size: 12px;
   }
 }

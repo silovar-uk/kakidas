@@ -12,6 +12,8 @@ import {
   type EntryKind,
   type EntryTreeNode,
   type EntryUpdate,
+  ENTRY_KIND_LABEL,
+  ENTRY_KIND_MOVE_TARGETS,
   supportsHierarchy,
 } from "../types/memo";
 
@@ -32,6 +34,7 @@ type EntryItemProps = {
   onIndent: (entryId: string) => Promise<unknown>;
   onOutdent: (entryId: string) => Promise<unknown>;
   onMove: (entryId: string, direction: "up" | "down") => Promise<unknown>;
+  onMoveToKind: (entryId: string, targetKind: EntryKind) => Promise<unknown>;
   onUpdate: (entryId: string, patch: EntryUpdate) => Promise<unknown>;
   onDelete: (entryId: string) => Promise<unknown>;
 };
@@ -53,6 +56,7 @@ export function EntryItem({
   onIndent,
   onOutdent,
   onMove,
+  onMoveToKind,
   onUpdate,
   onDelete,
 }: EntryItemProps) {
@@ -72,6 +76,7 @@ export function EntryItem({
   const hasNote = entry.note.trim().length > 0;
   const isEditing = editMode !== null;
   const completionLabel = entry.is_completed ? "未完了に戻す" : "完了にする";
+  const moveTargets = ENTRY_KIND_MOVE_TARGETS[kind];
 
   useEffect(() => {
     if (!isEditing) {
@@ -519,7 +524,7 @@ export function EntryItem({
             aria-label={hasNote ? "気持ち・備考を編集" : "気持ち・備考を追加"}
             title={hasNote ? "気持ち・備考を編集" : "気持ち・備考を追加"}
           >
-            {hasNote ? "気持ち・備考" : "＋ 気持ち・備考"}
+            ＋
           </button>
 
           {showCreatedAt ? (
@@ -632,6 +637,21 @@ export function EntryItem({
                 → 右へ下げる
               </button>
             </>
+          ) : null}
+          {moveTargets.length > 0 ? (
+            <div className="entry-item__kind-actions" aria-label="区分を移動">
+              {moveTargets.map((targetKind) => (
+                <button
+                  key={targetKind}
+                  type="button"
+                  className="structure-action structure-action--kind"
+                  onClick={() => void onMoveToKind(entry.id, targetKind)}
+                  disabled={disabled}
+                >
+                  {ENTRY_KIND_LABEL[targetKind]}へ移動
+                </button>
+              ))}
+            </div>
           ) : null}
           <button
             type="button"

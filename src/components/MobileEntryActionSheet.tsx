@@ -1,7 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { lockBodyScroll } from "../lib/bodyScrollLock";
-import { type EntryKind, type EntryTreeNode, supportsHierarchy } from "../types/memo";
+import {
+  type EntryKind,
+  type EntryTreeNode,
+  ENTRY_KIND_LABEL,
+  ENTRY_KIND_MOVE_TARGETS,
+  supportsHierarchy,
+} from "../types/memo";
 
 type MobileEntryActionSheetProps = {
   entry: EntryTreeNode | null;
@@ -15,6 +21,11 @@ type MobileEntryActionSheetProps = {
   onIndent: (entryId: string) => Promise<unknown> | unknown;
   onOutdent: (entryId: string) => Promise<unknown> | unknown;
   onMove: (entryId: string, direction: "up" | "down") => Promise<unknown> | unknown;
+  /** falseを返した場合は、確認を取り消したものとしてシートを閉じない。 */
+  onMoveToKind: (
+    entryId: string,
+    targetKind: EntryKind,
+  ) => Promise<unknown | false> | unknown | false;
   onDelete: (entryId: string) => Promise<unknown> | unknown;
 };
 
@@ -33,6 +44,7 @@ export function MobileEntryActionSheet({
   onIndent,
   onOutdent,
   onMove,
+  onMoveToKind,
   onDelete,
 }: MobileEntryActionSheetProps) {
   const [isWorking, setIsWorking] = useState(false);
@@ -84,19 +96,24 @@ export function MobileEntryActionSheet({
   if (!entry || typeof document === "undefined") return null;
 
   const isHierarchical = supportsHierarchy(kind);
+  const moveTargets = ENTRY_KIND_MOVE_TARGETS[kind];
   const close = () => onCloseRef.current();
 
-  const run = async (action: () => Promise<unknown> | unknown) => {
+  const run = async (action: () => Promise<unknown | false> | unknown | false) => {
     if (disabled || isWorking) return;
 
     setIsWorking(true);
 
+    let shouldClose = true;
+
     try {
-      await action();
+      const result = await action();
+      // 確認をキャンセルした場合は、操作内容を見直せるようシートを残す。
+      shouldClose = result !== false;
     } catch {
       // 保存・削除処理側のエラー表示を妨げない。
     } finally {
-      close();
+      if (shouldClose) close();
       setIsWorking(false);
     }
   };
@@ -204,6 +221,27 @@ export function MobileEntryActionSheet({
               </button>
             </div>
           </>
+        ) : null}
+
+        {moveTargets.length > 0 ? (
+          <section className="mobile-action-sheet__section" aria-label="区分を移動">
+            <p className="mobile-action-sheet__section-label">移動先</p>
+            <div className="mobile-action-sheet__grid">
+              {moveTargets.map((targetKind) => (
+                <button
+                  key={targetKind}
+                  type="button"
+                  className="mobile-action-sheet__tile mobile-action-sheet__tile--kind"
+                  onClick={() =>
+                    void run(() => onMoveToKind(entry.id, targetKind))
+                  }
+                  disabled={disabled || isWorking}
+                >
+                  {ENTRY_KIND_LABEL[targetKind]}へ移動
+                </button>
+              ))}
+            </div>
+          </section>
         ) : null}
 
         <button
