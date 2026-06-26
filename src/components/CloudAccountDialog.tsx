@@ -1,10 +1,11 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { lockBodyScroll } from "../lib/bodyScrollLock";
 import { useAuth } from "../auth/AuthProvider";
 import { useCloudMemos } from "../hooks/useCloudMemos";
 import type { CloudMemoListItem, MemoCloudSnapshot } from "../types/memo";
 import { formatUpdatedAt } from "../types/memo";
 import { CloudImportDialog } from "./CloudImportDialog";
+import { NoticeToast } from "./NoticeToast";
 
 type CloudAccountDialogProps = {
   open: boolean;
@@ -39,7 +40,17 @@ export function CloudAccountDialog({
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [activeTab, setActiveTab] = useState<CloudTab>("account");
-  const [notice, setNotice] = useState<string | null>(null);
+  const noticeIdRef = useRef(0);
+  const [notice, setNoticeState] = useState<{ id: number; message: string } | null>(null);
+  const setNotice = useCallback((message: string | null) => {
+    if (message === null) {
+      setNoticeState(null);
+      return;
+    }
+
+    noticeIdRef.current += 1;
+    setNoticeState({ id: noticeIdRef.current, message });
+  }, []);
   const [conflictSnapshot, setConflictSnapshot] =
     useState<MemoCloudSnapshot | null>(null);
   const panelRef = useRef<HTMLElement | null>(null);
@@ -223,7 +234,12 @@ export function CloudAccountDialog({
         </button>
       </div>
 
-      {notice ? <p className="notice cloud-dialog__notice">{notice}</p> : null}
+      <NoticeToast
+        key={notice?.id}
+        message={notice?.message ?? null}
+        onDismiss={() => setNotice(null)}
+        className="cloud-dialog__notice"
+      />
       {cloudError ? <p className="error-message cloud-dialog__error">{cloudError}</p> : null}
 
       {isCloudLoading ? (

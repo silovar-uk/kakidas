@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthProvider";
 import { copyToClipboard } from "../lib/clipboard";
@@ -16,6 +16,7 @@ import {
 } from "../components/CloudUploadDialog";
 import { CloudStatusBadge } from "../components/CloudStatusBadge";
 import { MemoDeleteDialog } from "../components/MemoDeleteDialog";
+import { NoticeToast } from "../components/NoticeToast";
 import { useCloudMemos } from "../hooks/useCloudMemos";
 import { useMemos } from "../hooks/useMemos";
 import {
@@ -75,7 +76,17 @@ export function MemoListPage() {
     document.title = "kakidas";
   }, []);
   const importInputRef = useRef<HTMLInputElement | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
+  const noticeIdRef = useRef(0);
+  const [notice, setNoticeState] = useState<{ id: number; message: string } | null>(null);
+  const setNotice = useCallback((message: string | null) => {
+    if (message === null) {
+      setNoticeState(null);
+      return;
+    }
+
+    noticeIdRef.current += 1;
+    setNoticeState({ id: noticeIdRef.current, message });
+  }, []);
   const [isCreating, setIsCreating] = useState(false);
   const [isCloudDialogOpen, setIsCloudDialogOpen] = useState(false);
   const [isUploadMode, setIsUploadMode] = useState(false);
@@ -629,11 +640,11 @@ export function MemoListPage() {
         </section>
       )}
 
-      {notice ? (
-        <p className="notice" role="status">
-          {notice}
-        </p>
-      ) : null}
+      <NoticeToast
+        key={notice?.id}
+        message={notice?.message ?? null}
+        onDismiss={() => setNotice(null)}
+      />
 
       {error ? (
         <div className="load-error" role="alert">

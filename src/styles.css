@@ -315,6 +315,40 @@ a:focus-visible {
   background: #e7eee3;
 }
 
+
+.notice--dismissible {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.notice__message {
+  min-width: 0;
+  line-height: 1.5;
+}
+
+.notice__dismiss {
+  display: grid;
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  margin: -4px -5px -4px 0;
+  place-items: center;
+  border: 0;
+  border-radius: 8px;
+  color: #5b6655;
+  background: transparent;
+  font-size: 19px;
+  line-height: 1;
+}
+
+.notice__dismiss:hover,
+.notice__dismiss:focus-visible {
+  color: #3f4b3b;
+  background: rgba(83, 96, 78, 0.12);
+}
+
 .error-message {
   color: #933a30;
   background: #fae7e2;
