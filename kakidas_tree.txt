@@ -43,6 +43,7 @@ kakidas/
 ├── RELEASE_NOTES_v0.5.37.md
 ├── RELEASE_NOTES_v0.5.38.md
 ├── RELEASE_NOTES_v0.5.39.md
+├── RELEASE_NOTES_v0.5.40.md
 ├── tsconfig.app.json
 ├── tsconfig.json
 ├── tsconfig.node.json

@@ -27,9 +27,12 @@ import { memoRepository } from "../repositories/memoRepository";
 import {
   type BackupPayload,
   type CloudState,
+  type EntryKind,
   type MemoCloudSnapshot,
   type MemoListItem,
   type MemoWithEntries,
+  ENTRY_KIND_LABEL,
+  ENTRY_KINDS,
   formatUpdatedAt,
 } from "../types/memo";
 
@@ -66,6 +69,52 @@ function getCloudAction(state: CloudState): CloudAction | null {
     case "uploaded":
       return null;
   }
+}
+
+type MemoPreviewFragment = {
+  kind: EntryKind;
+  content: string;
+};
+
+const MEMO_PREVIEW_MAX_LENGTH: Record<EntryKind, number> = {
+  word: 20,
+  sentence: 36,
+  paragraph: 54,
+};
+
+function toMemoPreviewText(content: string, maxLength: number): string {
+  const oneLine = content.replace(/\s+/g, " ").trim();
+
+  if (oneLine.length <= maxLength) return oneLine;
+
+  return `${oneLine.slice(0, Math.max(1, maxLength - 1))}…`;
+}
+
+/**
+ * 一覧では本文を開く前の「思い出すきっかけ」だけを見せる。
+ * 未完了の内容を優先し、未完了がないメモでは完了済みを代わりに使う。
+ */
+function getMemoPreviewFragments(memo: MemoWithEntries): MemoPreviewFragment[] {
+  const availableEntries = memo.entries.filter((entry) => entry.content.trim());
+  const sourceEntries = availableEntries.some((entry) => !entry.is_completed)
+    ? availableEntries.filter((entry) => !entry.is_completed)
+    : availableEntries;
+
+  return ENTRY_KINDS.flatMap((kind) => {
+    const latestEntry = sourceEntries
+      .filter((entry) => entry.kind === kind)
+      .sort((a, b) => b.updated_at.localeCompare(a.updated_at))[0];
+
+    if (!latestEntry) return [];
+
+    return [{
+      kind,
+      content: toMemoPreviewText(
+        latestEntry.content,
+        MEMO_PREVIEW_MAX_LENGTH[kind],
+      ),
+    }];
+  });
 }
 
 export function MemoListPage() {
@@ -105,6 +154,9 @@ export function MemoListPage() {
   // 一覧表示の間に本文を温めておく。スマホでも、コピーのタップ操作中に
   // Clipboard API を呼べるため、Safariの「The request is not allowed」を避けやすい。
   const memoCopyCacheRef = useRef<Map<string, MemoWithEntries>>(new Map());
+  const [memoPreviews, setMemoPreviews] = useState<
+    Map<string, MemoPreviewFragment[]>
+  >(() => new Map());
   const [conflictSnapshot, setConflictSnapshot] =
     useState<MemoCloudSnapshot | null>(null);
 
@@ -131,13 +183,23 @@ export function MemoListPage() {
     writeCopyIncludeCompleted(includeCompletedInCopy);
   }, [includeCompletedInCopy]);
 
+  const cacheMemoDetail = (memoId: string, detail: MemoWithEntries) => {
+    memoCopyCacheRef.current.set(memoId, detail);
+
+    setMemoPreviews((current) => {
+      const next = new Map(current);
+      next.set(memoId, getMemoPreviewFragments(detail));
+      return next;
+    });
+  };
+
   const primeMemoCopy = (memoId: string) => {
     if (memoCopyCacheRef.current.has(memoId)) return;
 
     void memoRepository
       .getMemo(memoId)
       .then((detail) => {
-        if (detail) memoCopyCacheRef.current.set(memoId, detail);
+        if (detail) cacheMemoDetail(memoId, detail);
       })
       .catch(() => {
         // コピー時に改めて取得して、通常のエラー表示へ任せる。
@@ -150,6 +212,7 @@ export function MemoListPage() {
     let cancelled = false;
     const cache = memoCopyCacheRef.current;
     cache.clear();
+    setMemoPreviews(new Map());
 
     const warmCopyCache = async () => {
       const details = await Promise.all(
@@ -161,9 +224,16 @@ export function MemoListPage() {
 
       if (cancelled) return;
 
+      const nextPreviews = new Map<string, MemoPreviewFragment[]>();
+
       for (const { id, detail } of details) {
-        if (detail) cache.set(id, detail);
+        if (!detail) continue;
+
+        cache.set(id, detail);
+        nextPreviews.set(id, getMemoPreviewFragments(detail));
       }
+
+      setMemoPreviews(nextPreviews);
     };
 
     void warmCopyCache().catch(() => {
@@ -323,7 +393,7 @@ export function MemoListPage() {
 
       if (!detail) {
         detail = await memoRepository.getMemo(memo.id);
-        if (detail) memoCopyCacheRef.current.set(memo.id, detail);
+        if (detail) cacheMemoDetail(memo.id, detail);
       }
 
       if (!detail) {
@@ -699,6 +769,26 @@ export function MemoListPage() {
                 ) : (
                   <Link to={`/memos/${memo.id}`} className="memo-card__link">
                     <strong>{memo.title}</strong>
+                    {(memoPreviews.get(memo.id) ?? []).length > 0 ? (
+                      <span
+                        className="memo-card__preview"
+                        aria-label={`${memo.title}の入力内容の抜粋`}
+                      >
+                        {(memoPreviews.get(memo.id) ?? []).map((fragment) => (
+                          <span
+                            key={`${fragment.kind}-${fragment.content}`}
+                            className="memo-card__preview-item"
+                          >
+                            <span className="memo-card__preview-kind">
+                              {ENTRY_KIND_LABEL[fragment.kind]}
+                            </span>
+                            <span className="memo-card__preview-content">
+                              {fragment.content}
+                            </span>
+                          </span>
+                        ))}
+                      </span>
+                    ) : null}
                     <span className="memo-card__meta">
                       <span>最終更新 {formatUpdatedAt(memo.updated_at)}</span>
                       <CloudStatusBadge syncMeta={memo.sync_meta} />

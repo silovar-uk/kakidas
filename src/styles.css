@@ -285,6 +285,41 @@ a:focus-visible {
   font-size: 12px;
 }
 
+/* 一覧では本文の代わりに、思い出すための小さな抜粋だけを置く。 */
+.memo-card__preview {
+  display: flex;
+  min-width: 0;
+  gap: 8px;
+  overflow: hidden;
+  color: #969188;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.memo-card__preview-item {
+  display: inline-flex;
+  min-width: 0;
+  flex: 1 1 0;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.memo-card__preview-kind {
+  flex: 0 0 auto;
+  color: #b3ada3 !important;
+  font-size: 10px !important;
+  font-weight: 760;
+}
+
+.memo-card__preview-content {
+  overflow: hidden;
+  min-width: 0;
+  color: #8b877f !important;
+  font-size: 11px !important;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .icon-button {
   display: inline-grid;
   width: 32px;
@@ -1829,6 +1864,18 @@ a:focus-visible {
 
   .memo-card__select {
     gap: 9px;
+  }
+
+  .memo-card__preview {
+    gap: 5px;
+  }
+
+  .memo-card__preview-kind {
+    display: none;
+  }
+
+  .memo-card__preview-content {
+    font-size: 10px !important;
   }
 
   .memo-card__details span {
