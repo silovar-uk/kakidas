@@ -833,7 +833,7 @@ a:focus-visible {
 
 .entry-item__structure-actions {
   display: grid;
-  grid-template-columns: 1.4fr repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 5px;
   margin-top: 9px;
   padding-top: 9px;
@@ -859,9 +859,15 @@ a:focus-visible {
 }
 
 .structure-action--child {
+  grid-column: 1 / -1;
   border-color: #deb299;
   color: #8c3e22;
   background: #fceadf;
+}
+
+.structure-action--jump {
+  color: #5e6772;
+  background: #f3f6f8;
 }
 
 .structure-action--danger {
@@ -887,11 +893,7 @@ a:focus-visible {
 
 @media (max-width: 1060px) {
   .entry-item__structure-actions {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-
-  .structure-action--child {
-    grid-column: span 3;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
@@ -1059,10 +1061,6 @@ a:focus-visible {
 
   .entry-item__structure-actions {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .structure-action--child {
-    grid-column: span 2;
   }
 
   .structure-action {
@@ -4147,26 +4145,65 @@ a:focus-visible {
 }
 
 .structure-action--kind {
-  color: #6e5c4f;
-  background: #fbf8f3;
+  font-weight: 820;
 }
 
-.structure-action--kind:hover:not(:disabled) {
-  border-color: #cab39f;
-  color: #75462e;
-  background: #fff4eb;
+.structure-action--kind-sentence {
+  border-color: #9fbfe9;
+  color: #1f5f9f;
+  background: #eaf3ff;
+}
+
+.structure-action--kind-sentence:hover:not(:disabled) {
+  border-color: #5f96d2;
+  color: #174e86;
+  background: #dcecff;
+}
+
+.structure-action--kind-paragraph {
+  border-color: #b6a2e7;
+  color: #6541a1;
+  background: #f0ebff;
+}
+
+.structure-action--kind-paragraph:hover:not(:disabled) {
+  border-color: #8e74cf;
+  color: #4e2e87;
+  background: #e7defe;
 }
 
 .mobile-action-sheet__tile--kind {
   min-height: 52px;
-  color: #65584e;
-  background: #fbfaf7;
+  font-weight: 820;
 }
 
-.mobile-action-sheet__tile--kind:active:not(:disabled) {
-  border-color: #caa98f;
-  color: #75462e;
-  background: #fff4eb;
+.mobile-action-sheet__tile--kind-sentence {
+  border-color: #9fbfe9;
+  color: #1f5f9f;
+  background: #eaf3ff;
+}
+
+.mobile-action-sheet__tile--kind-sentence:active:not(:disabled) {
+  border-color: #5f96d2;
+  color: #174e86;
+  background: #dcecff;
+}
+
+.mobile-action-sheet__tile--kind-paragraph {
+  border-color: #b6a2e7;
+  color: #6541a1;
+  background: #f0ebff;
+}
+
+.mobile-action-sheet__tile--kind-paragraph:active:not(:disabled) {
+  border-color: #8e74cf;
+  color: #4e2e87;
+  background: #e7defe;
+}
+
+.mobile-action-sheet__tile--jump {
+  color: #5e6772;
+  background: #f3f6f8;
 }
 
 

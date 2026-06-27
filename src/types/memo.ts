@@ -17,7 +17,8 @@ export type EntryKind = (typeof ENTRY_KINDS)[number];
 /** 新しい項目を同じ階層の先頭／末尾どちらに置くか。DBには保存しないUI設定。 */
 export type EntryInsertPosition = "top" | "bottom";
 
-export type EntryMoveDirection = "up" | "down";
+/** 同じ階層の中で項目を並べ替える方向。 */
+export type EntryMoveDirection = "top" | "up" | "down" | "bottom";
 
 /**
  * 項目の表示・出力に使う並び順。
@@ -211,8 +212,6 @@ export type EntryTreeNode = EntryRow & {
   depth: number;
   child_count: number;
   has_children: boolean;
-  can_indent: boolean;
-  can_outdent: boolean;
   can_move_up: boolean;
   can_move_down: boolean;
 };
@@ -599,7 +598,7 @@ export function getEntryTree(
   const visited = new Set<string>();
 
   /**
-   * 振り番は保存しない。並び替え・右へ下げる・左へ戻すのたびに
+   * 振り番は保存しない。並び替えや子の追加のたびに
    * parent_id と sort_order から再計算するので、常に現在の階層と一致する。
    */
   const visit = (
@@ -623,8 +622,6 @@ export function getEntryTree(
         depth,
         child_count: countDescendants(entry.id, new Set([entry.id])),
         has_children: children.length > 0,
-        can_indent: index > 0,
-        can_outdent: parentId !== null,
         can_move_up:
           index > 0 && siblings[index - 1]?.is_completed === entry.is_completed,
         can_move_down:
@@ -665,8 +662,6 @@ export function getEntryTree(
         depth: 0,
         child_count: countDescendants(orphan.id, new Set([orphan.id])),
         has_children: children.length > 0,
-        can_indent: index > 0,
-        can_outdent: false,
         can_move_up:
           index > 0 && siblings[index - 1]?.is_completed === orphan.is_completed,
         can_move_down:
@@ -698,8 +693,6 @@ export function getActiveEntries(
       depth: _depth,
       child_count: _childCount,
       has_children: _hasChildren,
-      can_indent: _canIndent,
-      can_outdent: _canOutdent,
       can_move_up: _canMoveUp,
       can_move_down: _canMoveDown,
       ...entry

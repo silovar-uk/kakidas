@@ -298,26 +298,6 @@ export function useMemoDetail(memoId: string | undefined) {
     [memoId, refreshAfterWrite, runWrite],
   );
 
-  const indentEntry = useCallback(
-    async (entryId: string): Promise<void> => {
-      return runWrite(async () => {
-        await memoRepository.indentEntry(entryId);
-        await refreshAfterWrite();
-      });
-    },
-    [refreshAfterWrite, runWrite],
-  );
-
-  const outdentEntry = useCallback(
-    async (entryId: string): Promise<void> => {
-      return runWrite(async () => {
-        await memoRepository.outdentEntry(entryId);
-        await refreshAfterWrite();
-      });
-    },
-    [refreshAfterWrite, runWrite],
-  );
-
   const moveEntry = useCallback(
     async (entryId: string, direction: EntryMoveDirection): Promise<void> => {
       return runWrite(async () => {
@@ -362,8 +342,6 @@ export function useMemoDetail(memoId: string | undefined) {
     restoreEntries,
     deleteEntriesByKind,
     deleteCompletedEntries,
-    indentEntry,
-    outdentEntry,
     moveEntry,
     moveEntryToKind,
     deleteMemo,

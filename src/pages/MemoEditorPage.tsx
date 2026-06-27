@@ -130,8 +130,6 @@ export function MemoEditorPage() {
     restoreEntries,
     deleteEntriesByKind,
     deleteCompletedEntries,
-    indentEntry,
-    outdentEntry,
     moveEntry,
     moveEntryToKind,
     deleteMemo,
@@ -800,8 +798,6 @@ export function MemoEditorPage() {
             copyIncludesCompleted={includeCompletedInCopy}
             onCopy={handleCopyKind}
             isCopying={copyingKind === kind}
-            onIndent={indentEntry}
-            onOutdent={outdentEntry}
             onMove={moveEntry}
             onMoveToKind={moveEntryToKind}
           />

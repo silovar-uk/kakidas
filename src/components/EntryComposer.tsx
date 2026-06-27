@@ -26,7 +26,8 @@ type EntryComposerProps = {
 };
 
 /**
- * 「Enterで置く」は残しつつ、スマホでは明示的な「置く」ボタンでも確定できる。
+ * 単語・文はEnterで置く。長文を書く段落はEnterで改行し、
+ * Shift + Enter / Ctrl + Enter または明示的な「置く」ボタンで確定する。
  * 日本語IMEの変換確定Enterは、保存操作として扱わない。
  */
 export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>(
@@ -101,8 +102,9 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
       if (isComposing || event.nativeEvent.isComposing) return;
 
       if (isParagraph) {
-        // Paragraphだけは Shift + Enter で改行。Enterは「置く」。
-        if (event.shiftKey) return;
+        // 段落は長文入力が前提。Enterは改行としてそのまま通し、
+        // 明示的なショートカットだけを「置く」に使う。
+        if (!event.shiftKey && !event.ctrlKey) return;
 
         event.preventDefault();
         void submit();
@@ -169,6 +171,7 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
               className="entry-composer__textarea"
               rows={4}
               aria-label={`${ENTRY_KIND_LABEL[kind]}を入力`}
+              aria-describedby="paragraph-shortcut-hint"
             />
           ) : (
             <input
@@ -192,6 +195,11 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
           </button>
         </div>
 
+        {isParagraph ? (
+          <p id="paragraph-shortcut-hint" className="entry-composer__hint">
+            Enterで改行。Shift＋Enter／Ctrl＋Enterで置く。
+          </p>
+        ) : null}
       </form>
     );
   },

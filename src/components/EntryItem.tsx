@@ -10,6 +10,7 @@ import { EntrySatisfactionControl } from "./EntrySatisfactionControl";
 import { formatEntryCreatedAt } from "../lib/formatDate";
 import {
   type EntryKind,
+  type EntryMoveDirection,
   type EntryTreeNode,
   type EntryUpdate,
   ENTRY_KIND_LABEL,
@@ -19,7 +20,7 @@ import {
   supportsHierarchy,
 } from "../types/memo";
 
-type StructureShortcut = "indent" | "outdent" | "move-up" | "move-down";
+type StructureShortcut = "move-up" | "move-down";
 type EditMode = "content" | "note" | "link" | null;
 
 function LinkIcon() {
@@ -44,9 +45,7 @@ type EntryItemProps = {
   disabled?: boolean;
   onOpenStructure: (entryId: string) => void;
   onAddChild: (entryId: string) => void;
-  onIndent: (entryId: string) => Promise<unknown>;
-  onOutdent: (entryId: string) => Promise<unknown>;
-  onMove: (entryId: string, direction: "up" | "down") => Promise<unknown>;
+  onMove: (entryId: string, direction: EntryMoveDirection) => Promise<unknown>;
   onMoveToKind: (entryId: string, targetKind: EntryKind) => Promise<unknown>;
   onUpdate: (entryId: string, patch: EntryUpdate) => Promise<unknown>;
   onDelete: (entryId: string) => Promise<unknown>;
@@ -67,8 +66,6 @@ export function EntryItem({
   disabled = false,
   onOpenStructure,
   onAddChild,
-  onIndent,
-  onOutdent,
   onMove,
   onMoveToKind,
   onUpdate,
@@ -213,10 +210,6 @@ export function EntryItem({
 
   const canRunStructureShortcut = (shortcut: StructureShortcut): boolean => {
     switch (shortcut) {
-      case "indent":
-        return entry.can_indent;
-      case "outdent":
-        return entry.can_outdent;
       case "move-up":
         return entry.can_move_up;
       case "move-down":
@@ -241,8 +234,6 @@ export function EntryItem({
       const canContinue = await persist(false);
       if (!canContinue) return;
 
-      if (shortcut === "indent") await onIndent(entry.id);
-      if (shortcut === "outdent") await onOutdent(entry.id);
       if (shortcut === "move-up") await onMove(entry.id, "up");
       if (shortcut === "move-down") await onMove(entry.id, "down");
 
@@ -260,14 +251,10 @@ export function EntryItem({
   ): StructureShortcut | null => {
     if (!isHierarchical || disabled) return null;
 
-    if (event.key === "Tab") return event.shiftKey ? "outdent" : "indent";
-
     const hasShiftedModifier =
       event.shiftKey && (event.ctrlKey || event.metaKey || event.altKey);
 
     if (!hasShiftedModifier) return null;
-    if (event.key === "ArrowRight") return "indent";
-    if (event.key === "ArrowLeft") return "outdent";
     if (event.key === "ArrowUp") return "move-up";
     if (event.key === "ArrowDown") return "move-down";
 
@@ -759,6 +746,15 @@ export function EntryItem({
               </button>
               <button
                 type="button"
+                className="structure-action structure-action--jump"
+                onClick={() => void onMove(entry.id, "top")}
+                disabled={disabled || !entry.can_move_up}
+                title="一番上に移動"
+              >
+                ⇡ 一番上
+              </button>
+              <button
+                type="button"
                 className="structure-action"
                 onClick={() => void onMove(entry.id, "up")}
                 disabled={disabled || !entry.can_move_up}
@@ -777,21 +773,12 @@ export function EntryItem({
               </button>
               <button
                 type="button"
-                className="structure-action"
-                onClick={() => void onOutdent(entry.id)}
-                disabled={disabled || !entry.can_outdent}
-                title="左へ戻す"
+                className="structure-action structure-action--jump"
+                onClick={() => void onMove(entry.id, "bottom")}
+                disabled={disabled || !entry.can_move_down}
+                title="一番下に移動"
               >
-                ← 左へ戻す
-              </button>
-              <button
-                type="button"
-                className="structure-action"
-                onClick={() => void onIndent(entry.id)}
-                disabled={disabled || !entry.can_indent}
-                title="右へ下げる"
-              >
-                → 右へ下げる
+                ⇣ 一番下
               </button>
             </>
           ) : null}
@@ -801,7 +788,7 @@ export function EntryItem({
                 <button
                   key={targetKind}
                   type="button"
-                  className="structure-action structure-action--kind"
+                  className={`structure-action structure-action--kind structure-action--kind-${targetKind}`}
                   onClick={() => void onMoveToKind(entry.id, targetKind)}
                   disabled={disabled}
                 >

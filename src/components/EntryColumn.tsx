@@ -10,6 +10,7 @@ import {
   type EntryDeletionResult,
   type EntryKind,
   type EntryInsertPosition,
+  type EntryMoveDirection,
   type EntryUpdate,
   type EntryTreeNode,
   ENTRY_KIND_LABEL,
@@ -49,9 +50,7 @@ type EntryColumnProps = {
   /** 単語 / 文 / 段落ごとのテキストをコピーする。 */
   onCopy: (kind: EntryKind) => Promise<void>;
   isCopying?: boolean;
-  onIndent: (entryId: string) => Promise<unknown>;
-  onOutdent: (entryId: string) => Promise<unknown>;
-  onMove: (entryId: string, direction: "up" | "down") => Promise<unknown>;
+  onMove: (entryId: string, direction: EntryMoveDirection) => Promise<unknown>;
   onMoveToKind: (entryId: string, targetKind: EntryKind) => Promise<unknown>;
 };
 
@@ -86,8 +85,6 @@ export function EntryColumn({
   copyIncludesCompleted,
   onCopy,
   isCopying = false,
-  onIndent,
-  onOutdent,
   onMove,
   onMoveToKind,
 }: EntryColumnProps) {
@@ -308,8 +305,12 @@ export function EntryColumn({
   const runStructureAction = async (
     action: (entryId: string) => Promise<unknown>,
     entryId: string,
+    { keepMenuOpen = false }: { keepMenuOpen?: boolean } = {},
   ) => {
     await action(entryId);
+
+    if (keepMenuOpen) return;
+
     setStructureEntryId(null);
     setMobileActionEntryId(null);
   };
@@ -365,10 +366,12 @@ export function EntryColumn({
       disabled={disabled || isDeletingAll}
       onOpenStructure={openStructureActions}
       onAddChild={selectParent}
-      onIndent={(entryId) => runStructureAction(onIndent, entryId)}
-      onOutdent={(entryId) => runStructureAction(onOutdent, entryId)}
       onMove={(entryId, direction) =>
-        runStructureAction((id) => onMove(id, direction), entryId)
+        runStructureAction(
+          (id) => onMove(id, direction),
+          entryId,
+          { keepMenuOpen: direction === "up" || direction === "down" },
+        )
       }
       onMoveToKind={requestMoveToKind}
       onUpdate={onUpdate}
@@ -487,10 +490,12 @@ export function EntryColumn({
           onClose={() => setMobileActionEntryId(null)}
           onToggleCompleted={toggleCompleted}
           onAddChild={selectParent}
-          onIndent={(entryId) => runStructureAction(onIndent, entryId)}
-          onOutdent={(entryId) => runStructureAction(onOutdent, entryId)}
           onMove={(entryId, direction) =>
-            runStructureAction((id) => onMove(id, direction), entryId)
+            runStructureAction(
+              (id) => onMove(id, direction),
+              entryId,
+              { keepMenuOpen: direction === "up" || direction === "down" },
+            )
           }
           onMoveToKind={requestMoveToKind}
           onDelete={requestDelete}

@@ -18,9 +18,10 @@ type MobileEntryActionSheetProps = {
   onClose: () => void;
   onToggleCompleted: (entryId: string) => Promise<unknown> | unknown;
   onAddChild: (entryId: string) => Promise<unknown> | unknown;
-  onIndent: (entryId: string) => Promise<unknown> | unknown;
-  onOutdent: (entryId: string) => Promise<unknown> | unknown;
-  onMove: (entryId: string, direction: "up" | "down") => Promise<unknown> | unknown;
+  onMove: (
+    entryId: string,
+    direction: "top" | "up" | "down" | "bottom",
+  ) => Promise<unknown> | unknown;
   /** falseを返した場合は、確認を取り消したものとしてシートを閉じない。 */
   onMoveToKind: (
     entryId: string,
@@ -41,8 +42,6 @@ export function MobileEntryActionSheet({
   onClose,
   onToggleCompleted,
   onAddChild,
-  onIndent,
-  onOutdent,
   onMove,
   onMoveToKind,
   onDelete,
@@ -99,19 +98,23 @@ export function MobileEntryActionSheet({
   const moveTargets = ENTRY_KIND_MOVE_TARGETS[kind];
   const close = () => onCloseRef.current();
 
-  const run = async (action: () => Promise<unknown | false> | unknown | false) => {
+  const run = async (
+    action: () => Promise<unknown | false> | unknown | false,
+    { keepOpen = false }: { keepOpen?: boolean } = {},
+  ) => {
     if (disabled || isWorking) return;
 
     setIsWorking(true);
 
-    let shouldClose = true;
+    let shouldClose = !keepOpen;
 
     try {
       const result = await action();
       // 確認をキャンセルした場合は、操作内容を見直せるようシートを残す。
-      shouldClose = result !== false;
+      shouldClose = !keepOpen && result !== false;
     } catch {
       // 保存・削除処理側のエラー表示を妨げない。
+      shouldClose = false;
     } finally {
       if (shouldClose) close();
       setIsWorking(false);
@@ -182,8 +185,20 @@ export function MobileEntryActionSheet({
             <div className="mobile-action-sheet__grid mobile-action-sheet__grid--operations">
               <button
                 type="button"
+                className="mobile-action-sheet__tile mobile-action-sheet__tile--jump"
+                onClick={() => void run(() => onMove(entry.id, "top"))}
+                disabled={disabled || isWorking || !entry.can_move_up}
+              >
+                <span aria-hidden="true">⇡</span>
+                一番上に移動
+              </button>
+
+              <button
+                type="button"
                 className="mobile-action-sheet__tile"
-                onClick={() => void run(() => onMove(entry.id, "up"))}
+                onClick={() =>
+                  void run(() => onMove(entry.id, "up"), { keepOpen: true })
+                }
                 disabled={disabled || isWorking || !entry.can_move_up}
               >
                 <span aria-hidden="true">↑</span>
@@ -193,7 +208,9 @@ export function MobileEntryActionSheet({
               <button
                 type="button"
                 className="mobile-action-sheet__tile"
-                onClick={() => void run(() => onMove(entry.id, "down"))}
+                onClick={() =>
+                  void run(() => onMove(entry.id, "down"), { keepOpen: true })
+                }
                 disabled={disabled || isWorking || !entry.can_move_down}
               >
                 <span aria-hidden="true">↓</span>
@@ -202,22 +219,12 @@ export function MobileEntryActionSheet({
 
               <button
                 type="button"
-                className="mobile-action-sheet__tile"
-                onClick={() => void run(() => onOutdent(entry.id))}
-                disabled={disabled || isWorking || !entry.can_outdent}
+                className="mobile-action-sheet__tile mobile-action-sheet__tile--jump"
+                onClick={() => void run(() => onMove(entry.id, "bottom"))}
+                disabled={disabled || isWorking || !entry.can_move_down}
               >
-                <span aria-hidden="true">←</span>
-                左へ戻す
-              </button>
-
-              <button
-                type="button"
-                className="mobile-action-sheet__tile"
-                onClick={() => void run(() => onIndent(entry.id))}
-                disabled={disabled || isWorking || !entry.can_indent}
-              >
-                <span aria-hidden="true">→</span>
-                右へ下げる
+                <span aria-hidden="true">⇣</span>
+                一番下に移動
               </button>
             </div>
           </>
@@ -231,7 +238,7 @@ export function MobileEntryActionSheet({
                 <button
                   key={targetKind}
                   type="button"
-                  className="mobile-action-sheet__tile mobile-action-sheet__tile--kind"
+                  className={`mobile-action-sheet__tile mobile-action-sheet__tile--kind mobile-action-sheet__tile--kind-${targetKind}`}
                   onClick={() =>
                     void run(() => onMoveToKind(entry.id, targetKind))
                   }
