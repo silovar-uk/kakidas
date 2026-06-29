@@ -11,6 +11,8 @@ create table if not exists public.memos (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
   title text not null,
+  -- メモに付けるタグは0または1つ。候補はメモから集計する。
+  tag text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   deleted_at timestamptz
@@ -54,6 +56,14 @@ alter table public.entries
 -- v0.5.31: 既存プロジェクトにも項目ごとの外部リンクを追加する。
 alter table public.entries
   add column if not exists link_url text not null default '';
+
+-- v0.5.44: メモに0または1つだけタグを付ける。
+alter table public.memos
+  add column if not exists tag text;
+
+create index if not exists memos_user_tag_idx
+  on public.memos (user_id, tag)
+  where deleted_at is null and tag is not null;
 
 create index if not exists entries_memo_kind_parent_order_idx
   on public.entries (memo_id, kind, parent_id, sort_order, created_at)

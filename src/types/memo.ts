@@ -32,6 +32,16 @@ export const ENTRY_SORT_MODES = [
 
 export type EntrySortMode = (typeof ENTRY_SORT_MODES)[number];
 
+/** メモ一覧だけの表示順。本文データの日時や並びは変更しない。 */
+export const MEMO_SORT_MODES = ["updated_desc", "created_desc"] as const;
+
+export type MemoSortMode = (typeof MEMO_SORT_MODES)[number];
+
+export const MEMO_SORT_MODE_LABEL: Record<MemoSortMode, string> = {
+  updated_desc: "更新が新しい順",
+  created_desc: "作成が新しい順",
+};
+
 export const ENTRY_SORT_MODE_LABEL: Record<EntrySortMode, string> = {
   created_asc: "追加順（昇順）",
   created_desc: "追加順（降順）",
@@ -50,22 +60,33 @@ export type MemoRow = {
   id: string;
   user_id: string | null;
   title: string;
+  /** メモに付ける自由入力のタグ。タグは0または1つだけ。 */
+  tag: string | null;
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
+};
+
+/**
+ * v0.5.43以前のIndexedDB・バックアップ・クラウド取り込みには tag がない。
+ * 読み込み時に null へ補完して、旧データをそのまま使えるようにする。
+ */
+export type LegacyMemoRow = Omit<MemoRow, "tag"> & {
+  tag?: string | null;
 };
 
 export type MemoInsert = {
   id?: string;
   user_id?: string | null;
   title: string;
+  tag?: string | null;
   created_at?: string;
   updated_at?: string;
   deleted_at?: string | null;
 };
 
 export type MemoUpdate = Partial<
-  Pick<MemoRow, "title" | "updated_at" | "deleted_at" | "user_id">
+  Pick<MemoRow, "title" | "tag" | "updated_at" | "deleted_at" | "user_id">
 >;
 
 export type EntryRow = {
@@ -285,9 +306,10 @@ export type Database = {
 };
 
 export type BackupPayload = {
-  version: 1 | 2 | 3 | 4 | 5;
+  version: 1 | 2 | 3 | 4 | 5 | 6;
   exported_at: string;
-  memos: MemoRow[];
+  /** v1〜v5は tag を持たないため、読み込み時に null へ補完する。 */
+  memos: LegacyMemoRow[];
   entries: LegacyEntryRow[];
 };
 
@@ -419,6 +441,33 @@ export function normalizeSatisfaction(value: unknown): number {
 
 export function normalizeCompletion(value: unknown): boolean {
   return value === true || value === 1 || value === "1" || value === "true";
+}
+
+/**
+ * タグは1つだけ。前後・連続空白を整え、30文字を超える場合も安全に切る。
+ * 表示用の大文字小文字は保ち、候補の集計だけでキーを小文字化する。
+ */
+export function normalizeMemoTag(value: unknown): string | null {
+  const normalized = typeof value === "string"
+    ? value.replace(/\s+/gu, " ").trim()
+    : "";
+
+  if (!normalized) return null;
+
+  return Array.from(normalized).slice(0, 30).join("") || null;
+}
+
+/** 同じタグ候補として束ねるための比較用キー。 */
+export function getMemoTagKey(value: unknown): string {
+  const tag = normalizeMemoTag(value);
+  return tag ? tag.toLocaleLowerCase("en-US") : "";
+}
+
+export function normalizeMemoRow(memo: LegacyMemoRow): MemoRow {
+  return {
+    ...memo,
+    tag: normalizeMemoTag(memo.tag),
+  };
 }
 
 export function normalizeEntryRow(entry: LegacyEntryRow): EntryRow {

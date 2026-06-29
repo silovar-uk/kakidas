@@ -3,6 +3,7 @@ import {
   type FormEvent,
   type KeyboardEvent,
   forwardRef,
+  useEffect,
   useImperativeHandle,
   useRef,
   useState,
@@ -25,6 +26,19 @@ type EntryComposerProps = {
   onSubmit: (content: string) => Promise<unknown> | unknown;
 };
 
+type ParagraphResizeOptions = {
+  /**
+   * 通常入力中は高さを縮めない。iPhone Safariでキーボード表示中に
+   * ページ位置が少しずつ補正されるのを避けるため、縮小は送信後・blur時だけにする。
+   */
+  allowShrink?: boolean;
+};
+
+function readCssPixel(value: string): number | null {
+  const parsed = Number.parseFloat(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 /**
  * 単語・文はEnterで置く。長文を書く段落はEnterで改行し、
  * Shift + Enter / Ctrl + Enter または明示的な「置く」ボタンで確定する。
@@ -46,8 +60,18 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     const inputRef = useRef<HTMLInputElement | HTMLTextAreaElement | null>(null);
+    const paragraphResizeFrameRef = useRef<number | null>(null);
+    const isComposingRef = useRef(false);
     const isParagraph = kind === "paragraph";
     const canSubmit = value.trim().length > 0 && !disabled && !isSubmitting;
+
+    useEffect(() => {
+      return () => {
+        if (paragraphResizeFrameRef.current !== null) {
+          window.cancelAnimationFrame(paragraphResizeFrameRef.current);
+        }
+      };
+    }, []);
 
     useImperativeHandle(ref, () => ({
       focus: ({ scroll = true, delay = 160 } = {}) => {
@@ -62,13 +86,59 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
       },
     }));
 
-    const adjustTextareaHeight = () => {
+    const adjustParagraphTextareaHeight = ({
+      allowShrink = false,
+    }: ParagraphResizeOptions = {}) => {
       const textarea = inputRef.current;
 
       if (!(textarea instanceof HTMLTextAreaElement)) return;
 
-      textarea.style.height = "0px";
-      textarea.style.height = `${Math.max(textarea.scrollHeight, 132)}px`;
+      const computedStyle = window.getComputedStyle(textarea);
+      const minHeight = readCssPixel(computedStyle.minHeight) ?? 132;
+      const maxHeight =
+        readCssPixel(computedStyle.maxHeight) ?? Number.POSITIVE_INFINITY;
+      const currentHeight = textarea.getBoundingClientRect().height;
+
+      /**
+       * 縮める時だけ自然高を測り直す。入力中にこれを行うと、
+       * `0px → 実寸` の連続レイアウト変化になり、iPhone Safariが
+       * 画面のスクロール位置を少しずつ動かすことがある。
+       */
+      if (allowShrink) {
+        textarea.style.height = "auto";
+      }
+
+      const contentHeight = textarea.scrollHeight;
+      const nextHeight = Math.min(
+        Math.max(contentHeight, minHeight),
+        maxHeight,
+      );
+      const shouldGrow = nextHeight > currentHeight + 0.5;
+      const shouldApplyHeight = allowShrink || shouldGrow;
+
+      if (shouldApplyHeight) {
+        textarea.style.height = `${nextHeight}px`;
+      }
+
+      const nextOverflow = contentHeight > maxHeight + 0.5 ? "auto" : "hidden";
+      if (textarea.style.overflowY !== nextOverflow) {
+        textarea.style.overflowY = nextOverflow;
+      }
+    };
+
+    const scheduleParagraphTextareaResize = (
+      options: ParagraphResizeOptions = {},
+    ) => {
+      if (!isParagraph) return;
+
+      if (paragraphResizeFrameRef.current !== null) {
+        window.cancelAnimationFrame(paragraphResizeFrameRef.current);
+      }
+
+      paragraphResizeFrameRef.current = window.requestAnimationFrame(() => {
+        paragraphResizeFrameRef.current = null;
+        adjustParagraphTextareaHeight(options);
+      });
     };
 
     const submit = async () => {
@@ -81,7 +151,8 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
       try {
         await onSubmit(content);
         setValue("");
-        window.requestAnimationFrame(adjustTextareaHeight);
+        // 送信後は空の基準高へ戻してよい。入力中だけ縮小を抑える。
+        scheduleParagraphTextareaResize({ allowShrink: true });
         window.requestAnimationFrame(() => inputRef.current?.focus());
       } finally {
         setIsSubmitting(false);
@@ -120,9 +191,24 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
     ) => {
       setValue(event.target.value);
 
-      if (isParagraph) {
-        window.requestAnimationFrame(adjustTextareaHeight);
+      /**
+       * IME変換中は高さ測定を保留する。変換の各候補更新でDOMを揺らさず、
+       * 変換確定後に一度だけ伸長を判定する。
+       */
+      if (isParagraph && !isComposingRef.current) {
+        scheduleParagraphTextareaResize();
       }
+    };
+
+    const handleCompositionStart = () => {
+      isComposingRef.current = true;
+      setIsComposing(true);
+    };
+
+    const handleCompositionEnd = () => {
+      isComposingRef.current = false;
+      setIsComposing(false);
+      scheduleParagraphTextareaResize();
     };
 
     const commonProps = {
@@ -133,8 +219,8 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
         : ENTRY_KIND_PLACEHOLDER[kind],
       onChange: handleChange,
       onKeyDown: handleKeyDown,
-      onCompositionStart: () => setIsComposing(true),
-      onCompositionEnd: () => setIsComposing(false),
+      onCompositionStart: handleCompositionStart,
+      onCompositionEnd: handleCompositionEnd,
     };
 
     return (
@@ -172,6 +258,7 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
               rows={4}
               aria-label={`${ENTRY_KIND_LABEL[kind]}を入力`}
               aria-describedby="paragraph-shortcut-hint"
+              onBlur={() => scheduleParagraphTextareaResize({ allowShrink: true })}
             />
           ) : (
             <input

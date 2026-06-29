@@ -2,13 +2,19 @@ import type {
   CloudMemoListItem,
   CloudState,
   EntryRow,
+  LegacyMemoRow,
   MemoCloudSnapshot,
   MemoEntryCounts,
   MemoListItem,
   MemoRow,
   MemoSyncMetaRow,
 } from "../types/memo";
-import { isCloudLinked, nowIso, normalizeEntryRow } from "../types/memo";
+import {
+  isCloudLinked,
+  nowIso,
+  normalizeEntryRow,
+  normalizeMemoRow,
+} from "../types/memo";
 import { supabase } from "../lib/supabase";
 import { memoRepository } from "./memoRepository";
 
@@ -330,7 +336,7 @@ export async function listCloudMemos(userId: string): Promise<CloudMemoListItem[
 
   if (memoError) throw memoError;
 
-  const memos = (memoData ?? []) as MemoRow[];
+  const memos = ((memoData ?? []) as LegacyMemoRow[]).map(normalizeMemoRow);
   const memoIds = memos.map((memo) => memo.id);
 
   if (memoIds.length === 0) return [];
@@ -436,7 +442,7 @@ export async function getCloudMemoSnapshot(
   if (entryError) throw entryError;
 
   return {
-    memo: memoData as MemoRow,
+    memo: normalizeMemoRow(memoData as LegacyMemoRow),
     entries: ((entryData ?? []) as EntryRow[]).map(normalizeEntryRow),
   };
 }

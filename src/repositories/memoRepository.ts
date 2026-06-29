@@ -18,6 +18,7 @@ import {
   type MemoInsert,
   type MemoListItem,
   type MemoRow,
+  type LegacyMemoRow,
   type MemoSyncMetaRow,
   type MemoUpdate,
   type MemoWithEntries,
@@ -26,6 +27,9 @@ import {
   formatDefaultMemoTitle,
   formatDerivedMemoTitle,
   isCloudLinked,
+  getMemoTagKey,
+  normalizeMemoRow,
+  normalizeMemoTag,
   normalizeMemoSyncMeta,
   normalizeEntryRow,
   normalizeLinkUrlForSave,
@@ -50,6 +54,14 @@ export type MemoFromEntryResult = {
   source_entry_id: string;
 };
 
+/** タグ名の一括変更・解除結果。複数メモをまたぐが、処理は1トランザクションで完結する。 */
+export type MemoTagBulkUpdateResult = {
+  previous_tag: string;
+  tag: string | null;
+  updated_count: number;
+  memo_ids: string[];
+};
+
 export interface MemoRepository {
   listMemos(): Promise<MemoListItem[]>;
   getMemo(memoId: string): Promise<MemoWithEntries | null>;
@@ -66,6 +78,10 @@ export interface MemoRepository {
   /** 元の項目を残したまま、同じ区分の新しいメモを作る。 */
   createMemoFromEntry(entryId: string): Promise<MemoFromEntryResult>;
   updateMemo(memoId: string, patch: MemoUpdate): Promise<MemoRow>;
+  /** 同じタグのメモをまとめて別名へ置き換える。 */
+  renameTag(currentTag: string, nextTag: string): Promise<MemoTagBulkUpdateResult>;
+  /** 同じタグのメモから、タグだけをまとめて外す。 */
+  clearTag(currentTag: string): Promise<MemoTagBulkUpdateResult>;
   deleteMemo(memoId: string): Promise<void>;
 
   createEntry(
@@ -126,14 +142,15 @@ class IndexedDbMemoRepository implements MemoRepository {
     const entryStore = transaction.objectStore(STORE_NAMES.entries);
     const syncMetaStore = transaction.objectStore(STORE_NAMES.memoSyncMeta);
 
-    const [memos, entries, syncMetas] = await Promise.all([
-      requestToPromise(memoStore.getAll() as IDBRequest<MemoRow[]>),
+    const [rawMemos, entries, syncMetas] = await Promise.all([
+      requestToPromise(memoStore.getAll() as IDBRequest<LegacyMemoRow[]>),
       requestToPromise(entryStore.getAll() as IDBRequest<LegacyEntryRow[]>),
       requestToPromise(
         syncMetaStore.getAll() as IDBRequest<LegacyMemoSyncMetaRow[]>,
       ),
     ]);
 
+    const memos = rawMemos.map(normalizeMemoRow);
     const countsByMemoId = new Map<string, MemoEntryCounts>();
 
     for (const rawEntry of entries) {
@@ -173,9 +190,10 @@ class IndexedDbMemoRepository implements MemoRepository {
     const entryStore = transaction.objectStore(STORE_NAMES.entries);
     const syncMetaStore = transaction.objectStore(STORE_NAMES.memoSyncMeta);
 
-    const memo = await requestToPromise(
-      memoStore.get(memoId) as IDBRequest<MemoRow | undefined>,
+    const rawMemo = await requestToPromise(
+      memoStore.get(memoId) as IDBRequest<LegacyMemoRow | undefined>,
     );
+    const memo = rawMemo ? normalizeMemoRow(rawMemo) : undefined;
 
     if (!memo || memo.deleted_at !== null) {
       return null;
@@ -203,9 +221,10 @@ class IndexedDbMemoRepository implements MemoRepository {
     const memoStore = transaction.objectStore(STORE_NAMES.memos);
     const entryStore = transaction.objectStore(STORE_NAMES.entries);
 
-    const memo = await requestToPromise(
-      memoStore.get(memoId) as IDBRequest<MemoRow | undefined>,
+    const rawMemo = await requestToPromise(
+      memoStore.get(memoId) as IDBRequest<LegacyMemoRow | undefined>,
     );
+    const memo = rawMemo ? normalizeMemoRow(rawMemo) : undefined;
 
     if (!memo || memo.deleted_at !== null) {
       return null;
@@ -221,7 +240,7 @@ class IndexedDbMemoRepository implements MemoRepository {
     cloudUserId: string,
     mode: CloudImportMode,
   ): Promise<CloudImportResult> {
-    const sourceMemo = snapshot.memo;
+    const sourceMemo = normalizeMemoRow(snapshot.memo);
 
     if (sourceMemo.deleted_at !== null) {
       throw new Error("削除済みのクラウドメモは取り込めません。");
@@ -384,6 +403,7 @@ class IndexedDbMemoRepository implements MemoRepository {
       id: input.id ?? createId(),
       user_id: input.user_id ?? null,
       title: input.title?.trim() || formatDefaultMemoTitle(new Date(timestamp)),
+      tag: normalizeMemoTag(input.tag),
       created_at: timestamp,
       updated_at: input.updated_at ?? timestamp,
       deleted_at: input.deleted_at ?? null,
@@ -431,6 +451,7 @@ class IndexedDbMemoRepository implements MemoRepository {
       id: memoId,
       user_id: sourceEntry.user_id ?? sourceMemo.user_id,
       title: formatDerivedMemoTitle(new Date(timestamp), sourceEntry.content),
+      tag: null,
       created_at: timestamp,
       updated_at: timestamp,
       deleted_at: null,
@@ -475,9 +496,10 @@ class IndexedDbMemoRepository implements MemoRepository {
     const store = transaction.objectStore(STORE_NAMES.memos);
     const syncMetaStore = transaction.objectStore(STORE_NAMES.memoSyncMeta);
 
-    const current = await requestToPromise(
-      store.get(memoId) as IDBRequest<MemoRow | undefined>,
+    const rawCurrent = await requestToPromise(
+      store.get(memoId) as IDBRequest<LegacyMemoRow | undefined>,
     );
+    const current = rawCurrent ? normalizeMemoRow(rawCurrent) : undefined;
 
     if (!current || current.deleted_at !== null) {
       transaction.abort();
@@ -485,14 +507,16 @@ class IndexedDbMemoRepository implements MemoRepository {
     }
 
     const timestamp = patch.updated_at ?? nowIso();
+    const { title: patchTitle, tag: patchTag, ...restPatch } = patch;
 
     const next: MemoRow = {
       ...current,
-      ...patch,
+      ...restPatch,
       title:
-        patch.title === undefined
+        patchTitle === undefined
           ? current.title
-          : patch.title.trim() || formatDefaultMemoTitle(new Date(current.created_at)),
+          : patchTitle.trim() || formatDefaultMemoTitle(new Date(current.created_at)),
+      tag: patchTag === undefined ? current.tag : normalizeMemoTag(patchTag),
       updated_at: timestamp,
     };
 
@@ -502,6 +526,63 @@ class IndexedDbMemoRepository implements MemoRepository {
     await transactionToPromise(transaction);
 
     return next;
+  }
+
+  async renameTag(
+    currentTag: string,
+    nextTag: string,
+  ): Promise<MemoTagBulkUpdateResult> {
+    return this.updateTagAcrossMemos(currentTag, normalizeMemoTag(nextTag));
+  }
+
+  async clearTag(currentTag: string): Promise<MemoTagBulkUpdateResult> {
+    return this.updateTagAcrossMemos(currentTag, null);
+  }
+
+  private async updateTagAcrossMemos(
+    currentTag: string,
+    nextTag: string | null,
+  ): Promise<MemoTagBulkUpdateResult> {
+    const currentKey = getMemoTagKey(currentTag);
+    if (!currentKey) {
+      throw new Error("変更するタグを確認してください。");
+    }
+
+    const db = await getDatabase();
+    const transaction = db.transaction(
+      [STORE_NAMES.memos, STORE_NAMES.memoSyncMeta],
+      "readwrite",
+    );
+    const memoStore = transaction.objectStore(STORE_NAMES.memos);
+    const syncMetaStore = transaction.objectStore(STORE_NAMES.memoSyncMeta);
+    const rawMemos = await requestToPromise(
+      memoStore.getAll() as IDBRequest<LegacyMemoRow[]>,
+    );
+    const timestamp = nowIso();
+    const matchingMemos = rawMemos
+      .map(normalizeMemoRow)
+      .filter(
+        (memo) =>
+          memo.deleted_at === null && getMemoTagKey(memo.tag) === currentKey,
+      );
+
+    for (const memo of matchingMemos) {
+      memoStore.put({
+        ...memo,
+        tag: nextTag,
+        updated_at: timestamp,
+      } satisfies MemoRow);
+      await this.markMemoChangedWithinTransaction(syncMetaStore, memo.id, timestamp);
+    }
+
+    await transactionToPromise(transaction);
+
+    return {
+      previous_tag: normalizeMemoTag(currentTag) ?? currentTag,
+      tag: nextTag,
+      updated_count: matchingMemos.length,
+      memo_ids: matchingMemos.map((memo) => memo.id),
+    };
   }
 
   async deleteMemo(memoId: string): Promise<void> {
@@ -1174,7 +1255,7 @@ class IndexedDbMemoRepository implements MemoRepository {
     const entryStore = transaction.objectStore(STORE_NAMES.entries);
 
     const memos = await requestToPromise(
-      memoStore.getAll() as IDBRequest<MemoRow[]>,
+      memoStore.getAll() as IDBRequest<LegacyMemoRow[]>,
     );
 
     const entries = await requestToPromise(
@@ -1182,9 +1263,9 @@ class IndexedDbMemoRepository implements MemoRepository {
     );
 
     return {
-      version: 5,
+      version: 6,
       exported_at: nowIso(),
-      memos,
+      memos: memos.map(normalizeMemoRow),
       entries: entries.map(normalizeEntryRow),
     };
   }
@@ -1195,7 +1276,8 @@ class IndexedDbMemoRepository implements MemoRepository {
         payload.version !== 2 &&
         payload.version !== 3 &&
         payload.version !== 4 &&
-        payload.version !== 5) ||
+        payload.version !== 5 &&
+        payload.version !== 6) ||
       !Array.isArray(payload.memos) ||
       !Array.isArray(payload.entries)
     ) {
@@ -1203,7 +1285,7 @@ class IndexedDbMemoRepository implements MemoRepository {
     }
 
     for (const memo of payload.memos) {
-      await this.upsertIfNewer(STORE_NAMES.memos, memo);
+      await this.upsertIfNewer(STORE_NAMES.memos, normalizeMemoRow(memo));
     }
 
     for (const rawEntry of payload.entries) {

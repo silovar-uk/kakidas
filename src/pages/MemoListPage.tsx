@@ -8,6 +8,8 @@ import {
   writeCopyIncludeCompleted,
 } from "../lib/copyPreferences";
 import { formatMemoText } from "../lib/memoText";
+import { readMemoSortMode, writeMemoSortMode } from "../lib/memoListPreferences";
+import { getMemoTagSummaries } from "../lib/memoTags";
 import { CloudAccountDialog } from "../components/CloudAccountDialog";
 import { CloudImportDialog } from "../components/CloudImportDialog";
 import {
@@ -30,10 +32,14 @@ import {
   type EntryKind,
   type MemoCloudSnapshot,
   type MemoListItem,
+  type MemoSortMode,
   type MemoWithEntries,
   ENTRY_KIND_LABEL,
   ENTRY_KINDS,
+  MEMO_SORT_MODE_LABEL,
+  MEMO_SORT_MODES,
   formatUpdatedAt,
+  getMemoTagKey,
 } from "../types/memo";
 
 function downloadFile(filename: string, content: string, type: string) {
@@ -151,6 +157,12 @@ export function MemoListPage() {
   const [includeCompletedInCopy, setIncludeCompletedInCopy] = useState(
     readCopyIncludeCompleted,
   );
+  /** 一覧の並び順は端末ごとの表示設定。メモ本体の日時は変えない。 */
+  const [memoSortMode, setMemoSortMode] = useState<MemoSortMode>(
+    readMemoSortMode,
+  );
+  /** 空文字は「すべて」。タグは比較用キーで保持し、表記ゆれをまとめる。 */
+  const [selectedTagKey, setSelectedTagKey] = useState("");
   // 一覧表示の間に本文を温めておく。スマホでも、コピーのタップ操作中に
   // Clipboard API を呼べるため、Safariの「The request is not allowed」を避けやすい。
   const memoCopyCacheRef = useRef<Map<string, MemoWithEntries>>(new Map());
@@ -182,6 +194,10 @@ export function MemoListPage() {
   useEffect(() => {
     writeCopyIncludeCompleted(includeCompletedInCopy);
   }, [includeCompletedInCopy]);
+
+  useEffect(() => {
+    writeMemoSortMode(memoSortMode);
+  }, [memoSortMode]);
 
   const cacheMemoDetail = (memoId: string, detail: MemoWithEntries) => {
     memoCopyCacheRef.current.set(memoId, detail);
@@ -269,6 +285,30 @@ export function MemoListPage() {
       cancelled = true;
     };
   }, [refresh, user]);
+
+  const tagSummaries = useMemo(() => getMemoTagSummaries(memos), [memos]);
+
+  useEffect(() => {
+    if (
+      selectedTagKey &&
+      !tagSummaries.some((summary) => summary.key === selectedTagKey)
+    ) {
+      setSelectedTagKey("");
+    }
+  }, [selectedTagKey, tagSummaries]);
+
+  const visibleMemos = useMemo(() => {
+    const filtered = selectedTagKey
+      ? memos.filter((memo) => getMemoTagKey(memo.tag) === selectedTagKey)
+      : memos;
+
+    return [...filtered].sort((left, right) => {
+      const primary = memoSortMode === "created_desc"
+        ? right.created_at.localeCompare(left.created_at)
+        : right.updated_at.localeCompare(left.updated_at);
+      return primary || right.updated_at.localeCompare(left.updated_at);
+    });
+  }, [memoSortMode, memos, selectedTagKey]);
 
   const selectedTargets = useMemo<CloudUploadTarget[]>(
     () =>
@@ -657,7 +697,48 @@ export function MemoListPage() {
         <section className="memo-list-toolbar" aria-label="メモ操作">
           <div>
             <h2>メモ</h2>
-            <span>{memos.length}件</span>
+            <span>
+              {selectedTagKey ? `${visibleMemos.length}/${memos.length}件` : `${memos.length}件`}
+            </span>
+          </div>
+
+          <div className="memo-list-toolbar__organize">
+            <label className="memo-list-select">
+              <span>並び順</span>
+              <select
+                value={memoSortMode}
+                onChange={(event) =>
+                  setMemoSortMode(event.target.value as MemoSortMode)
+                }
+                aria-label="メモの並び順"
+              >
+                {MEMO_SORT_MODES.map((mode) => (
+                  <option key={mode} value={mode}>
+                    {MEMO_SORT_MODE_LABEL[mode]}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="memo-list-select">
+              <span>タグ</span>
+              <select
+                value={selectedTagKey}
+                onChange={(event) => setSelectedTagKey(event.target.value)}
+                aria-label="タグで絞り込む"
+              >
+                <option value="">すべて</option>
+                {tagSummaries.map((summary) => (
+                  <option key={summary.key} value={summary.key}>
+                    {summary.label}（{summary.count}）
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <Link to="/tags" className="tag-manager-link">
+              タグ管理
+            </Link>
           </div>
 
           <div className="memo-list-toolbar__actions">
@@ -738,9 +819,20 @@ export function MemoListPage() {
             ＋ 新しいメモ
           </button>
         </section>
+      ) : visibleMemos.length === 0 ? (
+        <section className="empty-state empty-state--filtered">
+          <p>このタグのメモはありません。</p>
+          <button
+            type="button"
+            className="secondary-button"
+            onClick={() => setSelectedTagKey("")}
+          >
+            すべてのメモを見る
+          </button>
+        </section>
       ) : (
         <ul className={`memo-list ${isUploadMode ? "memo-list--selecting" : ""}`}>
-          {memos.map((memo) => {
+          {visibleMemos.map((memo) => {
             const selected = selectedMemoIds.has(memo.id);
             const cloudAction = getCloudAction(memo.sync_meta.cloud_state);
 
@@ -761,6 +853,7 @@ export function MemoListPage() {
                     </span>
                     <span className="memo-card__details">
                       <strong>{memo.title}</strong>
+                      {memo.tag ? <span className="memo-card__tag">#{memo.tag}</span> : null}
                       <span>
                         単語 {memo.entry_counts.word}件 ／ 文 {memo.entry_counts.sentence}件 ／ 段落 {memo.entry_counts.paragraph}件
                       </span>
@@ -769,6 +862,7 @@ export function MemoListPage() {
                 ) : (
                   <Link to={`/memos/${memo.id}`} className="memo-card__link">
                     <strong>{memo.title}</strong>
+                    {memo.tag ? <span className="memo-card__tag">#{memo.tag}</span> : null}
                     {(memoPreviews.get(memo.id) ?? []).length > 0 ? (
                       <span
                         className="memo-card__preview"

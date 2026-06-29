@@ -17,9 +17,12 @@ import {
 } from "../components/CloudUploadDialog";
 import { CloudStatusBadge } from "../components/CloudStatusBadge";
 import { EntryColumn } from "../components/EntryColumn";
+import { MemoTagControl } from "../components/MemoTagControl";
 import { NoticeToast } from "../components/NoticeToast";
 import { useMemoDetail } from "../hooks/useMemos";
+import { getMemoTagSummaries, type MemoTagSummary } from "../lib/memoTags";
 import { uploadMemoToCloud } from "../repositories/cloudMemoRepository";
+import { memoRepository } from "../repositories/memoRepository";
 import {
   type EntryKind,
   type EntrySortMode,
@@ -136,6 +139,7 @@ export function MemoEditorPage() {
     error,
     reload,
     updateTitle,
+    updateMemo,
     createEntry,
     updateEntry,
     deleteEntry,
@@ -149,6 +153,7 @@ export function MemoEditorPage() {
   } = useMemoDetail(memoId);
 
   const [title, setTitle] = useState("");
+  const [tagSuggestions, setTagSuggestions] = useState<MemoTagSummary[]>([]);
   const [activeKind, setActiveKind] = useState<EntryKind>(
     () => getNavigationKind(initialNavigationState),
   );
@@ -267,6 +272,24 @@ export function MemoEditorPage() {
     }
   }, [memo?.id, memo?.title]);
 
+  // タグ候補は「実際に使ったことがある言葉」だけから作る。AI推測や別テーブルは使わない。
+  useEffect(() => {
+    let cancelled = false;
+
+    void memoRepository
+      .listMemos()
+      .then((memos) => {
+        if (!cancelled) setTagSuggestions(getMemoTagSummaries(memos));
+      })
+      .catch(() => {
+        // タグ候補が読めなくても、自由入力でタグを付けられる。
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [memo?.id, memo?.tag]);
+
   // Chromeなどのブラウザタブでは、今開いているメモをすぐ見分けられるようにする。
   // 編集中のタイトルもそのまま反映し、空欄に戻した時だけ既定タイトルを使う。
   useEffect(() => {
@@ -327,6 +350,13 @@ export function MemoEditorPage() {
 
     return () => window.clearTimeout(timer);
   }, [memo, saveTitle, title]);
+
+  const handleSaveTag = async (tag: string | null): Promise<void> => {
+    if (!memo) return;
+
+    await updateMemo({ tag });
+    setNotice(tag ? `タグ「${tag}」を付けました。` : "タグを外しました。");
+  };
 
   const handleDownload = () => {
     if (!memo) return;
@@ -636,6 +666,13 @@ export function MemoEditorPage() {
           onChange={(event) => setTitle(event.target.value)}
           onBlur={() => void saveTitle(title)}
           aria-label="メモのタイトル"
+        />
+
+        <MemoTagControl
+          tag={memo.tag}
+          suggestions={tagSuggestions}
+          disabled={isSaving}
+          onSave={handleSaveTag}
         />
 
         <div className="editor-title-row__actions">

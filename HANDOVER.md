@@ -1,6 +1,6 @@
 # kakidas 引き継ぎ書
 
-- **基準バージョン**：v0.5.43
+- **基準バージョン**：v0.5.45
 - **最終確認対象**：`kakidas_tree.txt` に記録された現行構造
 - **用途**：次の実装担当者・運用担当者が、設計意図と壊してはいけない境界を理解した上で改修できるようにする。
 
@@ -26,9 +26,9 @@ kakidasは、考えを「単語」「文」「段落」の粒度で、整える�
    - 番号、日時、並び順、完了の非表示などは、主に端末ごとの表示設定である。
 
 3. **データ本体・派生表示・個人設定を混ぜない**
-   - 本体データ：メモ本文、項目、親子関係、備考、リンク、満足度、完了状態。
+   - 本体データ：メモタイトル、単一タグ、項目、親子関係、備考、リンク、満足度、完了状態。
    - 派生表示：振り番、階層深度、件数、表示上の並び。
-   - 個人設定：日時表示、番号表示、本文だけ表示、完了非表示、追加位置、コピー設定、並び順。
+   - 個人設定：日時表示、番号表示、本文だけ表示、完了非表示、追加位置、コピー設定、項目の並び順、メモ一覧の並び順。
    - 派生表示や個人設定を、安易にIndexedDBやSupabaseのカラムへ追加しない。
 
 ### 粒度を移す時の扱い
@@ -93,26 +93,84 @@ VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_YOUR_KEY
 
 ## 3. 現行フォルダ構成と責務
 
-### 完全ツリー（v0.5.43・引き継ぎ資料同梱版）
+### 完全ツリー（v0.5.45・引き継ぎ資料同梱版）
 
 以下が、この引き継ぎ書をルートへ置いた配布版の実ファイル構成である。`HANDOVER.md` 以外は、受領した最新の `kakidas_tree.txt` を踏襲している。
 
 ```text
 kakidas/
+├── public/
+│   ├── android-chrome-192x192.png
+│   ├── android-chrome-512x512.png
+│   ├── apple-touch-icon.png
+│   ├── browserconfig.xml
+│   ├── favicon-16x16.png
+│   ├── favicon-32x32.png
+│   ├── favicon-48x48.png
+│   ├── favicon-head.html
+│   ├── favicon.ico
+│   ├── mstile-150x150.png
+│   ├── README.md
+│   └── site.webmanifest
+├── src/
+│   ├── auth/
+│   │   └── AuthProvider.tsx
+│   ├── components/
+│   │   ├── CloudAccountDialog.tsx
+│   │   ├── CloudImportDialog.tsx
+│   │   ├── CloudStatusBadge.tsx
+│   │   ├── CloudUploadDialog.tsx
+│   │   ├── EntryColumn.tsx
+│   │   ├── EntryComposer.tsx
+│   │   ├── EntryItem.tsx
+│   │   ├── EntrySatisfactionControl.tsx
+│   │   ├── MemoDeleteDialog.tsx
+│   │   ├── MemoTagControl.tsx
+│   │   ├── MobileEntryActionSheet.tsx
+│   │   ├── NoticeToast.tsx
+│   │   └── UndoToast.tsx
+│   ├── hooks/
+│   │   ├── useCloudMemos.ts
+│   │   └── useMemos.ts
+│   ├── lib/
+│   │   ├── bodyScrollLock.ts
+│   │   ├── clipboard.ts
+│   │   ├── copyPreferences.ts
+│   │   ├── db.ts
+│   │   ├── formatDate.ts
+│   │   ├── memoListPreferences.ts
+│   │   ├── memoTags.ts
+│   │   ├── memoText.ts
+│   │   └── supabase.ts
+│   ├── pages/
+│   │   ├── MemoEditorPage.tsx
+│   │   ├── MemoListPage.tsx
+│   │   └── TagManagerPage.tsx
+│   ├── repositories/
+│   │   ├── cloudMemoRepository.ts
+│   │   └── memoRepository.ts
+│   ├── types/
+│   │   └── memo.ts
+│   ├── App.tsx
+│   ├── main.tsx
+│   ├── styles.css
+│   └── vite-env.d.ts
+├── supabase/
+│   ├── MIGRATE_v0.5.11.sql
+│   ├── MIGRATE_v0.5.13.sql
+│   ├── MIGRATE_v0.5.14.sql
+│   ├── MIGRATE_v0.5.31.sql
+│   ├── MIGRATE_v0.5.44.sql
+│   └── schema.sql
 ├── .env.example
 ├── .gitignore
 ├── .npmrc
-├── HANDOVER.md                         # この引き継ぎ書
+├── HANDOVER.md
 ├── index.html
 ├── kakidas_tree.txt
 ├── package-lock.json
 ├── package.json
 ├── README.md
-├── RELEASE_NOTES_v0.5.5.md
-├── RELEASE_NOTES_v0.5.6.md
-├── RELEASE_NOTES_v0.5.7.md
-├── RELEASE_NOTES_v0.5.8.md
-├── RELEASE_NOTES_v0.5.9.md
 ├── RELEASE_NOTES_v0.5.10.md
 ├── RELEASE_NOTES_v0.5.11.md
 ├── RELEASE_NOTES_v0.5.12.md
@@ -147,69 +205,18 @@ kakidas/
 ├── RELEASE_NOTES_v0.5.41.md
 ├── RELEASE_NOTES_v0.5.42.md
 ├── RELEASE_NOTES_v0.5.43.md
+├── RELEASE_NOTES_v0.5.44.md
+├── RELEASE_NOTES_v0.5.45.md
+├── RELEASE_NOTES_v0.5.5.md
+├── RELEASE_NOTES_v0.5.6.md
+├── RELEASE_NOTES_v0.5.7.md
+├── RELEASE_NOTES_v0.5.8.md
+├── RELEASE_NOTES_v0.5.9.md
 ├── tsconfig.app.json
 ├── tsconfig.json
 ├── tsconfig.node.json
 ├── vercel.json
-├── vite.config.ts
-├── public/
-│   ├── android-chrome-192x192.png
-│   ├── android-chrome-512x512.png
-│   ├── apple-touch-icon.png
-│   ├── browserconfig.xml
-│   ├── favicon-16x16.png
-│   ├── favicon-32x32.png
-│   ├── favicon-48x48.png
-│   ├── favicon-head.html
-│   ├── favicon.ico
-│   ├── mstile-150x150.png
-│   ├── README.md
-│   └── site.webmanifest
-├── src/
-│   ├── App.tsx
-│   ├── main.tsx
-│   ├── styles.css
-│   ├── vite-env.d.ts
-│   ├── auth/
-│   │   └── AuthProvider.tsx
-│   ├── components/
-│   │   ├── CloudAccountDialog.tsx
-│   │   ├── CloudImportDialog.tsx
-│   │   ├── CloudStatusBadge.tsx
-│   │   ├── CloudUploadDialog.tsx
-│   │   ├── EntryColumn.tsx
-│   │   ├── EntryComposer.tsx
-│   │   ├── EntryItem.tsx
-│   │   ├── EntrySatisfactionControl.tsx
-│   │   ├── MemoDeleteDialog.tsx
-│   │   ├── NoticeToast.tsx
-│   │   ├── MobileEntryActionSheet.tsx
-│   │   └── UndoToast.tsx
-│   ├── hooks/
-│   │   ├── useCloudMemos.ts
-│   │   └── useMemos.ts
-│   ├── lib/
-│   │   ├── bodyScrollLock.ts
-│   │   ├── clipboard.ts
-│   │   ├── copyPreferences.ts
-│   │   ├── db.ts
-│   │   ├── formatDate.ts
-│   │   ├── memoText.ts
-│   │   └── supabase.ts
-│   ├── pages/
-│   │   ├── MemoEditorPage.tsx
-│   │   └── MemoListPage.tsx
-│   ├── repositories/
-│   │   ├── cloudMemoRepository.ts
-│   │   └── memoRepository.ts
-│   └── types/
-│       └── memo.ts
-└── supabase/
-    ├── MIGRATE_v0.5.11.sql
-    ├── MIGRATE_v0.5.13.sql
-    ├── MIGRATE_v0.5.14.sql
-    ├── MIGRATE_v0.5.31.sql
-    └── schema.sql
+└── vite.config.ts
 ```
 
 ```text
@@ -254,14 +261,14 @@ RELEASE_NOTES_*.md       各バージョンの変更履歴
 ### まず読む順番
 
 1. `README.md`：アプリの目的とローカルファースト方針
-2. `RELEASE_NOTES_v0.5.34.md`〜`v0.5.43.md`：直近の事故対応と意図
+2. `RELEASE_NOTES_v0.5.34.md`〜`v0.5.45.md`：直近の事故対応と意図
 3. `src/types/memo.ts`：データ構造と正規化ルール
 4. `src/repositories/memoRepository.ts`：ローカル保存の実体
 5. `src/repositories/cloudMemoRepository.ts`：クラウド同期の境界
 6. `src/pages/MemoListPage.tsx` / `MemoEditorPage.tsx`：ユーザー操作の入口
 7. `src/lib/db.ts` / `bodyScrollLock.ts`：Safari対策
 
-> `README.md` はv0.5.32までの説明が中心で、v0.5.33〜v0.5.43の内容を十分に反映していない。最新の挙動は、該当するリリースノートと実装を正とする。
+> `README.md` はv0.5.32までの説明が中心で、v0.5.33〜v0.5.45の内容を十分に反映していない。最新の挙動は、該当するリリースノートと実装を正とする。
 
 ---
 
@@ -402,6 +409,7 @@ RELEASE_NOTES_*.md       各バージョンの変更履歴
 - タイトルに合わせてブラウザタブ名を更新
 - 単語・文・段落の追加・編集・削除
 - 段落はEnterで改行。Shift＋Enter／Ctrl＋Enter、または `置く` ボタンで確定する。単語・文はEnterで確定する。
+- **段落入力のモバイル安定化（v0.5.45）**：入力中の自動高さ調整は、必要な時だけ伸ばし、文字削除では縮めない。縮小は送信後かblur時だけにする。IME変換中は測定を保留し、最大高を超えた長文は入力欄内でスクロールする。高さ計算で `height: 0px` を挟む実装へ戻さない。
 - Word / Sentenceの親子関係、子の追加・上下／一番上／一番下への並べ替え
 - 満足度、完了、備考、リンク
 - 項目・区分・メモ全体のコピー、`.txt`出力
@@ -456,6 +464,17 @@ v0.5.34以降、複数タブの保存領域更新で詰まりにくくするた�
 
 これは **DB接続・スキーマ更新の安定化** である。同じメモを複数タブで同時編集した時の、内容競合や最後に保存した内容の上書きまでは解決していない。
 
+
+## 8.5 v0.5.44 タグ・一覧整理
+
+- タグは`memos.tag`に持つ**0または1つ**の自由入力文字列。項目へタグを付けたり、タグ専用テーブルを作ったりしない。
+- `normalizeMemoTag()`で前後・連続空白を整え、空文字は`null`、最大30文字へ正規化する。`getMemoTagKey()`は候補集計・一括変更用の比較キーで、英字の大文字小文字だけを同一視する。
+- 旧IndexedDB・旧クラウドデータ・v1〜v5バックアップは`normalizeMemoRow()`を通し、タグなしとして安全に読む。バックアップの現行形式はv6。
+- 編集画面の`MemoTagControl`は自由入力を主役にし、候補はメモに実際に付いているタグのみ。AIによる推測タグは行わない。
+- 一覧の`更新が新しい順`／`作成が新しい順`は`localStorage`の`kakidas.memo-list-sort`だけへ保存する。`created_at`／`updated_at`は並び替えのために書き換えない。
+- `/tags`の`TagManagerPage`は、実在タグの件数表示・一括名称変更・一括解除を扱う。名称変更や解除は対象メモを同一IndexedDBトランザクションで更新し、クラウド連携済みなら通常のローカル更新として同期状態を変える。
+- クラウドを使う既存環境では、`MIGRATE_v0.5.44.sql`が必要。`memos.tag`列がない状態でタグ付きメモを送るとSupabaseのupsertは失敗する。
+
 ---
 
 ## 8. アイコン・ブラウザタブ名
@@ -484,7 +503,7 @@ iPhoneのホーム画面アイコンはSafari側のキャッシュが強い。�
 - 一覧画面：`kakidas`
 - 編集画面：開いているメモのタイトル
 - タイトルを編集中も即時反映
-- 空欄の場合：既定タイトル `M/D HH:MM 「」`
+- 空欄の場合：既定タイトル `M/D`
 
 この処理は`MemoListPage.tsx` と `MemoEditorPage.tsx` に分かれている。ルーティング変更や画面追加時に、古いタイトルが残らないか確認する。
 
@@ -506,6 +525,7 @@ iPhoneのホーム画面アイコンはSafari側のキャッシュが強い。�
 | `MIGRATE_v0.5.13.sql` | `entries.satisfaction` |
 | `MIGRATE_v0.5.14.sql` | `entries.is_completed` |
 | `MIGRATE_v0.5.31.sql` | `entries.link_url` |
+| `MIGRATE_v0.5.44.sql` | `memos.tag` とタグ検索用インデックス |
 
 現行環境では、これらは実行済み前提。追加機能でクラウドに保存するカラムを増やす時は、必ず以下を同時に確認する。
 
@@ -598,7 +618,7 @@ iPhoneのホーム画面アイコンはSafari側のキャッシュが強い。�
 ## 13. 次の担当者への短い実装依頼テンプレート
 
 ```text
-kakidas v0.5.41を基準に修正する。
+kakidas v0.5.44を基準に修正する。
 
 目的：
 - （ユーザーにとって何を楽にする変更か）

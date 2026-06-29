@@ -17,6 +17,7 @@ import {
 import {
   memoRepository,
   type MemoFromEntryResult,
+  type MemoTagBulkUpdateResult,
 } from "../repositories/memoRepository";
 
 type AsyncStatus = {
@@ -81,6 +82,39 @@ export function useMemos() {
     return memo;
   }, []);
 
+  const updateMemo = useCallback(
+    async (memoId: string, patch: MemoUpdate): Promise<MemoRow> => {
+      const updated = await memoRepository.updateMemo(memoId, patch);
+      setMemos((current) =>
+        current.map((memo) =>
+          memo.id === memoId
+            ? { ...memo, ...updated }
+            : memo,
+        ),
+      );
+      return updated;
+    },
+    [],
+  );
+
+  const renameTag = useCallback(
+    async (currentTag: string, nextTag: string): Promise<MemoTagBulkUpdateResult> => {
+      const result = await memoRepository.renameTag(currentTag, nextTag);
+      await refresh();
+      return result;
+    },
+    [refresh],
+  );
+
+  const clearTag = useCallback(
+    async (currentTag: string): Promise<MemoTagBulkUpdateResult> => {
+      const result = await memoRepository.clearTag(currentTag);
+      await refresh();
+      return result;
+    },
+    [refresh],
+  );
+
   const deleteMemo = useCallback(async (memoId: string): Promise<void> => {
     await memoRepository.deleteMemo(memoId);
     setMemos((current) => current.filter((memo) => memo.id !== memoId));
@@ -104,6 +138,9 @@ export function useMemos() {
     error: status.error,
     refresh,
     createMemo,
+    updateMemo,
+    renameTag,
+    clearTag,
     deleteMemo,
     exportBackup,
     importBackup,
@@ -346,6 +383,7 @@ export function useMemoDetail(memoId: string | undefined) {
     error: status.error,
     reload,
     updateTitle,
+    updateMemo: updateTitle,
     createEntry,
     createMemoFromEntry,
     updateEntry,
