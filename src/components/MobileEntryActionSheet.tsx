@@ -27,12 +27,16 @@ type MobileEntryActionSheetProps = {
     entryId: string,
     targetKind: EntryKind,
   ) => Promise<unknown | false> | unknown | false;
+  /** 「…」から本文をそのままコピーする。 */
+  onCopy: (entryId: string) => Promise<unknown | false> | unknown | false;
+  /** 元の項目を残したまま、新しいメモの起点として複製する。 */
+  onCreateMemoFromEntry: (entryId: string) => Promise<unknown | false> | unknown | false;
   onDelete: (entryId: string) => Promise<unknown> | unknown;
 };
 
 /**
- * 単語 / 文のモバイル操作シート。
- * 個別コピーは置かず、完了・階層操作・削除だけへ絞る。
+ * 単語 / 文 / 段落のモバイル操作シート。
+ * 「…」から本文を個別コピーできる。コピー後はシートを閉じる。
  */
 export function MobileEntryActionSheet({
   entry,
@@ -44,6 +48,8 @@ export function MobileEntryActionSheet({
   onAddChild,
   onMove,
   onMoveToKind,
+  onCopy,
+  onCreateMemoFromEntry,
   onDelete,
 }: MobileEntryActionSheetProps) {
   const [isWorking, setIsWorking] = useState(false);
@@ -168,6 +174,26 @@ export function MobileEntryActionSheet({
         >
           <span aria-hidden="true">✓</span>
           {entry.is_completed ? "未完了に戻す" : "完了にする"}
+        </button>
+
+        <button
+          type="button"
+          className="mobile-action-sheet__copy"
+          onClick={() => void run(() => onCopy(entry.id))}
+          disabled={disabled || isWorking}
+        >
+          <span aria-hidden="true">⧉</span>
+          コピー
+        </button>
+
+        <button
+          type="button"
+          className="mobile-action-sheet__derive"
+          onClick={() => void run(() => onCreateMemoFromEntry(entry.id))}
+          disabled={disabled || isWorking}
+        >
+          <span aria-hidden="true">↗</span>
+          新しいメモにする
         </button>
 
         {isHierarchical ? (

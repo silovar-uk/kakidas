@@ -24,6 +24,7 @@ import {
   createId,
   createLocalSyncMeta,
   formatDefaultMemoTitle,
+  formatDerivedMemoTitle,
   isCloudLinked,
   normalizeMemoSyncMeta,
   normalizeEntryRow,
@@ -43,6 +44,12 @@ import {
  * UIはこのinterfaceだけを見る。
  * IndexedDBの読み書きはここへ閉じ込め、将来の同期実装はCloudRepository側に足す。
  */
+export type MemoFromEntryResult = {
+  memo: MemoRow;
+  entry: EntryRow;
+  source_entry_id: string;
+};
+
 export interface MemoRepository {
   listMemos(): Promise<MemoListItem[]>;
   getMemo(memoId: string): Promise<MemoWithEntries | null>;
@@ -56,6 +63,8 @@ export interface MemoRepository {
   ): Promise<CloudImportResult>;
 
   createMemo(input?: Partial<MemoInsert>): Promise<MemoRow>;
+  /** 元の項目を残したまま、同じ区分の新しいメモを作る。 */
+  createMemoFromEntry(entryId: string): Promise<MemoFromEntryResult>;
   updateMemo(memoId: string, patch: MemoUpdate): Promise<MemoRow>;
   deleteMemo(memoId: string): Promise<void>;
 
@@ -75,7 +84,7 @@ export interface MemoRepository {
 
   /** 同じ親・同じ完了状態の中で順序を入れ替える。 */
   moveEntry(entryId: string, direction: EntryMoveDirection): Promise<void>;
-  /** 単語→文 / 段落、文→段落へ移す。移動先ではルート項目になる。 */
+  /** 別の区分へ移す。移動先ではルート項目になる。 */
   moveEntryToKind(entryId: string, targetKind: EntryKind): Promise<void>;
 
   getSyncMeta(memoId: string): Promise<MemoSyncMetaRow>;
@@ -389,6 +398,71 @@ class IndexedDbMemoRepository implements MemoRepository {
     await transactionToPromise(transaction);
 
     return memo;
+  }
+
+  /**
+   * 項目を「新しいメモにする」。元の項目は変更せず、本文・備考・リンク・満足度を
+   * 新メモのルート項目へ複製する。メモと項目は同じトランザクションで作るため、
+   * 途中で失敗して片方だけ残ることはない。
+   */
+  async createMemoFromEntry(entryId: string): Promise<MemoFromEntryResult> {
+    const db = await getDatabase();
+    const transaction = db.transaction(
+      [STORE_NAMES.memos, STORE_NAMES.entries, STORE_NAMES.memoSyncMeta],
+      "readwrite",
+    );
+
+    const memoStore = transaction.objectStore(STORE_NAMES.memos);
+    const entryStore = transaction.objectStore(STORE_NAMES.entries);
+    const syncMetaStore = transaction.objectStore(STORE_NAMES.memoSyncMeta);
+    const sourceEntry = await this.requireActiveEntry(entryStore, entryId, transaction);
+    const sourceMemo = await requestToPromise(
+      memoStore.get(sourceEntry.memo_id) as IDBRequest<MemoRow | undefined>,
+    );
+
+    if (!sourceMemo || sourceMemo.deleted_at !== null) {
+      transaction.abort();
+      throw new Error("元のメモが見つかりません。");
+    }
+
+    const timestamp = nowIso();
+    const memoId = createId();
+    const memo: MemoRow = {
+      id: memoId,
+      user_id: sourceEntry.user_id ?? sourceMemo.user_id,
+      title: formatDerivedMemoTitle(new Date(timestamp), sourceEntry.content),
+      created_at: timestamp,
+      updated_at: timestamp,
+      deleted_at: null,
+    };
+    const entry: EntryRow = {
+      id: createId(),
+      memo_id: memoId,
+      user_id: memo.user_id,
+      kind: sourceEntry.kind,
+      parent_id: null,
+      content: sourceEntry.content,
+      note: sourceEntry.note,
+      link_url: sourceEntry.link_url,
+      satisfaction: sourceEntry.satisfaction,
+      // 別メモで続きを書くための起点なので、完了済みでも新メモ側は未完了に戻す。
+      is_completed: false,
+      sort_order: 0,
+      created_at: timestamp,
+      updated_at: timestamp,
+      deleted_at: null,
+    };
+
+    memoStore.put(memo);
+    entryStore.put(entry);
+    syncMetaStore.put({
+      ...createLocalSyncMeta(memoId),
+      updated_at: timestamp,
+    } satisfies MemoSyncMetaRow);
+
+    await transactionToPromise(transaction);
+
+    return { memo, entry, source_entry_id: sourceEntry.id };
   }
 
   async updateMemo(memoId: string, patch: MemoUpdate): Promise<MemoRow> {
@@ -991,7 +1065,7 @@ class IndexedDbMemoRepository implements MemoRepository {
   }
 
   /**
-   * 内容をより長い粒度へ移す。
+   * 内容を別の粒度へ移す。
    * 種別をまたぐ親子関係は持たないため、移動する項目は移動先のルートへ置く。
    * 下に項目がある場合は、元の種別に残し、元の親と同じ階層へ繰り上げる。
    * UI側では事前に確認を出すため、ここではデータ整合性だけを守る。

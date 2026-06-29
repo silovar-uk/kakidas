@@ -306,14 +306,14 @@ export const ENTRY_KIND_PLACEHOLDER: Record<EntryKind, string> = {
 };
 
 /**
- * 内容をより長い粒度へ移すための遷移先。
+ * 内容を別の粒度へ移すための遷移先。
  * kind自体は既存のDB値をそのまま使い、表示上だけ日本語ラベルを使う。
- * 段落から短い粒度へ戻す操作は、意図しない分割を避けるため用意しない。
+ * 移動は内容を分割せず、移動先のルート項目として置く。
  */
 export const ENTRY_KIND_MOVE_TARGETS: Record<EntryKind, readonly EntryKind[]> = {
   word: ["sentence", "paragraph"],
-  sentence: ["paragraph"],
-  paragraph: [],
+  sentence: ["word", "paragraph"],
+  paragraph: ["sentence"],
 };
 
 export function canMoveEntryToKind(
@@ -473,15 +473,32 @@ export function getOpenableLinkUrl(value: unknown): string | null {
 }
 
 /**
- * 新規メモのタイトル。年は内部の created_at に保持し、表示タイトルは軽くする。
- * 末尾の空のかぎ括弧は、あとからテーマなどを足せる余白。
+ * 新規メモのタイトルは、作成日だけを軽く置く。
+ * 年・時刻は created_at に保持し、タイトルには含めない。
  */
 export function formatDefaultMemoTitle(date = new Date()): string {
-  const pad = (value: number) => String(value).padStart(2, "0");
+  return `${date.getMonth() + 1}/${date.getDate()}`;
+}
 
-  return `${date.getMonth() + 1}/${date.getDate()} ${pad(date.getHours())}:${pad(
-    date.getMinutes(),
-  )} 「」`;
+/**
+ * 項目を起点に別メモを作る時のタイトル。
+ * 日付を先頭に残し、改行や連続空白を一行へ整えてから本文の冒頭を添える。
+ */
+export function formatDerivedMemoTitle(
+  date: Date,
+  content: string,
+): string {
+  const dateTitle = formatDefaultMemoTitle(date);
+  const condensed = content.replace(/\s+/gu, " ").trim();
+
+  if (!condensed) return dateTitle;
+
+  const titleCharacters = Array.from(condensed);
+  const preview = titleCharacters.length > 30
+    ? `${titleCharacters.slice(0, 29).join("")}…`
+    : condensed;
+
+  return `${dateTitle}｜${preview}`;
 }
 
 export function formatUpdatedAt(iso: string): string {

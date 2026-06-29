@@ -27,8 +27,10 @@ type EntryColumnProps = {
   showEntryNumbers: boolean;
   /** 本文だけを密に眺める簡易表示か。 */
   compactView?: boolean;
-  /** 新規メモ作成直後、Wordの入力欄へ一度だけフォーカスする。 */
+  /** 新規メモ作成直後、対象区分の入力欄へ一度だけフォーカスする。 */
   autoFocusComposer?: boolean;
+  /** メモ切替時に自動フォーカス済みの記録をリセットするためのキー。 */
+  autoFocusKey?: string;
   /** trueなら新しい項目を同じ階層の末尾へ、falseなら先頭へ置く。 */
   addAtBottom?: boolean;
   onAutoFocusHandled?: () => void;
@@ -49,6 +51,10 @@ type EntryColumnProps = {
   copyIncludesCompleted: boolean;
   /** 単語 / 文 / 段落ごとのテキストをコピーする。 */
   onCopy: (kind: EntryKind) => Promise<void>;
+  /** 「…」から、1項目の本文だけをコピーする。trueならコピー成功。 */
+  onCopyEntry: (content: string) => Promise<boolean>;
+  /** 元の項目を残したまま、新しい大きなメモへ展開する。 */
+  onCreateMemoFromEntry: (entryId: string) => Promise<unknown>;
   isCopying?: boolean;
   onMove: (entryId: string, direction: EntryMoveDirection) => Promise<unknown>;
   onMoveToKind: (entryId: string, targetKind: EntryKind) => Promise<unknown>;
@@ -73,6 +79,7 @@ export function EntryColumn({
   showEntryNumbers,
   compactView = false,
   autoFocusComposer = false,
+  autoFocusKey,
   addAtBottom = false,
   onAutoFocusHandled,
   disabled = false,
@@ -84,6 +91,8 @@ export function EntryColumn({
   copyableEntryCount,
   copyIncludesCompleted,
   onCopy,
+  onCopyEntry,
+  onCreateMemoFromEntry,
   isCopying = false,
   onMove,
   onMoveToKind,
@@ -173,6 +182,10 @@ export function EntryColumn({
   }, [entries, mobileActionEntryId, structureEntryId]);
 
   useEffect(() => {
+    didAutoFocusRef.current = false;
+  }, [autoFocusKey]);
+
+  useEffect(() => {
     if (!autoFocusComposer || !isActiveOnMobile || didAutoFocusRef.current) {
       return;
     }
@@ -228,6 +241,37 @@ export function EntryColumn({
       setPendingUndo(null);
       undoTimerRef.current = null;
     }, UNDO_WINDOW_MS);
+  };
+
+  const requestCopyEntry = async (entryId: string): Promise<boolean> => {
+    const target = entries.find((entry) => entry.id === entryId);
+
+    if (!target || disabled || isDeletingAll) return false;
+
+    const copied = await onCopyEntry(target.content);
+
+    if (!copied) return false;
+
+    setStructureEntryId(null);
+    setMobileActionEntryId(null);
+    return true;
+  };
+
+  /** 項目を残したまま、別メモの最初の項目として複製して開く。 */
+  const requestCreateMemoFromEntry = async (entryId: string): Promise<boolean> => {
+    const target = entries.find((entry) => entry.id === entryId);
+
+    if (!target || disabled || isDeletingAll) return false;
+
+    try {
+      await onCreateMemoFromEntry(entryId);
+      setStructureEntryId(null);
+      setMobileActionEntryId(null);
+      return true;
+    } catch {
+      // 親の保存エラー表示をそのまま使い、メニューを勝手に閉じない。
+      return false;
+    }
   };
 
   const requestDelete = async (entryId: string) => {
@@ -374,6 +418,8 @@ export function EntryColumn({
         )
       }
       onMoveToKind={requestMoveToKind}
+      onCopy={requestCopyEntry}
+      onCreateMemoFromEntry={requestCreateMemoFromEntry}
       onUpdate={onUpdate}
       onDelete={requestDelete}
     />
@@ -498,6 +544,8 @@ export function EntryColumn({
             )
           }
           onMoveToKind={requestMoveToKind}
+          onCopy={requestCopyEntry}
+          onCreateMemoFromEntry={requestCreateMemoFromEntry}
           onDelete={requestDelete}
         />
       ) : null}

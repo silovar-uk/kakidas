@@ -14,7 +14,10 @@ import {
   type MemoWithEntries,
   createLocalSyncMeta,
 } from "../types/memo";
-import { memoRepository } from "../repositories/memoRepository";
+import {
+  memoRepository,
+  type MemoFromEntryResult,
+} from "../repositories/memoRepository";
 
 type AsyncStatus = {
   isLoading: boolean;
@@ -236,6 +239,13 @@ export function useMemoDetail(memoId: string | undefined) {
     [memoId, refreshAfterWrite, runWrite],
   );
 
+  const createMemoFromEntry = useCallback(
+    async (entryId: string): Promise<MemoFromEntryResult> => {
+      return runWrite(async () => memoRepository.createMemoFromEntry(entryId));
+    },
+    [runWrite],
+  );
+
   const updateEntry = useCallback(
     async (entryId: string, patch: EntryUpdate): Promise<EntryRow> => {
       return runWrite(async () => {
@@ -337,6 +347,7 @@ export function useMemoDetail(memoId: string | undefined) {
     reload,
     updateTitle,
     createEntry,
+    createMemoFromEntry,
     updateEntry,
     deleteEntry,
     restoreEntries,

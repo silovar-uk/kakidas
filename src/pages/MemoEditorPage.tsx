@@ -52,7 +52,15 @@ function downloadText(filename: string, content: string) {
 
 type EditorNavigationState = {
   focusComposer?: boolean;
+  /** 新しいメモへ展開した時、元の区分で続きを書けるようにする。 */
+  activeKind?: EntryKind;
 };
+
+function getNavigationKind(state: EditorNavigationState | null): EntryKind {
+  return state?.activeKind && ENTRY_KINDS.includes(state.activeKind)
+    ? state.activeKind
+    : "word";
+}
 
 const ENTRY_TIMESTAMP_VISIBILITY_STORAGE_KEY = "kakidas.show-entry-timestamps";
 const ENTRY_NUMBER_VISIBILITY_STORAGE_KEY = "kakidas.show-entry-numbers";
@@ -113,8 +121,12 @@ export function MemoEditorPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = useAuth();
+  const initialNavigationState = location.state as EditorNavigationState | null;
   const [shouldFocusNewMemoComposer, setShouldFocusNewMemoComposer] = useState(
-    () => Boolean((location.state as EditorNavigationState | null)?.focusComposer),
+    () => Boolean(initialNavigationState?.focusComposer),
+  );
+  const [composerFocusKind, setComposerFocusKind] = useState<EntryKind>(
+    () => getNavigationKind(initialNavigationState),
   );
 
   const {
@@ -132,11 +144,14 @@ export function MemoEditorPage() {
     deleteCompletedEntries,
     moveEntry,
     moveEntryToKind,
+    createMemoFromEntry,
     deleteMemo,
   } = useMemoDetail(memoId);
 
   const [title, setTitle] = useState("");
-  const [activeKind, setActiveKind] = useState<EntryKind>("word");
+  const [activeKind, setActiveKind] = useState<EntryKind>(
+    () => getNavigationKind(initialNavigationState),
+  );
   const noticeIdRef = useRef(0);
   const [notice, setNoticeState] = useState<{ id: number; message: string } | null>(null);
   const setNotice = useCallback((message: string | null) => {
@@ -264,11 +279,23 @@ export function MemoEditorPage() {
       title.trim() || formatDefaultMemoTitle(new Date(memo.created_at));
   }, [memo?.created_at, memo?.id, title]);
 
+  // 同じ編集画面のまま別メモへ遷移する場合にも、元の区分で続きを書けるようにする。
+  useEffect(() => {
+    const navigationState = location.state as EditorNavigationState | null;
+
+    if (!navigationState?.focusComposer) return;
+
+    const nextKind = getNavigationKind(navigationState);
+    setComposerFocusKind(nextKind);
+    setActiveKind(nextKind);
+    setShouldFocusNewMemoComposer(true);
+  }, [location.key, location.state]);
+
   useEffect(() => {
     if (shouldFocusNewMemoComposer) {
-      setActiveKind("word");
+      setActiveKind(composerFocusKind);
     }
-  }, [shouldFocusNewMemoComposer]);
+  }, [composerFocusKind, shouldFocusNewMemoComposer]);
 
   const saveTitle = useCallback(
     async (rawTitle: string) => {
@@ -370,6 +397,34 @@ export function MemoEditorPage() {
     } finally {
       setCopyingKind(null);
     }
+  };
+
+  /** 「…」から個別にコピーする場合は、本文だけをそのまま渡す。 */
+  const handleCopyEntry = async (content: string): Promise<boolean> => {
+    try {
+      await copyToClipboard(content);
+      setNotice("項目をコピーしました。");
+      return true;
+    } catch (copyError) {
+      setNotice(
+        copyError instanceof Error
+          ? copyError.message
+          : "項目をコピーできませんでした。",
+      );
+      return false;
+    }
+  };
+
+  /** 「…」の項目を、新しい大きなメモの起点として複製して開く。 */
+  const handleCreateMemoFromEntry = async (entryId: string): Promise<void> => {
+    const result = await createMemoFromEntry(entryId);
+
+    navigate(`/memos/${result.memo.id}`, {
+      state: {
+        focusComposer: true,
+        activeKind: result.entry.kind,
+      } satisfies EditorNavigationState,
+    });
   };
 
   const handleDeleteMemo = async () => {
@@ -785,8 +840,9 @@ export function MemoEditorPage() {
             compactView={compactEntryView}
             disabled={isSaving || isUploading}
             autoFocusComposer={
-              kind === "word" && shouldFocusNewMemoComposer
+              kind === composerFocusKind && shouldFocusNewMemoComposer
             }
+            autoFocusKey={memo?.id}
             addAtBottom={addEntriesAtBottom}
             onAutoFocusHandled={handleComposerAutoFocusHandled}
             onCreate={createEntry}
@@ -797,6 +853,8 @@ export function MemoEditorPage() {
             copyableEntryCount={copyableEntryCountsByKind[kind]}
             copyIncludesCompleted={includeCompletedInCopy}
             onCopy={handleCopyKind}
+            onCopyEntry={handleCopyEntry}
+            onCreateMemoFromEntry={handleCreateMemoFromEntry}
             isCopying={copyingKind === kind}
             onMove={moveEntry}
             onMoveToKind={moveEntryToKind}

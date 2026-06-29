@@ -47,6 +47,10 @@ type EntryItemProps = {
   onAddChild: (entryId: string) => void;
   onMove: (entryId: string, direction: EntryMoveDirection) => Promise<unknown>;
   onMoveToKind: (entryId: string, targetKind: EntryKind) => Promise<unknown>;
+  /** 「…」から本文をそのままコピーする。 */
+  onCopy: (entryId: string) => Promise<boolean>;
+  /** 元の項目を残したまま、新しいメモの起点として複製する。 */
+  onCreateMemoFromEntry: (entryId: string) => Promise<boolean>;
   onUpdate: (entryId: string, patch: EntryUpdate) => Promise<unknown>;
   onDelete: (entryId: string) => Promise<unknown>;
 };
@@ -68,6 +72,8 @@ export function EntryItem({
   onAddChild,
   onMove,
   onMoveToKind,
+  onCopy,
+  onCreateMemoFromEntry,
   onUpdate,
   onDelete,
 }: EntryItemProps) {
@@ -734,6 +740,22 @@ export function EntryItem({
 
       {isStructureOpen ? (
         <div className="entry-item__structure-actions" aria-label="項目の操作">
+          <button
+            type="button"
+            className="structure-action structure-action--copy"
+            onClick={() => void onCopy(entry.id)}
+            disabled={disabled}
+          >
+            ⧉ コピー
+          </button>
+          <button
+            type="button"
+            className="structure-action structure-action--derive"
+            onClick={() => void onCreateMemoFromEntry(entry.id)}
+            disabled={disabled}
+          >
+            ↗ 新しいメモにする
+          </button>
           {isHierarchical ? (
             <>
               <button

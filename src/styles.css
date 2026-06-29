@@ -900,6 +900,32 @@ a:focus-visible {
   background: #fceadf;
 }
 
+.structure-action--copy {
+  border-color: #a6cbc6;
+  color: #24645d;
+  background: #edf8f5;
+}
+
+.structure-action--copy:hover:not(:disabled) {
+  border-color: #70aaa1;
+  color: #174d47;
+  background: #ddf1ec;
+}
+
+/* 項目から別メモを枝分かれさせる、非破壊の展開操作。 */
+.structure-action--derive {
+  grid-column: 1 / -1;
+  border-color: #d8bb80;
+  color: #805c1f;
+  background: #fff8e7;
+}
+
+.structure-action--derive:hover:not(:disabled) {
+  border-color: #b99148;
+  color: #654713;
+  background: #fff1cc;
+}
+
 .structure-action--jump {
   color: #5e6772;
   background: #f3f6f8;
@@ -2062,6 +2088,34 @@ a:focus-visible {
   color: #7a6d61;
   font-size: 12px;
   text-align: center;
+}
+
+.mobile-action-sheet__derive {
+  display: flex;
+  width: 100%;
+  min-height: 46px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  margin-bottom: 8px;
+  border: 1px solid #d8bb80;
+  border-radius: 13px;
+  color: #805c1f;
+  background: #fff8e7;
+  font-size: 13px;
+  font-weight: 780;
+}
+
+.mobile-action-sheet__derive:active:not(:disabled) {
+  border-color: #b99148;
+  color: #654713;
+  background: #fff1cc;
+}
+
+.mobile-action-sheet__derive span {
+  color: #9a6a1d;
+  font-size: 18px;
+  line-height: 1;
 }
 
 @media (max-width: 920px) {
@@ -4185,7 +4239,7 @@ a:focus-visible {
 
 
 /* --------------------------------------------------------------------------
-   v0.5.23 — 単語 → 文 / 段落、文 → 段落への移動
+   v0.5.23–v0.5.41 — 区分移動の選択肢
    -------------------------------------------------------------------------- */
 .entry-item__kind-actions {
   display: contents;
@@ -4193,6 +4247,18 @@ a:focus-visible {
 
 .structure-action--kind {
   font-weight: 820;
+}
+
+.structure-action--kind-word {
+  border-color: #bdc99a;
+  color: #52632c;
+  background: #f2f7e5;
+}
+
+.structure-action--kind-word:hover:not(:disabled) {
+  border-color: #91a764;
+  color: #40531e;
+  background: #e7f0d4;
 }
 
 .structure-action--kind-sentence {
@@ -4222,6 +4288,18 @@ a:focus-visible {
 .mobile-action-sheet__tile--kind {
   min-height: 52px;
   font-weight: 820;
+}
+
+.mobile-action-sheet__tile--kind-word {
+  border-color: #bdc99a;
+  color: #52632c;
+  background: #f2f7e5;
+}
+
+.mobile-action-sheet__tile--kind-word:active:not(:disabled) {
+  border-color: #91a764;
+  color: #40531e;
+  background: #e7f0d4;
 }
 
 .mobile-action-sheet__tile--kind-sentence {
