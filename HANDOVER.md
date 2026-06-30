@@ -1,6 +1,6 @@
 # kakidas 引き継ぎ書
 
-- **基準バージョン**：v0.5.45
+- **基準バージョン**：v0.5.49
 - **最終確認対象**：`kakidas_tree.txt` に記録された現行構造
 - **用途**：次の実装担当者・運用担当者が、設計意図と壊してはいけない境界を理解した上で改修できるようにする。
 
@@ -23,6 +23,8 @@ kakidasは、考えを「単語」「文」「段落」の粒度で、整える�
    - 本文を読んだり書いたりする流れを、操作ボタンやラベルで塞がない。
    - 備考が空なら余白も出さない。
    - 満足度は本文やコピー出力に混ぜない。
+   - 満足度は0〜5の値に応じて、項目背景を淡く色分けする。完了済み項目は灰色表示を優先する。
+   - PCでは、備考＋とリンクを完了の右側へまとめる。スマホでは本文下のリンクと右側の＋を維持する。
    - 番号、日時、並び順、完了の非表示などは、主に端末ごとの表示設定である。
 
 3. **データ本体・派生表示・個人設定を混ぜない**
@@ -93,12 +95,12 @@ VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_YOUR_KEY
 
 ## 3. 現行フォルダ構成と責務
 
-### 完全ツリー（v0.5.45・引き継ぎ資料同梱版）
+### 完全ツリー（v0.5.49・引き継ぎ資料同梱版）
 
-以下が、この引き継ぎ書をルートへ置いた配布版の実ファイル構成である。`HANDOVER.md` 以外は、受領した最新の `kakidas_tree.txt` を踏襲している。
+以下が、この引き継ぎ書をルートへ置いた配布版の実ファイル構成である。`HANDOVER.md` と `kakidas_tree.txt` は同じ構成を記録している。`node_modules`、`dist`、`.git` を除くファイル数は **68件** である。
 
 ```text
-kakidas/
+kakidas/  # 68 files (excluding node_modules, dist, .git)
 ├── public/
 │   ├── android-chrome-192x192.png
 │   ├── android-chrome-512x512.png
@@ -171,47 +173,7 @@ kakidas/
 ├── package-lock.json
 ├── package.json
 ├── README.md
-├── RELEASE_NOTES_v0.5.10.md
-├── RELEASE_NOTES_v0.5.11.md
-├── RELEASE_NOTES_v0.5.12.md
-├── RELEASE_NOTES_v0.5.13.md
-├── RELEASE_NOTES_v0.5.14.md
-├── RELEASE_NOTES_v0.5.15.md
-├── RELEASE_NOTES_v0.5.16.md
-├── RELEASE_NOTES_v0.5.17.md
-├── RELEASE_NOTES_v0.5.18.md
-├── RELEASE_NOTES_v0.5.19.md
-├── RELEASE_NOTES_v0.5.20.md
-├── RELEASE_NOTES_v0.5.21.md
-├── RELEASE_NOTES_v0.5.22.md
-├── RELEASE_NOTES_v0.5.23.md
-├── RELEASE_NOTES_v0.5.24.md
-├── RELEASE_NOTES_v0.5.25.md
-├── RELEASE_NOTES_v0.5.26.md
-├── RELEASE_NOTES_v0.5.27.md
-├── RELEASE_NOTES_v0.5.28.md
-├── RELEASE_NOTES_v0.5.29.md
-├── RELEASE_NOTES_v0.5.30.md
-├── RELEASE_NOTES_v0.5.31.md
-├── RELEASE_NOTES_v0.5.32.md
-├── RELEASE_NOTES_v0.5.33.md
-├── RELEASE_NOTES_v0.5.34.md
-├── RELEASE_NOTES_v0.5.35.md
-├── RELEASE_NOTES_v0.5.36.md
-├── RELEASE_NOTES_v0.5.37.md
-├── RELEASE_NOTES_v0.5.38.md
-├── RELEASE_NOTES_v0.5.39.md
-├── RELEASE_NOTES_v0.5.40.md
-├── RELEASE_NOTES_v0.5.41.md
-├── RELEASE_NOTES_v0.5.42.md
-├── RELEASE_NOTES_v0.5.43.md
-├── RELEASE_NOTES_v0.5.44.md
-├── RELEASE_NOTES_v0.5.45.md
-├── RELEASE_NOTES_v0.5.5.md
-├── RELEASE_NOTES_v0.5.6.md
-├── RELEASE_NOTES_v0.5.7.md
-├── RELEASE_NOTES_v0.5.8.md
-├── RELEASE_NOTES_v0.5.9.md
+├── RELEASE_NOTES.md
 ├── tsconfig.app.json
 ├── tsconfig.json
 ├── tsconfig.node.json
@@ -255,20 +217,20 @@ src/
 supabase/
   schema.sql             新規Supabaseプロジェクト向けの全体定義
   MIGRATE_*.sql          既存Supabaseプロジェクト向けの追加カラム移行
-RELEASE_NOTES_*.md       各バージョンの変更履歴
+RELEASE_NOTES.md         v0.5.5〜v0.5.47の統合変更履歴。以後もここへ追記
 ```
 
 ### まず読む順番
 
 1. `README.md`：アプリの目的とローカルファースト方針
-2. `RELEASE_NOTES_v0.5.34.md`〜`v0.5.45.md`：直近の事故対応と意図
+2. `RELEASE_NOTES.md` のv0.5.34〜v0.5.47の節：直近の事故対応と意図
 3. `src/types/memo.ts`：データ構造と正規化ルール
 4. `src/repositories/memoRepository.ts`：ローカル保存の実体
 5. `src/repositories/cloudMemoRepository.ts`：クラウド同期の境界
 6. `src/pages/MemoListPage.tsx` / `MemoEditorPage.tsx`：ユーザー操作の入口
 7. `src/lib/db.ts` / `bodyScrollLock.ts`：Safari対策
 
-> `README.md` はv0.5.32までの説明が中心で、v0.5.33〜v0.5.45の内容を十分に反映していない。最新の挙動は、該当するリリースノートと実装を正とする。
+> `README.md` はv0.5.32までの説明が中心で、v0.5.33〜v0.5.47の内容を十分に反映していない。最新の挙動は、`RELEASE_NOTES.md` の該当節と実装を正とする。
 
 ---
 
@@ -381,9 +343,15 @@ RELEASE_NOTES_*.md       各バージョンの変更履歴
 
 #### v0.5.41の初期タイトルと区分移動
 
-- 新しいメモの既定タイトルは、作成日だけの `M/D`。時刻や空のかぎ括弧はタイトルへ入れない。
+- 新しいメモの既定タイトルは、作成日と空のかぎ括弧による `M/D「」`。時刻はタイトルへ入れない。
 - 区分移動は、単語→文／段落、文→単語／段落、段落→文。
 - 移動は本文を分割しない。内容と補助情報を保持したまま、移動先区分のルート項目へ置く。
+
+#### v0.5.48の空の初期タイトル
+
+- 空の新規メモは `M/D「」` で作成する。
+- `M/D｜本文冒頭` を使う「項目から新しいメモにする」の派生タイトルは、空のかぎ括弧を付けない。
+- 既存メモのタイトルは自動で変更しない。
 
 #### v0.5.36のメモ削除
 
@@ -503,7 +471,7 @@ iPhoneのホーム画面アイコンはSafari側のキャッシュが強い。�
 - 一覧画面：`kakidas`
 - 編集画面：開いているメモのタイトル
 - タイトルを編集中も即時反映
-- 空欄の場合：既定タイトル `M/D`
+- 空欄の場合：既定タイトル `M/D「」`
 
 この処理は`MemoListPage.tsx` と `MemoEditorPage.tsx` に分かれている。ルーティング変更や画面追加時に、古いタイトルが残らないか確認する。
 
@@ -546,7 +514,7 @@ iPhoneのホーム画面アイコンはSafari側のキャッシュが強い。�
 2. `styles.css` のPC・モバイル双方を確認
 3. `npm run build`
 4. PCとiPhone Safariで確認
-5. `RELEASE_NOTES_v0.5.xx.md` を追加
+5. `RELEASE_NOTES.md` の末尾にv0.5.xxの節を追加
 
 ### データを持つ機能の追加
 
@@ -585,7 +553,7 @@ iPhoneのホーム画面アイコンはSafari側のキャッシュが強い。�
    - 型・ビルドは確認できるが、Safari固有の挙動は実機確認が必要。
 
 5. **READMEの更新遅れ**
-   - v0.5.33〜v0.5.43の説明をREADMEにまだ統合していない。
+   - v0.5.33〜v0.5.47の説明をREADMEにまだ統合していない。
    - 次の大きな更新時に、READMEを「最新の概要」に整理し、詳細はリリースノートへ寄せるのが望ましい。
 
 ---
@@ -618,7 +586,7 @@ iPhoneのホーム画面アイコンはSafari側のキャッシュが強い。�
 ## 13. 次の担当者への短い実装依頼テンプレート
 
 ```text
-kakidas v0.5.44を基準に修正する。
+kakidas v0.5.49を基準に修正する。
 
 目的：
 - （ユーザーにとって何を楽にする変更か）
@@ -632,7 +600,7 @@ kakidas v0.5.44を基準に修正する。
 
 変更後に行うこと：
 - npm run build
-- RELEASE_NOTES_v0.5.xx.md を追加
+- RELEASE_NOTES.mdの末尾にv0.5.xxの節を追加
 - データ構造を変える場合は schema.sql と MIGRATE_*.sql も更新
 - 変更したファイルと、既知の未検証点を明記
 ```

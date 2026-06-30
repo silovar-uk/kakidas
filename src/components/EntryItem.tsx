@@ -17,6 +17,7 @@ import {
   ENTRY_KIND_MOVE_TARGETS,
   getOpenableLinkUrl,
   normalizeLinkUrlForSave,
+  normalizeSatisfaction,
   supportsHierarchy,
 } from "../types/memo";
 
@@ -380,11 +381,12 @@ export function EntryItem({
 
   const createdAtLabel = formatEntryCreatedAt(entry.created_at);
   const completionClassName = entry.is_completed ? "entry-item--completed" : "";
+  const satisfactionClassName = `entry-item--satisfaction-${normalizeSatisfaction(entry.satisfaction)}`;
 
   if (compactView) {
     return (
       <article
-        className={`entry-item entry-item--compact ${completionClassName} ${
+        className={`entry-item entry-item--compact ${completionClassName} ${satisfactionClassName} ${
           isHierarchical ? "entry-item--hierarchical" : ""
         } ${entry.depth > 0 ? "entry-item--nested" : ""}`}
         style={style}
@@ -399,7 +401,7 @@ export function EntryItem({
   if (isEditing) {
     return (
       <article
-        className={`entry-item entry-item--editing ${completionClassName} ${
+        className={`entry-item entry-item--editing ${completionClassName} ${satisfactionClassName} ${
           isHierarchical ? "entry-item--hierarchical" : ""
         } ${entry.depth > 0 ? "entry-item--nested" : ""}`}
         style={style}
@@ -597,7 +599,7 @@ export function EntryItem({
 
   return (
     <article
-      className={`entry-item ${completionClassName} ${
+      className={`entry-item ${completionClassName} ${satisfactionClassName} ${
         isHierarchical ? "entry-item--hierarchical" : ""
       } ${entry.depth > 0 ? "entry-item--nested" : ""} ${
         isStructureOpen ? "entry-item--structure-open" : ""
@@ -719,6 +721,45 @@ export function EntryItem({
           >
             {entry.is_completed ? "戻す" : "完了"}
           </button>
+
+          {/* PCでは、備考とリンクを完了ボタンの右側へまとめる。
+              スマホは本文下のリンクと右側の＋を既存配置のまま使う。 */}
+          <div className="entry-item__desktop-inline-actions">
+            <button
+              type="button"
+              className="entry-item__note-trigger entry-item__note-trigger--inline"
+              onClick={beginNoteEdit}
+              disabled={disabled || isSaving}
+              aria-label={hasNote ? "気持ち・備考を編集" : "気持ち・備考を追加"}
+              title={hasNote ? "気持ち・備考を編集" : "気持ち・備考を追加"}
+            >
+              ＋
+            </button>
+
+            {openableLinkUrl ? (
+              <a
+                className="entry-item__link-trigger entry-item__link-trigger--active"
+                href={openableLinkUrl}
+                target="_blank"
+                rel="noreferrer"
+                aria-label="リンクを開く"
+                title="リンクを開く"
+              >
+                <LinkIcon />
+              </a>
+            ) : (
+              <button
+                type="button"
+                className="entry-item__link-trigger"
+                onClick={beginLinkEdit}
+                disabled={disabled || isSaving}
+                aria-label="リンクを追加"
+                title="リンクを追加"
+              >
+                <LinkIcon />
+              </button>
+            )}
+          </div>
 
           <button
             type="button"

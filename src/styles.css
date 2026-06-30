@@ -5423,3 +5423,135 @@ a:focus-visible {
     flex: 1;
   }
 }
+
+/* --------------------------------------------------------------------------
+   v0.5.47 — satisfaction-tinted entry backgrounds
+   満足度は数字だけでなく、項目の紙色にもごく薄く反映する。
+   完了済みは従来の灰色表示を優先し、満足度色と競合させない。
+   -------------------------------------------------------------------------- */
+.entry-item {
+  --entry-satisfaction-background: transparent;
+  --entry-satisfaction-background-hover: rgba(255, 254, 250, 0.7);
+  --entry-satisfaction-background-focus: rgba(255, 252, 247, 0.76);
+}
+
+.entry-item:not(.entry-item--completed).entry-item--satisfaction-0 {
+  --entry-satisfaction-background: #f4f7fa;
+  --entry-satisfaction-background-hover: #f0f5f9;
+  --entry-satisfaction-background-focus: #edf3f8;
+}
+
+.entry-item:not(.entry-item--completed).entry-item--satisfaction-1 {
+  --entry-satisfaction-background: #f5f7f4;
+  --entry-satisfaction-background-hover: #f2f6f1;
+  --entry-satisfaction-background-focus: #eff4ee;
+}
+
+.entry-item:not(.entry-item--completed).entry-item--satisfaction-2 {
+  --entry-satisfaction-background: #f8f6f1;
+  --entry-satisfaction-background-hover: #f6f3ed;
+  --entry-satisfaction-background-focus: #f3f0e9;
+}
+
+.entry-item:not(.entry-item--completed).entry-item--satisfaction-3 {
+  --entry-satisfaction-background: #faf5ee;
+  --entry-satisfaction-background-hover: #f8f1e9;
+  --entry-satisfaction-background-focus: #f6eee5;
+}
+
+.entry-item:not(.entry-item--completed).entry-item--satisfaction-4 {
+  --entry-satisfaction-background: #fbefea;
+  --entry-satisfaction-background-hover: #f9ebe5;
+  --entry-satisfaction-background-focus: #f7e7e0;
+}
+
+.entry-item:not(.entry-item--completed).entry-item--satisfaction-5 {
+  --entry-satisfaction-background: #faeae8;
+  --entry-satisfaction-background-hover: #f8e5e2;
+  --entry-satisfaction-background-focus: #f6e0dd;
+}
+
+.entry-item:not(.entry-item--completed).entry-item--satisfaction-0,
+.entry-item:not(.entry-item--completed).entry-item--satisfaction-1,
+.entry-item:not(.entry-item--completed).entry-item--satisfaction-2,
+.entry-item:not(.entry-item--completed).entry-item--satisfaction-3,
+.entry-item:not(.entry-item--completed).entry-item--satisfaction-4,
+.entry-item:not(.entry-item--completed).entry-item--satisfaction-5 {
+  background: var(--entry-satisfaction-background);
+}
+
+.entry-item:not(.entry-item--completed).entry-item--satisfaction-0:hover,
+.entry-item:not(.entry-item--completed).entry-item--satisfaction-1:hover,
+.entry-item:not(.entry-item--completed).entry-item--satisfaction-2:hover,
+.entry-item:not(.entry-item--completed).entry-item--satisfaction-3:hover,
+.entry-item:not(.entry-item--completed).entry-item--satisfaction-4:hover,
+.entry-item:not(.entry-item--completed).entry-item--satisfaction-5:hover,
+.entry-item:not(.entry-item--completed).entry-item--satisfaction-0:focus-within,
+.entry-item:not(.entry-item--completed).entry-item--satisfaction-1:focus-within,
+.entry-item:not(.entry-item--completed).entry-item--satisfaction-2:focus-within,
+.entry-item:not(.entry-item--completed).entry-item--satisfaction-3:focus-within,
+.entry-item:not(.entry-item--completed).entry-item--satisfaction-4:focus-within,
+.entry-item:not(.entry-item--completed).entry-item--satisfaction-5:focus-within {
+  background: var(--entry-satisfaction-background-hover);
+}
+
+.entry-item:not(.entry-item--completed).entry-item--structure-open {
+  background: var(--entry-satisfaction-background-focus);
+}
+
+.entry-item--completed {
+  --entry-satisfaction-background: #ebeae6;
+  --entry-satisfaction-background-hover: #edebe7;
+  --entry-satisfaction-background-focus: #edebe7;
+}
+
+.entry-column--compact .entry-item:not(.entry-item--completed).entry-item--satisfaction-0,
+.entry-column--compact .entry-item:not(.entry-item--completed).entry-item--satisfaction-1,
+.entry-column--compact .entry-item:not(.entry-item--completed).entry-item--satisfaction-2,
+.entry-column--compact .entry-item:not(.entry-item--completed).entry-item--satisfaction-3,
+.entry-column--compact .entry-item:not(.entry-item--completed).entry-item--satisfaction-4,
+.entry-column--compact .entry-item:not(.entry-item--completed).entry-item--satisfaction-5 {
+  background: color-mix(in srgb, var(--entry-satisfaction-background) 66%, transparent);
+}
+
+@supports not (background: color-mix(in srgb, #ffffff 50%, transparent)) {
+  .entry-column--compact .entry-item:not(.entry-item--completed).entry-item--satisfaction-0,
+  .entry-column--compact .entry-item:not(.entry-item--completed).entry-item--satisfaction-1,
+  .entry-column--compact .entry-item:not(.entry-item--completed).entry-item--satisfaction-2,
+  .entry-column--compact .entry-item:not(.entry-item--completed).entry-item--satisfaction-3,
+  .entry-column--compact .entry-item:not(.entry-item--completed).entry-item--satisfaction-4,
+  .entry-column--compact .entry-item:not(.entry-item--completed).entry-item--satisfaction-5 {
+    background: var(--entry-satisfaction-background);
+  }
+}
+
+
+/* --------------------------------------------------------------------------
+   v0.5.49 — PCの項目補助操作を右側の一列へ
+   備考＋とリンクを「完了」の右へ寄せ、本文下の余白を減らす。
+   モバイルの本文下リンク／右側＋は既存配置を維持する。
+   -------------------------------------------------------------------------- */
+.entry-item__desktop-inline-actions {
+  display: none;
+}
+
+@media (min-width: 921px) {
+  .entry-item__body > .entry-item__inline-actions {
+    display: none;
+  }
+
+  .entry-item__desktop-inline-actions {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: 2px;
+  }
+
+  .entry-item__desktop-inline-actions .entry-item__note-trigger--inline {
+    margin-top: 0;
+  }
+
+  .entry-item__quick-actions {
+    flex-wrap: nowrap;
+  }
+}

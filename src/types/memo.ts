@@ -522,11 +522,19 @@ export function getOpenableLinkUrl(value: unknown): string | null {
 }
 
 /**
- * 新規メモのタイトルは、作成日だけを軽く置く。
+ * メモタイトルに使う日付部分。
  * 年・時刻は created_at に保持し、タイトルには含めない。
  */
-export function formatDefaultMemoTitle(date = new Date()): string {
+function formatMemoDatePrefix(date: Date): string {
   return `${date.getMonth() + 1}/${date.getDate()}`;
+}
+
+/**
+ * 新規メモの空の初期タイトル。
+ * 日付の後ろに空のかぎ括弧を置き、まだ題名がない状態も見分けやすくする。
+ */
+export function formatDefaultMemoTitle(date = new Date()): string {
+  return `${formatMemoDatePrefix(date)}「」`;
 }
 
 /**
@@ -537,7 +545,7 @@ export function formatDerivedMemoTitle(
   date: Date,
   content: string,
 ): string {
-  const dateTitle = formatDefaultMemoTitle(date);
+  const dateTitle = formatMemoDatePrefix(date);
   const condensed = content.replace(/\s+/gu, " ").trim();
 
   if (!condensed) return dateTitle;

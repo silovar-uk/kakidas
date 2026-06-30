@@ -1,4 +1,4 @@
-kakidas/
+.
 ├── public/
 │   ├── android-chrome-192x192.png
 │   ├── android-chrome-512x512.png
@@ -67,51 +67,10 @@ kakidas/
 ├── .npmrc
 ├── HANDOVER.md
 ├── index.html
-├── kakidas_tree.txt
 ├── package-lock.json
 ├── package.json
 ├── README.md
-├── RELEASE_NOTES_v0.5.10.md
-├── RELEASE_NOTES_v0.5.11.md
-├── RELEASE_NOTES_v0.5.12.md
-├── RELEASE_NOTES_v0.5.13.md
-├── RELEASE_NOTES_v0.5.14.md
-├── RELEASE_NOTES_v0.5.15.md
-├── RELEASE_NOTES_v0.5.16.md
-├── RELEASE_NOTES_v0.5.17.md
-├── RELEASE_NOTES_v0.5.18.md
-├── RELEASE_NOTES_v0.5.19.md
-├── RELEASE_NOTES_v0.5.20.md
-├── RELEASE_NOTES_v0.5.21.md
-├── RELEASE_NOTES_v0.5.22.md
-├── RELEASE_NOTES_v0.5.23.md
-├── RELEASE_NOTES_v0.5.24.md
-├── RELEASE_NOTES_v0.5.25.md
-├── RELEASE_NOTES_v0.5.26.md
-├── RELEASE_NOTES_v0.5.27.md
-├── RELEASE_NOTES_v0.5.28.md
-├── RELEASE_NOTES_v0.5.29.md
-├── RELEASE_NOTES_v0.5.30.md
-├── RELEASE_NOTES_v0.5.31.md
-├── RELEASE_NOTES_v0.5.32.md
-├── RELEASE_NOTES_v0.5.33.md
-├── RELEASE_NOTES_v0.5.34.md
-├── RELEASE_NOTES_v0.5.35.md
-├── RELEASE_NOTES_v0.5.36.md
-├── RELEASE_NOTES_v0.5.37.md
-├── RELEASE_NOTES_v0.5.38.md
-├── RELEASE_NOTES_v0.5.39.md
-├── RELEASE_NOTES_v0.5.40.md
-├── RELEASE_NOTES_v0.5.41.md
-├── RELEASE_NOTES_v0.5.42.md
-├── RELEASE_NOTES_v0.5.43.md
-├── RELEASE_NOTES_v0.5.44.md
-├── RELEASE_NOTES_v0.5.45.md
-├── RELEASE_NOTES_v0.5.5.md
-├── RELEASE_NOTES_v0.5.6.md
-├── RELEASE_NOTES_v0.5.7.md
-├── RELEASE_NOTES_v0.5.8.md
-├── RELEASE_NOTES_v0.5.9.md
+├── RELEASE_NOTES.md
 ├── tsconfig.app.json
 ├── tsconfig.json
 ├── tsconfig.node.json
