@@ -382,6 +382,7 @@ export function EntryItem({
   const createdAtLabel = formatEntryCreatedAt(entry.created_at);
   const completionClassName = entry.is_completed ? "entry-item--completed" : "";
   const satisfactionClassName = `entry-item--satisfaction-${normalizeSatisfaction(entry.satisfaction)}`;
+  const numberVisibilityClassName = showEntryNumbers ? "entry-item--numbered" : "";
 
   if (compactView) {
     return (
@@ -401,13 +402,17 @@ export function EntryItem({
   if (isEditing) {
     return (
       <article
-        className={`entry-item entry-item--editing ${completionClassName} ${satisfactionClassName} ${
+        className={`entry-item entry-item--editing ${completionClassName} ${satisfactionClassName} ${numberVisibilityClassName} ${
           isHierarchical ? "entry-item--hierarchical" : ""
         } ${entry.depth > 0 ? "entry-item--nested" : ""}`}
         style={style}
         onBlur={handleEditorBlur}
       >
-        <div className="entry-item__editor-control">
+        <div
+          className={`entry-item__editor-body ${
+            showEntryNumbers ? "entry-item__editor-body--numbered" : ""
+          }`}
+        >
           {showEntryNumbers ? (
             <span
               className="entry-item__number entry-item__number--editing"
@@ -417,140 +422,144 @@ export function EntryItem({
             </span>
           ) : null}
 
-          {editMode === "content" ? (
-            isParagraph ? (
-              <textarea
-                ref={(element) => {
-                  contentInputRef.current = element;
-                }}
-                value={value}
-                disabled={disabled || isSaving}
-                onChange={(event) => setValue(event.target.value)}
-                onKeyDown={handleContentKeyDown}
-                onCompositionStart={() => setIsComposing(true)}
-                onCompositionEnd={() => setIsComposing(false)}
-                rows={4}
-                aria-label="段落を編集"
-              />
-            ) : (
-              <input
-                ref={(element) => {
-                  contentInputRef.current = element;
-                }}
-                value={value}
-                disabled={disabled || isSaving}
-                onChange={(event) => setValue(event.target.value)}
-                onKeyDown={handleContentKeyDown}
-                onCompositionStart={() => setIsComposing(true)}
-                onCompositionEnd={() => setIsComposing(false)}
-                aria-label="項目を編集"
-                aria-keyshortcuts={hierarchyKeyShortcuts}
-              />
-            )
-          ) : (
-            <p className="entry-item__editing-content">{entry.content}</p>
-          )}
-        </div>
+          <div className="entry-item__editor-main">
+            <div className="entry-item__editor-control">
+              {editMode === "content" ? (
+                isParagraph ? (
+                  <textarea
+                    ref={(element) => {
+                      contentInputRef.current = element;
+                    }}
+                    value={value}
+                    disabled={disabled || isSaving}
+                    onChange={(event) => setValue(event.target.value)}
+                    onKeyDown={handleContentKeyDown}
+                    onCompositionStart={() => setIsComposing(true)}
+                    onCompositionEnd={() => setIsComposing(false)}
+                    rows={4}
+                    aria-label="段落を編集"
+                  />
+                ) : (
+                  <input
+                    ref={(element) => {
+                      contentInputRef.current = element;
+                    }}
+                    value={value}
+                    disabled={disabled || isSaving}
+                    onChange={(event) => setValue(event.target.value)}
+                    onKeyDown={handleContentKeyDown}
+                    onCompositionStart={() => setIsComposing(true)}
+                    onCompositionEnd={() => setIsComposing(false)}
+                    aria-label="項目を編集"
+                    aria-keyshortcuts={hierarchyKeyShortcuts}
+                  />
+                )
+              ) : (
+                <p className="entry-item__editing-content">{entry.content}</p>
+              )}
+            </div>
 
-        {showNoteEditor ? (
-          <div className="entry-item__note-editor">
-            <div className="entry-item__note-editor-header">
-              <label htmlFor={`entry-note-${entry.id}`}>気持ち・備考</label>
+            {showNoteEditor ? (
+              <div className="entry-item__note-editor">
+                <div className="entry-item__note-editor-header">
+                  <label htmlFor={`entry-note-${entry.id}`}>気持ち・備考</label>
+                  <button
+                    type="button"
+                    className="text-button entry-item__remove-note"
+                    disabled={disabled || isSaving}
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => {
+                      setNoteValue("");
+                      setShowNoteEditor(false);
+                    }}
+                  >
+                    消す
+                  </button>
+                </div>
+                <textarea
+                  id={`entry-note-${entry.id}`}
+                  ref={noteInputRef}
+                  value={noteValue}
+                  disabled={disabled || isSaving}
+                  onChange={(event) => setNoteValue(event.target.value)}
+                  onKeyDown={handleNoteKeyDown}
+                  onCompositionStart={() => setIsComposing(true)}
+                  onCompositionEnd={() => setIsComposing(false)}
+                  rows={3}
+                  placeholder="そのときの気持ち・補足"
+                  aria-label="気持ち・備考を編集"
+                />
+              </div>
+            ) : editMode !== "link" ? (
               <button
                 type="button"
-                className="text-button entry-item__remove-note"
+                className="entry-item__add-note"
                 disabled={disabled || isSaving}
                 onMouseDown={(event) => event.preventDefault()}
                 onClick={() => {
-                  setNoteValue("");
-                  setShowNoteEditor(false);
+                  setShowNoteEditor(true);
+                  setEditMode("note");
                 }}
               >
-                消す
+                ＋ 気持ち・備考
               </button>
-            </div>
-            <textarea
-              id={`entry-note-${entry.id}`}
-              ref={noteInputRef}
-              value={noteValue}
-              disabled={disabled || isSaving}
-              onChange={(event) => setNoteValue(event.target.value)}
-              onKeyDown={handleNoteKeyDown}
-              onCompositionStart={() => setIsComposing(true)}
-              onCompositionEnd={() => setIsComposing(false)}
-              rows={3}
-              placeholder="そのときの気持ち・補足"
-              aria-label="気持ち・備考を編集"
-            />
-          </div>
-        ) : editMode !== "link" ? (
-          <button
-            type="button"
-            className="entry-item__add-note"
-            disabled={disabled || isSaving}
-            onMouseDown={(event) => event.preventDefault()}
-            onClick={() => {
-              setShowNoteEditor(true);
-              setEditMode("note");
-            }}
-          >
-            ＋ 気持ち・備考
-          </button>
-        ) : null}
+            ) : null}
 
-        {showLinkEditor ? (
-          <div className="entry-item__link-editor">
-            <div className="entry-item__link-editor-control">
-              <LinkIcon />
-              <input
-                id={`entry-link-${entry.id}`}
-                ref={linkInputRef}
-                type="url"
-                inputMode="url"
-                autoCapitalize="off"
-                autoCorrect="off"
-                spellCheck={false}
-                value={linkValue}
-                disabled={disabled || isSaving}
-                onChange={(event) => {
-                  setLinkValue(event.target.value);
-                  setLinkError(null);
-                }}
-                onKeyDown={handleLinkKeyDown}
-                placeholder="https://..."
-                aria-label="リンクURLを編集"
-                aria-invalid={linkError ? true : undefined}
-              />
-              {linkValue ? (
-                <button
-                  type="button"
-                  className="entry-item__remove-link"
-                  disabled={disabled || isSaving}
-                  onMouseDown={(event) => event.preventDefault()}
-                  onClick={() => {
-                    setLinkValue("");
-                    setLinkError(null);
-                  }}
-                  aria-label="リンクを外す"
-                  title="リンクを外す"
-                >
-                  ×
-                </button>
-              ) : null}
-            </div>
-            {linkError ? <p className="entry-item__link-error">{linkError}</p> : null}
-          </div>
-        ) : null}
+            {showLinkEditor ? (
+              <div className="entry-item__link-editor">
+                <div className="entry-item__link-editor-control">
+                  <LinkIcon />
+                  <input
+                    id={`entry-link-${entry.id}`}
+                    ref={linkInputRef}
+                    type="url"
+                    inputMode="url"
+                    autoCapitalize="off"
+                    autoCorrect="off"
+                    spellCheck={false}
+                    value={linkValue}
+                    disabled={disabled || isSaving}
+                    onChange={(event) => {
+                      setLinkValue(event.target.value);
+                      setLinkError(null);
+                    }}
+                    onKeyDown={handleLinkKeyDown}
+                    placeholder="https://..."
+                    aria-label="リンクURLを編集"
+                    aria-invalid={linkError ? true : undefined}
+                  />
+                  {linkValue ? (
+                    <button
+                      type="button"
+                      className="entry-item__remove-link"
+                      disabled={disabled || isSaving}
+                      onMouseDown={(event) => event.preventDefault()}
+                      onClick={() => {
+                        setLinkValue("");
+                        setLinkError(null);
+                      }}
+                      aria-label="リンクを外す"
+                      title="リンクを外す"
+                    >
+                      ×
+                    </button>
+                  ) : null}
+                </div>
+                {linkError ? <p className="entry-item__link-error">{linkError}</p> : null}
+              </div>
+            ) : null}
 
-        {showCreatedAt ? (
-          <time
-            className="entry-item__created-at entry-item__created-at--editing"
-            dateTime={entry.created_at}
-            aria-label={`書いた日時 ${createdAtLabel}`}
-          >
-            作成 {createdAtLabel}
-          </time>
-        ) : null}
+            {showCreatedAt ? (
+              <time
+                className="entry-item__created-at entry-item__created-at--editing"
+                dateTime={entry.created_at}
+                aria-label={`書いた日時 ${createdAtLabel}`}
+              >
+                作成 {createdAtLabel}
+              </time>
+            ) : null}
+          </div>
+        </div>
 
         <div className="entry-item__edit-actions">
           <button
@@ -599,7 +608,7 @@ export function EntryItem({
 
   return (
     <article
-      className={`entry-item ${completionClassName} ${satisfactionClassName} ${
+      className={`entry-item ${completionClassName} ${satisfactionClassName} ${numberVisibilityClassName} ${
         isHierarchical ? "entry-item--hierarchical" : ""
       } ${entry.depth > 0 ? "entry-item--nested" : ""} ${
         isStructureOpen ? "entry-item--structure-open" : ""
@@ -607,7 +616,17 @@ export function EntryItem({
       style={style}
     >
       <div className="entry-item__row">
-        <div className="entry-item__body">
+        <div
+          className={`entry-item__body ${
+            showEntryNumbers ? "entry-item__body--numbered" : ""
+          }`}
+        >
+          {showEntryNumbers ? (
+            <span className="entry-item__number" aria-hidden="true">
+              {entry.outline_number}
+            </span>
+          ) : null}
+
           <button
             type="button"
             className="entry-item__content"
@@ -621,11 +640,6 @@ export function EntryItem({
             }
             aria-keyshortcuts={hierarchyKeyShortcuts}
           >
-            {showEntryNumbers ? (
-              <span className="entry-item__number" aria-hidden="true">
-                {entry.outline_number}
-              </span>
-            ) : null}
             <span className="entry-item__content-text">{entry.content}</span>
           </button>
 

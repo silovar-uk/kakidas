@@ -5559,3 +5559,35 @@ a:focus-visible {
     flex-wrap: nowrap;
   }
 }
+
+/* --------------------------------------------------------------------------
+   v0.5.51 — 番号表示時の気持ち・備考の階層
+   番号を左端の基準にし、本文・気持ち・補助情報を同じ本文列に揃える。
+   これにより「気持ち」が番号の実文字より左に出ず、主従が読み取れる。
+   -------------------------------------------------------------------------- */
+.entry-item__body--numbered,
+.entry-item__editor-body--numbered {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  align-items: start;
+  column-gap: 8px;
+}
+
+.entry-item__body--numbered > .entry-item__number,
+.entry-item__editor-body--numbered > .entry-item__number {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.entry-item__body--numbered > .entry-item__content,
+.entry-item__body--numbered > .entry-item__note,
+.entry-item__body--numbered > .entry-item__inline-actions,
+.entry-item__body--numbered > .entry-item__created-at,
+.entry-item__editor-body--numbered > .entry-item__editor-main {
+  grid-column: 2;
+  min-width: 0;
+}
+
+.entry-item__editor-main {
+  min-width: 0;
+}
