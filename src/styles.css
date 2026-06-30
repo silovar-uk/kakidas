@@ -5435,10 +5435,11 @@ a:focus-visible {
   --entry-satisfaction-background-focus: rgba(255, 252, 247, 0.76);
 }
 
+/* 満足度0は通常のカードと同じ紙色にし、色による意味づけをしない。 */
 .entry-item:not(.entry-item--completed).entry-item--satisfaction-0 {
-  --entry-satisfaction-background: #f4f7fa;
-  --entry-satisfaction-background-hover: #f0f5f9;
-  --entry-satisfaction-background-focus: #edf3f8;
+  --entry-satisfaction-background: #f8f7f3;
+  --entry-satisfaction-background-hover: #fffefa;
+  --entry-satisfaction-background-focus: #fffaf6;
 }
 
 .entry-item:not(.entry-item--completed).entry-item--satisfaction-1 {
@@ -5505,7 +5506,6 @@ a:focus-visible {
   --entry-satisfaction-background-focus: #edebe7;
 }
 
-.entry-column--compact .entry-item:not(.entry-item--completed).entry-item--satisfaction-0,
 .entry-column--compact .entry-item:not(.entry-item--completed).entry-item--satisfaction-1,
 .entry-column--compact .entry-item:not(.entry-item--completed).entry-item--satisfaction-2,
 .entry-column--compact .entry-item:not(.entry-item--completed).entry-item--satisfaction-3,
@@ -5515,7 +5515,6 @@ a:focus-visible {
 }
 
 @supports not (background: color-mix(in srgb, #ffffff 50%, transparent)) {
-  .entry-column--compact .entry-item:not(.entry-item--completed).entry-item--satisfaction-0,
   .entry-column--compact .entry-item:not(.entry-item--completed).entry-item--satisfaction-1,
   .entry-column--compact .entry-item:not(.entry-item--completed).entry-item--satisfaction-2,
   .entry-column--compact .entry-item:not(.entry-item--completed).entry-item--satisfaction-3,
@@ -5525,6 +5524,11 @@ a:focus-visible {
   }
 }
 
+
+/* --------------------------------------------------------------------------
+   v0.5.50 — 満足度0は通常背景
+   0は色による強調を行わず、通常／ホバー／操作中とも既定の紙色を使う。
+   -------------------------------------------------------------------------- */
 
 /* --------------------------------------------------------------------------
    v0.5.49 — PCの項目補助操作を右側の一列へ
