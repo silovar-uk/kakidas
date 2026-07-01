@@ -7,7 +7,9 @@ import {
   useState,
 } from "react";
 import { EntrySatisfactionControl } from "./EntrySatisfactionControl";
+import { EntryTagControl } from "./EntryTagControl";
 import { formatEntryCreatedAt } from "../lib/formatDate";
+import type { EntryTagSummary } from "../lib/memoTags";
 import {
   type EntryKind,
   type EntryMoveDirection,
@@ -43,6 +45,8 @@ type EntryItemProps = {
   showEntryNumbers: boolean;
   /** 補助情報と操作を隠し、本文だけを密に表示するか。 */
   compactView?: boolean;
+  /** 現在のメモで使われている項目タグ。候補表示だけに使う。 */
+  tagSuggestions: EntryTagSummary[];
   disabled?: boolean;
   onOpenStructure: (entryId: string) => void;
   onAddChild: (entryId: string) => void;
@@ -68,6 +72,7 @@ export function EntryItem({
   showCreatedAt,
   showEntryNumbers,
   compactView = false,
+  tagSuggestions,
   disabled = false,
   onOpenStructure,
   onAddChild,
@@ -642,6 +647,15 @@ export function EntryItem({
           >
             <span className="entry-item__content-text">{entry.content}</span>
           </button>
+
+          <EntryTagControl
+            tag={entry.tag}
+            suggestions={tagSuggestions}
+            disabled={disabled || isSaving}
+            onSave={async (tag) => {
+              await onUpdate(entry.id, { tag });
+            }}
+          />
 
           {hasNote ? (
             <button

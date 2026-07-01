@@ -30,6 +30,7 @@ import {
   getMemoTagKey,
   normalizeMemoRow,
   normalizeMemoTag,
+  normalizeEntryTag,
   normalizeMemoSyncMeta,
   normalizeEntryRow,
   normalizeLinkUrlForSave,
@@ -421,7 +422,7 @@ class IndexedDbMemoRepository implements MemoRepository {
   }
 
   /**
-   * 項目を「新しいメモにする」。元の項目は変更せず、本文・備考・リンク・満足度を
+   * 項目を「新しいメモにする」。元の項目は変更せず、本文・タグ・備考・リンク・満足度を
    * 新メモのルート項目へ複製する。メモと項目は同じトランザクションで作るため、
    * 途中で失敗して片方だけ残ることはない。
    */
@@ -463,6 +464,7 @@ class IndexedDbMemoRepository implements MemoRepository {
       kind: sourceEntry.kind,
       parent_id: null,
       content: sourceEntry.content,
+      tag: sourceEntry.tag,
       note: sourceEntry.note,
       link_url: sourceEntry.link_url,
       satisfaction: sourceEntry.satisfaction,
@@ -699,6 +701,7 @@ class IndexedDbMemoRepository implements MemoRepository {
       kind: input.kind,
       parent_id: parentId,
       content,
+      tag: normalizeEntryTag(input.tag),
       note: input.note?.trim() ?? "",
       link_url: normalizeLinkUrlForSave(input.link_url),
       satisfaction: normalizeSatisfaction(input.satisfaction),
@@ -741,6 +744,7 @@ class IndexedDbMemoRepository implements MemoRepository {
 
     const current = await this.requireActiveEntry(entryStore, entryId, transaction);
     const content = patch.content === undefined ? current.content : patch.content.trim();
+    const tag = patch.tag === undefined ? current.tag : normalizeEntryTag(patch.tag);
     const note = patch.note === undefined ? current.note : patch.note.trim();
     const linkUrl =
       patch.link_url === undefined
@@ -766,6 +770,7 @@ class IndexedDbMemoRepository implements MemoRepository {
       ...current,
       ...patch,
       content: content || current.content,
+      tag,
       note,
       link_url: linkUrl,
       satisfaction,
@@ -1263,7 +1268,7 @@ class IndexedDbMemoRepository implements MemoRepository {
     );
 
     return {
-      version: 6,
+      version: 7,
       exported_at: nowIso(),
       memos: memos.map(normalizeMemoRow),
       entries: entries.map(normalizeEntryRow),
@@ -1277,7 +1282,8 @@ class IndexedDbMemoRepository implements MemoRepository {
         payload.version !== 3 &&
         payload.version !== 4 &&
         payload.version !== 5 &&
-        payload.version !== 6) ||
+        payload.version !== 6 &&
+        payload.version !== 7) ||
       !Array.isArray(payload.memos) ||
       !Array.isArray(payload.entries)
     ) {

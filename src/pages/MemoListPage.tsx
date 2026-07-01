@@ -18,6 +18,7 @@ import {
 } from "../components/CloudUploadDialog";
 import { CloudStatusBadge } from "../components/CloudStatusBadge";
 import { MemoDeleteDialog } from "../components/MemoDeleteDialog";
+import { MemoTagControl } from "../components/MemoTagControl";
 import { NoticeToast } from "../components/NoticeToast";
 import { useCloudMemos } from "../hooks/useCloudMemos";
 import { useMemos } from "../hooks/useMemos";
@@ -180,6 +181,7 @@ export function MemoListPage() {
     error,
     refresh,
     createMemo,
+    updateMemo,
     deleteMemo,
     exportBackup,
     importBackup,
@@ -418,6 +420,26 @@ export function MemoListPage() {
       );
     } finally {
       setIsDeletingMemo(false);
+    }
+  };
+
+  const handleSaveMemoTag = async (
+    memo: MemoListItem,
+    tag: string | null,
+  ): Promise<void> => {
+    try {
+      await updateMemo(memo.id, { tag });
+      setNotice(
+        tag
+          ? `「${memo.title}」にタグ「${tag}」を付けました。`
+          : `「${memo.title}」のタグを外しました。`,
+      );
+    } catch (caught) {
+      const message = caught instanceof Error
+        ? caught.message
+        : "タグを保存できませんでした。";
+      setNotice(message);
+      throw new Error(message);
     }
   };
 
@@ -860,34 +882,43 @@ export function MemoListPage() {
                     </span>
                   </button>
                 ) : (
-                  <Link to={`/memos/${memo.id}`} className="memo-card__link">
-                    <strong>{memo.title}</strong>
-                    {memo.tag ? <span className="memo-card__tag">#{memo.tag}</span> : null}
-                    {(memoPreviews.get(memo.id) ?? []).length > 0 ? (
-                      <span
-                        className="memo-card__preview"
-                        aria-label={`${memo.title}の入力内容の抜粋`}
-                      >
-                        {(memoPreviews.get(memo.id) ?? []).map((fragment) => (
-                          <span
-                            key={`${fragment.kind}-${fragment.content}`}
-                            className="memo-card__preview-item"
-                          >
-                            <span className="memo-card__preview-kind">
-                              {ENTRY_KIND_LABEL[fragment.kind]}
+                  <div className="memo-card__content">
+                    <Link to={`/memos/${memo.id}`} className="memo-card__link">
+                      <strong>{memo.title}</strong>
+                      {(memoPreviews.get(memo.id) ?? []).length > 0 ? (
+                        <span
+                          className="memo-card__preview"
+                          aria-label={`${memo.title}の入力内容の抜粋`}
+                        >
+                          {(memoPreviews.get(memo.id) ?? []).map((fragment) => (
+                            <span
+                              key={`${fragment.kind}-${fragment.content}`}
+                              className="memo-card__preview-item"
+                            >
+                              <span className="memo-card__preview-kind">
+                                {ENTRY_KIND_LABEL[fragment.kind]}
+                              </span>
+                              <span className="memo-card__preview-content">
+                                {fragment.content}
+                              </span>
                             </span>
-                            <span className="memo-card__preview-content">
-                              {fragment.content}
-                            </span>
-                          </span>
-                        ))}
+                          ))}
+                        </span>
+                      ) : null}
+                      <span className="memo-card__meta">
+                        <span>最終更新 {formatUpdatedAt(memo.updated_at)}</span>
+                        <CloudStatusBadge syncMeta={memo.sync_meta} />
                       </span>
-                    ) : null}
-                    <span className="memo-card__meta">
-                      <span>最終更新 {formatUpdatedAt(memo.updated_at)}</span>
-                      <CloudStatusBadge syncMeta={memo.sync_meta} />
-                    </span>
-                  </Link>
+                    </Link>
+
+                    <div className="memo-card__tag-control">
+                      <MemoTagControl
+                        tag={memo.tag}
+                        suggestions={tagSummaries}
+                        onSave={(tag) => handleSaveMemoTag(memo, tag)}
+                      />
+                    </div>
+                  </div>
                 )}
 
                 {isUploadMode ? (

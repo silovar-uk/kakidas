@@ -24,6 +24,7 @@
 │   │   ├── EntryComposer.tsx
 │   │   ├── EntryItem.tsx
 │   │   ├── EntrySatisfactionControl.tsx
+│   │   ├── EntryTagControl.tsx
 │   │   ├── MemoDeleteDialog.tsx
 │   │   ├── MemoTagControl.tsx
 │   │   ├── MobileEntryActionSheet.tsx
@@ -37,6 +38,7 @@
 │   │   ├── clipboard.ts
 │   │   ├── copyPreferences.ts
 │   │   ├── db.ts
+│   │   ├── entryTagGroups.ts
 │   │   ├── formatDate.ts
 │   │   ├── memoListPreferences.ts
 │   │   ├── memoTags.ts
@@ -61,6 +63,7 @@
 │   ├── MIGRATE_v0.5.14.sql
 │   ├── MIGRATE_v0.5.31.sql
 │   ├── MIGRATE_v0.5.44.sql
+│   ├── MIGRATE_v0.5.53.sql
 │   └── schema.sql
 ├── .env.example
 ├── .gitignore

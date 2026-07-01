@@ -1,27 +1,31 @@
-import type { MemoListItem, MemoRow } from "../types/memo";
-import { getMemoTagKey, normalizeMemoTag } from "../types/memo";
+import type { EntryRow, MemoListItem, MemoRow } from "../types/memo";
+import { getEntryTagKey, normalizeEntryTag } from "../types/memo";
 
-export type MemoTagSummary = {
+export type TagSummary = {
   /** 表記ゆれをまとめるための内部キー。保存用ではない。 */
   key: string;
-  /** 一覧や候補に見せる自然な表記。最新更新の表記を採用する。 */
+  /** 一覧や候補に見せる自然な表記。現在の表示順で先に現れた表記を採用する。 */
   label: string;
   count: number;
   last_used_at: string;
 };
 
-type TaggableMemo = Pick<MemoRow, "tag" | "updated_at"> | Pick<MemoListItem, "tag" | "updated_at">;
+/** 既存の公開名を残し、メモ用／項目用で同じ候補ロジックを使う。 */
+export type MemoTagSummary = TagSummary;
+export type EntryTagSummary = TagSummary;
+
+type Taggable = Pick<MemoRow, "tag" | "updated_at"> | Pick<MemoListItem, "tag" | "updated_at"> | Pick<EntryRow, "tag" | "updated_at">;
 
 /**
- * 使われたタグを、空白・英字の大小文字の表記ゆれだけまとめて候補化する。
- * タグ管理の専用テーブルは作らず、メモに実際に付いている言葉だけを候補にする。
+ * 実際に使われたタグを、空白・英字の大小文字の表記ゆれだけまとめて候補化する。
+ * タグ専用テーブルは作らず、メモ・項目に付いている言葉だけを候補にする。
  */
-export function getMemoTagSummaries(memos: TaggableMemo[]): MemoTagSummary[] {
-  const summaryByKey = new Map<string, MemoTagSummary>();
+export function getTagSummaries(items: Taggable[]): TagSummary[] {
+  const summaryByKey = new Map<string, TagSummary>();
 
-  for (const memo of memos) {
-    const label = normalizeMemoTag(memo.tag);
-    const key = getMemoTagKey(label);
+  for (const item of items) {
+    const label = normalizeEntryTag(item.tag);
+    const key = getEntryTagKey(label);
     if (!label || !key) continue;
 
     const current = summaryByKey.get(key);
@@ -30,16 +34,15 @@ export function getMemoTagSummaries(memos: TaggableMemo[]): MemoTagSummary[] {
         key,
         label,
         count: 1,
-        last_used_at: memo.updated_at,
+        last_used_at: item.updated_at,
       });
       continue;
     }
 
     current.count += 1;
-    // 最近付け直した表記を候補の表示にも採用する。
-    if (memo.updated_at > current.last_used_at) {
+    if (item.updated_at > current.last_used_at) {
       current.label = label;
-      current.last_used_at = memo.updated_at;
+      current.last_used_at = item.updated_at;
     }
   }
 
@@ -50,16 +53,40 @@ export function getMemoTagSummaries(memos: TaggableMemo[]): MemoTagSummary[] {
   );
 }
 
+export function getMemoTagSummaries(memos: (MemoRow | MemoListItem)[]): MemoTagSummary[] {
+  return getTagSummaries(memos);
+}
+
+export function getEntryTagSummaries(entries: EntryRow[]): EntryTagSummary[] {
+  return getTagSummaries(entries);
+}
+
 /** 候補の前方一致。未入力時は使用頻度・最近使った順をそのまま出す。 */
-export function getRecommendedMemoTags(
-  summaries: MemoTagSummary[],
+export function getRecommendedTags(
+  summaries: TagSummary[],
   query: string,
   limit = 6,
-): MemoTagSummary[] {
-  const key = getMemoTagKey(query);
+): TagSummary[] {
+  const key = getEntryTagKey(query);
   const matches = key
     ? summaries.filter((summary) => summary.key.startsWith(key))
     : summaries;
 
   return matches.slice(0, limit);
+}
+
+export function getRecommendedMemoTags(
+  summaries: MemoTagSummary[],
+  query: string,
+  limit = 6,
+): MemoTagSummary[] {
+  return getRecommendedTags(summaries, query, limit);
+}
+
+export function getRecommendedEntryTags(
+  summaries: EntryTagSummary[],
+  query: string,
+  limit = 6,
+): EntryTagSummary[] {
+  return getRecommendedTags(summaries, query, limit);
 }

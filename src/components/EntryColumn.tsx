@@ -5,6 +5,17 @@ import {
 } from "./EntryComposer";
 import { EntryItem } from "./EntryItem";
 import { MobileEntryActionSheet } from "./MobileEntryActionSheet";
+import type { EntryTagSummary } from "../lib/memoTags";
+import {
+  ENTRY_LIST_DISPLAY_MODE_LABEL,
+  getEntryTagGroupStateKey,
+  groupEntriesByTag,
+  readEntryListDisplayMode,
+  readEntryTagGroupExpandedState,
+  type EntryListDisplayMode,
+  writeEntryListDisplayMode,
+  writeEntryTagGroupExpandedState,
+} from "../lib/entryTagGroups";
 import { UndoToast } from "./UndoToast";
 import {
   type EntryDeletionResult,
@@ -27,6 +38,8 @@ type EntryColumnProps = {
   showEntryNumbers: boolean;
   /** 本文だけを密に眺める簡易表示か。 */
   compactView?: boolean;
+  /** 現在のメモで使われている項目タグ。候補表示だけに使う。 */
+  tagSuggestions: EntryTagSummary[];
   /** 新規メモ作成直後、対象区分の入力欄へ一度だけフォーカスする。 */
   autoFocusComposer?: boolean;
   /** メモ切替時に自動フォーカス済みの記録をリセットするためのキー。 */
@@ -78,6 +91,7 @@ export function EntryColumn({
   showCreatedAt,
   showEntryNumbers,
   compactView = false,
+  tagSuggestions,
   autoFocusComposer = false,
   autoFocusKey,
   addAtBottom = false,
@@ -107,6 +121,14 @@ export function EntryColumn({
   const [isDeletingAll, setIsDeletingAll] = useState(false);
   const [pendingUndo, setPendingUndo] = useState<PendingUndo | null>(null);
   const [isUndoing, setIsUndoing] = useState(false);
+  /** 単語／文／段落ごとに記憶する表示方法。初期状態は従来の通常表示。 */
+  const [displayMode, setDisplayMode] = useState<EntryListDisplayMode>(
+    () => readEntryListDisplayMode(kind),
+  );
+  /** タググループは初期状態では閉じ、開閉だけをブラウザ内に記憶する。 */
+  const [expandedTagGroups, setExpandedTagGroups] = useState(
+    readEntryTagGroupExpandedState,
+  );
 
   const composerRef = useRef<EntryComposerHandle | null>(null);
   const undoTimerRef = useRef<number | null>(null);
@@ -123,6 +145,7 @@ export function EntryColumn({
 
   const openEntries = entries.filter((entry) => !entry.is_completed);
   const completedEntries = entries.filter((entry) => entry.is_completed);
+  const isTagGrouped = displayMode === "tag_grouped";
 
   const clearUndo = () => {
     if (undoTimerRef.current !== null) {
@@ -184,6 +207,10 @@ export function EntryColumn({
   useEffect(() => {
     didAutoFocusRef.current = false;
   }, [autoFocusKey]);
+
+  useEffect(() => {
+    writeEntryListDisplayMode(kind, displayMode);
+  }, [displayMode, kind]);
 
   useEffect(() => {
     if (!autoFocusComposer || !isActiveOnMobile || didAutoFocusRef.current) {
@@ -407,6 +434,7 @@ export function EntryColumn({
       showCreatedAt={showCreatedAt}
       showEntryNumbers={showEntryNumbers}
       compactView={compactView}
+      tagSuggestions={tagSuggestions}
       disabled={disabled || isDeletingAll}
       onOpenStructure={openStructureActions}
       onAddChild={selectParent}
@@ -425,6 +453,62 @@ export function EntryColumn({
     />
   );
 
+  const toggleTagGroup = (tag: string) => {
+    const stateKey = getEntryTagGroupStateKey(kind, tag);
+    const nextState = {
+      ...expandedTagGroups,
+      [stateKey]: !(expandedTagGroups[stateKey] ?? false),
+    };
+
+    setExpandedTagGroups(nextState);
+    writeEntryTagGroupExpandedState(nextState);
+  };
+
+  const renderTagGroupedEntries = (
+    sourceEntries: EntryTreeNode[],
+    sectionKey: string,
+  ) => {
+    const grouped = groupEntriesByTag(sourceEntries);
+
+    return (
+      <>
+        {grouped.untagged.map(renderEntry)}
+
+        {grouped.groups.map((group) => {
+          const stateKey = getEntryTagGroupStateKey(kind, group.label);
+          const isExpanded = expandedTagGroups[stateKey] ?? false;
+
+          return (
+            <section
+              key={`${sectionKey}-${group.key}`}
+              className="entry-list__tag-group"
+              aria-label={`タグ「${group.label}」の項目`}
+            >
+              <button
+                type="button"
+                className="entry-list__tag-group-toggle"
+                onClick={() => toggleTagGroup(group.label)}
+                aria-expanded={isExpanded}
+              >
+                <span className="entry-list__tag-group-label">{group.label}</span>
+                <span className="entry-list__tag-group-count">{group.entries.length}件</span>
+                <span className="entry-list__tag-group-chevron" aria-hidden="true">
+                  {isExpanded ? "⌃" : "⌄"}
+                </span>
+              </button>
+
+              {isExpanded ? (
+                <div className="entry-list__tag-group-items">
+                  {group.entries.map(renderEntry)}
+                </div>
+              ) : null}
+            </section>
+          );
+        })}
+      </>
+    );
+  };
+
   return (
     <section
       className={`entry-column entry-column--${kind} ${
@@ -437,6 +521,22 @@ export function EntryColumn({
 
         <div className="entry-column__header-actions">
           <span className="entry-column__count">{entries.length}</span>
+          <label className="entry-column__display-mode">
+            <span>表示</span>
+            <select
+              value={displayMode}
+              onChange={(event) =>
+                setDisplayMode(event.target.value as EntryListDisplayMode)
+              }
+              aria-label={`${ENTRY_KIND_LABEL[kind]}の表示方法`}
+            >
+              {(Object.keys(ENTRY_LIST_DISPLAY_MODE_LABEL) as EntryListDisplayMode[]).map((mode) => (
+                <option key={mode} value={mode}>
+                  {ENTRY_LIST_DISPLAY_MODE_LABEL[mode]}
+                </option>
+              ))}
+            </select>
+          </label>
           {!compactView ? (
             <>
               <button
@@ -500,10 +600,14 @@ export function EntryColumn({
         {entries.length === 0 ? (
           <p className="entry-list__empty">まだありません。</p>
         ) : compactView ? (
-          entries.map(renderEntry)
+          isTagGrouped
+            ? renderTagGroupedEntries(entries, "compact")
+            : entries.map(renderEntry)
         ) : (
           <>
-            {openEntries.map(renderEntry)}
+            {isTagGrouped
+              ? renderTagGroupedEntries(openEntries, "open")
+              : openEntries.map(renderEntry)}
 
             {completedEntries.length > 0 ? (
               <section className="entry-list__completed-section" aria-label="完了済み">
@@ -518,7 +622,9 @@ export function EntryColumn({
                 </button>
                 {!isCompletedCollapsed ? (
                   <div className="entry-list__completed-items">
-                    {completedEntries.map(renderEntry)}
+                    {isTagGrouped
+                      ? renderTagGroupedEntries(completedEntries, "completed")
+                      : completedEntries.map(renderEntry)}
                   </div>
                 ) : null}
               </section>

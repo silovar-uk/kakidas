@@ -20,7 +20,11 @@ import { EntryColumn } from "../components/EntryColumn";
 import { MemoTagControl } from "../components/MemoTagControl";
 import { NoticeToast } from "../components/NoticeToast";
 import { useMemoDetail } from "../hooks/useMemos";
-import { getMemoTagSummaries, type MemoTagSummary } from "../lib/memoTags";
+import {
+  getEntryTagSummaries,
+  getMemoTagSummaries,
+  type MemoTagSummary,
+} from "../lib/memoTags";
 import { uploadMemoToCloud } from "../repositories/cloudMemoRepository";
 import { memoRepository } from "../repositories/memoRepository";
 import {
@@ -551,6 +555,12 @@ export function MemoEditorPage() {
     [includeCompletedInCopy, memo?.entries],
   );
 
+  /** 項目タグの候補は、このメモの単語・文・段落をまたいで再利用できる。 */
+  const entryTagSuggestions = useMemo(
+    () => getEntryTagSummaries(memo?.entries ?? []),
+    [memo?.entries],
+  );
+
   const entriesByKind = useMemo(() => {
     const allEntries = memo?.entries ?? [];
     // 完了を隠すときは、完了項目を木の計算前に除外する。
@@ -875,6 +885,7 @@ export function MemoEditorPage() {
             showCreatedAt={showEntryTimestamps}
             showEntryNumbers={showEntryNumbers}
             compactView={compactEntryView}
+            tagSuggestions={entryTagSuggestions}
             disabled={isSaving || isUploading}
             autoFocusComposer={
               kind === composerFocusKind && shouldFocusNewMemoComposer

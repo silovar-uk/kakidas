@@ -6,41 +6,39 @@ import {
   useState,
 } from "react";
 import {
-  getRecommendedMemoTags,
-  type MemoTagSummary,
+  getRecommendedEntryTags,
+  type EntryTagSummary,
 } from "../lib/memoTags";
-import { normalizeMemoTag } from "../types/memo";
+import { normalizeEntryTag } from "../types/memo";
 
-type MemoTagControlProps = {
+type EntryTagControlProps = {
   tag: string | null;
-  suggestions: MemoTagSummary[];
+  suggestions: EntryTagSummary[];
   disabled?: boolean;
   onSave: (tag: string | null) => Promise<void>;
 };
 
 /**
- * メモにはタグをひとつだけ置く。自由入力を主役にし、既存タグは候補として添える。
- * 入力中に勝手に保存せず、Enter・候補タップ・保存ボタンで確定する。
+ * 項目にはタグをひとつだけ置く。タグの追加・変更・解除はこの場で確定し、
+ * 同じタグをEntryColumnが折りたたみグループとして束ねる。
  */
-export function MemoTagControl({
+export function EntryTagControl({
   tag,
   suggestions,
   disabled = false,
   onSave,
-}: MemoTagControlProps) {
+}: EntryTagControlProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [value, setValue] = useState(tag ?? "");
   const [isSaving, setIsSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!isEditing) {
-      setValue(tag ?? "");
-    }
+    if (!isEditing) setValue(tag ?? "");
   }, [isEditing, tag]);
 
   const recommended = useMemo(
-    () => getRecommendedMemoTags(suggestions, value),
+    () => getRecommendedEntryTags(suggestions, value),
     [suggestions, value],
   );
 
@@ -54,7 +52,7 @@ export function MemoTagControl({
   const save = async (nextValue = value) => {
     if (disabled || isSaving) return;
 
-    const nextTag = normalizeMemoTag(nextValue);
+    const nextTag = normalizeEntryTag(nextValue);
     if (nextTag === tag) {
       setIsEditing(false);
       return;
@@ -68,9 +66,7 @@ export function MemoTagControl({
       setIsEditing(false);
     } catch (caught) {
       setErrorMessage(
-        caught instanceof Error
-          ? caught.message
-          : "タグを保存できませんでした。",
+        caught instanceof Error ? caught.message : "タグを保存できませんでした。",
       );
     } finally {
       setIsSaving(false);
@@ -90,7 +86,7 @@ export function MemoTagControl({
 
   if (!isEditing) {
     return (
-      <div className="memo-tag-control" aria-label="メモのタグ">
+      <div className="entry-tag-control memo-tag-control" aria-label="項目のタグ">
         {tag ? (
           <>
             <button
@@ -108,7 +104,7 @@ export function MemoTagControl({
             <button
               type="button"
               className="memo-tag-control__remove"
-              disabled={disabled}
+              disabled={disabled || isSaving}
               onClick={() => void save("")}
               aria-label={`タグ「${tag}」を外す`}
               title="タグを外す"
@@ -134,7 +130,7 @@ export function MemoTagControl({
   }
 
   return (
-    <div className="memo-tag-control memo-tag-control--editing" aria-label="タグを編集">
+    <div className="entry-tag-control entry-tag-control--editing memo-tag-control memo-tag-control--editing" aria-label="項目のタグを編集">
       <form className="memo-tag-control__form" onSubmit={handleSubmit}>
         <label>
           <span>タグ</span>
@@ -145,7 +141,7 @@ export function MemoTagControl({
               setValue(event.target.value);
             }}
             onKeyDown={handleKeyDown}
-            placeholder="例：面接"
+            placeholder="例：後日対応"
             maxLength={30}
             autoFocus
             disabled={disabled || isSaving}
@@ -169,13 +165,11 @@ export function MemoTagControl({
       </form>
 
       {errorMessage ? (
-        <p className="memo-tag-control__error" role="alert">
-          {errorMessage}
-        </p>
+        <p className="memo-tag-control__error" role="alert">{errorMessage}</p>
       ) : null}
 
       {recommended.length > 0 ? (
-        <div className="memo-tag-control__suggestions" aria-label="過去のタグ候補">
+        <div className="memo-tag-control__suggestions" aria-label="過去の項目タグ候補">
           <span>候補</span>
           <div>
             {recommended.map((summary) => (

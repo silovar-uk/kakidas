@@ -265,6 +265,31 @@ a:focus-visible {
   transform: translateY(-1px);
 }
 
+.memo-card__content {
+  display: grid;
+  min-width: 0;
+  gap: 7px;
+}
+
+.memo-card__tag-control {
+  position: relative;
+  z-index: 1;
+  min-width: 0;
+}
+
+.memo-card__tag-control .memo-tag-control {
+  max-width: 100%;
+}
+
+.memo-card__tag-control .memo-tag-control--editing {
+  width: min(100%, 420px);
+  min-width: 0;
+}
+
+.memo-card__tag-control .memo-tag-chip {
+  max-width: min(230px, 100%);
+}
+
 .memo-card__link {
   display: grid;
   min-width: 0;
@@ -4995,6 +5020,13 @@ a:focus-visible {
   font: inherit;
 }
 
+.memo-tag-control__error {
+  margin: 0;
+  color: #9c4438;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
 .memo-tag-chip {
   display: inline-flex;
   max-width: min(230px, 25vw);
@@ -5590,4 +5622,240 @@ a:focus-visible {
 
 .entry-item__editor-main {
   min-width: 0;
+}
+
+
+/* --------------------------------------------------------------------------
+   v0.5.52 — memo list inline tag editing
+   カードを開くリンクとタグ操作を分け、一覧からも安全に付け替えられるようにする。
+   -------------------------------------------------------------------------- */
+@media (max-width: 560px) {
+  .memo-card__content {
+    gap: 6px;
+  }
+
+  .memo-card__tag-control .memo-tag-control--editing {
+    width: 100%;
+  }
+
+  .memo-card__tag-control .memo-tag-control__form {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .memo-card__tag-control .memo-tag-control__form label {
+    grid-column: 1 / -1;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   v0.5.53 — item tags and tag-grouped entry lists
+   項目ごとにタグをひとつだけ付け、単語／文／段落の中で折りたためる。
+   タグなしは常に先頭。色ではなく静かな見出しでまとまりを示す。
+   -------------------------------------------------------------------------- */
+.entry-column__display-mode {
+  display: inline-flex;
+  min-height: 28px;
+  align-items: center;
+  gap: 4px;
+  padding: 0 5px 0 7px;
+  border: 1px solid #e0dbd2;
+  border-radius: 8px;
+  color: #746d65;
+  background: rgba(255, 254, 250, 0.7);
+  font-size: 10px;
+  font-weight: 720;
+  line-height: 1;
+}
+
+.entry-column__display-mode select {
+  min-width: 0;
+  max-width: 116px;
+  min-height: 24px;
+  padding: 0 20px 0 3px;
+  border: 0;
+  border-radius: 6px;
+  color: #514b44;
+  background: transparent;
+  font: inherit;
+  font-size: 10px;
+  cursor: pointer;
+  outline: 0;
+}
+
+.entry-column__display-mode select:focus-visible {
+  outline: 3px solid rgba(111, 91, 133, 0.2);
+  outline-offset: 2px;
+}
+
+.entry-list__tag-group {
+  border-bottom: 1px solid #eeeae4;
+}
+
+.entry-list__tag-group-toggle {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  width: 100%;
+  min-height: 38px;
+  align-items: center;
+  gap: 8px;
+  padding: 0 2px;
+  border: 0;
+  color: #625776;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+}
+
+.entry-list__tag-group-toggle:hover {
+  color: #4e4067;
+  background: #faf8ff;
+}
+
+.entry-list__tag-group-label {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 12px;
+  font-weight: 780;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.entry-list__tag-group-label::before {
+  margin-right: 4px;
+  color: #8a7aa2;
+  content: "#";
+}
+
+.entry-list__tag-group-count {
+  color: #8a837e;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.entry-list__tag-group-chevron {
+  width: 18px;
+  color: #7e728e;
+  font-size: 15px;
+  line-height: 1;
+  text-align: center;
+}
+
+.entry-list__tag-group-items {
+  border-top: 1px solid #f0ece7;
+}
+
+.entry-list__tag-group-items .entry-item:first-child {
+  border-top: 0;
+}
+
+.entry-list__completed-items > .entry-list__tag-group:first-child {
+  border-top: 0;
+}
+
+.entry-tag-control {
+  align-self: start;
+  width: fit-content;
+  max-width: 100%;
+  margin-top: 5px;
+}
+
+.entry-tag-control .memo-tag-chip {
+  max-width: min(250px, 100%);
+  min-height: 24px;
+  padding-inline: 8px;
+  font-size: 10px;
+}
+
+.entry-tag-control .memo-tag-control__add {
+  min-height: 24px;
+  padding-inline: 6px;
+  font-size: 10px;
+}
+
+.entry-tag-control .memo-tag-control__remove {
+  width: 23px;
+  height: 23px;
+  font-size: 14px;
+}
+
+.entry-tag-control--editing {
+  width: min(100%, 390px);
+  margin-top: 7px;
+}
+
+.entry-item__body--numbered > .entry-tag-control {
+  grid-column: 2;
+  min-width: 0;
+}
+
+@media (max-width: 920px) {
+  .entry-column__display-mode {
+    min-height: 32px;
+    gap: 5px;
+    padding-left: 8px;
+    font-size: 11px;
+  }
+
+  .entry-column__display-mode select {
+    min-height: 28px;
+    max-width: 124px;
+    font-size: 11px;
+  }
+
+  .entry-list__tag-group-toggle {
+    min-height: 42px;
+    padding-inline: 3px;
+  }
+
+  .entry-list__tag-group-label {
+    font-size: 13px;
+  }
+
+  .entry-list__tag-group-count {
+    font-size: 11px;
+  }
+
+  .entry-tag-control {
+    margin-top: 6px;
+  }
+
+  .entry-tag-control .memo-tag-chip,
+  .entry-tag-control .memo-tag-control__add {
+    min-height: 28px;
+    font-size: 11px;
+  }
+
+  .entry-tag-control .memo-tag-control__remove {
+    width: 27px;
+    height: 27px;
+  }
+}
+
+@media (max-width: 560px) {
+  .entry-column__header-actions {
+    gap: 3px;
+  }
+
+  .entry-column__display-mode > span {
+    display: none;
+  }
+
+  .entry-column__display-mode {
+    padding-inline: 5px;
+  }
+
+  .entry-column__display-mode select {
+    max-width: 108px;
+    padding-left: 2px;
+    font-size: 10px;
+  }
+
+  .entry-tag-control--editing .memo-tag-control__form {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .entry-tag-control--editing .memo-tag-control__form label {
+    grid-column: 1 / -1;
+  }
 }

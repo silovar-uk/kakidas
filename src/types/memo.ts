@@ -96,6 +96,8 @@ export type EntryRow = {
   kind: EntryKind;
   parent_id: string | null;
   content: string;
+  /** 項目に付ける自由入力のタグ。タグは0または1つだけ。 */
+  tag: string | null;
   /** 任意の補足。空文字なら画面に余白を作らない。 */
   note: string;
   /** 任意の外部リンク。空文字ならリンクボタンは追加用として扱う。 */
@@ -116,9 +118,11 @@ export type EntryRow = {
  */
 export type LegacyEntryRow = Omit<
   EntryRow,
-  "parent_id" | "note" | "link_url" | "satisfaction" | "is_completed"
+  "parent_id" | "tag" | "note" | "link_url" | "satisfaction" | "is_completed"
 > & {
   parent_id?: string | null;
+  /** v0.5.53以前は項目タグがないため、読み込み時にnullへ補完する。 */
+  tag?: string | null;
   /** v0.5.10以前は備考カラムがないため、読み込み時に空文字へ補完する。 */
   note?: string | null;
   /** v0.5.31以前はリンクカラムがないため、読み込み時に空文字へ補完する。 */
@@ -136,6 +140,7 @@ export type EntryInsert = {
   kind: EntryKind;
   parent_id?: string | null;
   content: string;
+  tag?: string | null;
   note?: string;
   link_url?: string;
   satisfaction?: number;
@@ -149,7 +154,7 @@ export type EntryInsert = {
 export type EntryUpdate = Partial<
   Pick<
     EntryRow,
-    "content" | "note" | "link_url" | "satisfaction" | "is_completed" | "sort_order" | "updated_at" | "deleted_at" | "user_id"
+    "content" | "tag" | "note" | "link_url" | "satisfaction" | "is_completed" | "sort_order" | "updated_at" | "deleted_at" | "user_id"
   >
 >;
 
@@ -306,9 +311,9 @@ export type Database = {
 };
 
 export type BackupPayload = {
-  version: 1 | 2 | 3 | 4 | 5 | 6;
+  version: 1 | 2 | 3 | 4 | 5 | 6 | 7;
   exported_at: string;
-  /** v1〜v5は tag を持たないため、読み込み時に null へ補完する。 */
+  /** v1〜v5はメモタグを、v1〜v6は項目タグを持たないため、読み込み時に null へ補完する。 */
   memos: LegacyMemoRow[];
   entries: LegacyEntryRow[];
 };
@@ -463,6 +468,16 @@ export function getMemoTagKey(value: unknown): string {
   return tag ? tag.toLocaleLowerCase("en-US") : "";
 }
 
+/** 項目タグもメモタグと同じ正規化ルールを使う。 */
+export function normalizeEntryTag(value: unknown): string | null {
+  return normalizeMemoTag(value);
+}
+
+/** 項目タグを同じグループとして束ねる比較用キー。 */
+export function getEntryTagKey(value: unknown): string {
+  return getMemoTagKey(value);
+}
+
 export function normalizeMemoRow(memo: LegacyMemoRow): MemoRow {
   return {
     ...memo,
@@ -474,6 +489,7 @@ export function normalizeEntryRow(entry: LegacyEntryRow): EntryRow {
   return {
     ...entry,
     parent_id: entry.parent_id ?? null,
+    tag: normalizeEntryTag(entry.tag),
     note: typeof entry.note === "string" ? entry.note : "",
     link_url: typeof entry.link_url === "string" ? entry.link_url.trim() : "",
     satisfaction: normalizeSatisfaction(entry.satisfaction),
