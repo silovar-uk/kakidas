@@ -254,6 +254,7 @@ export function useMemoDetail(memoId: string | undefined) {
     async (
       kind: EntryKind,
       content: string,
+      tag: string | null = null,
       parentId: string | null = null,
       position: EntryInsertPosition = "bottom",
     ): Promise<EntryRow> => {
@@ -267,6 +268,7 @@ export function useMemoDetail(memoId: string | undefined) {
           kind,
           parent_id: parentId,
           content,
+          tag,
         }, position);
 
         await refreshAfterWrite();

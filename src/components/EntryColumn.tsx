@@ -54,6 +54,7 @@ type EntryColumnProps = {
   onCreate: (
     kind: EntryKind,
     content: string,
+    tag?: string | null,
     parentId?: string | null,
     position?: EntryInsertPosition,
   ) => Promise<unknown>;
@@ -251,10 +252,11 @@ export function EntryColumn({
     setStructureEntryId((current) => (current === entryId ? null : entryId));
   };
 
-  const handleCreate = async (content: string) => {
+  const handleCreate = async (content: string, tag: string | null) => {
     await onCreate(
       kind,
       content,
+      tag,
       isHierarchical ? parentId : null,
       addAtBottom ? "bottom" : "top",
     );
@@ -645,6 +647,7 @@ export function EntryColumn({
           kind={kind}
           disabled={disabled || isDeletingAll}
           targetLabel={isHierarchical ? parentEntry?.content ?? null : null}
+          tagSuggestions={tagSuggestions}
           onClearTarget={() => setParentId(null)}
           onSubmit={handleCreate}
         />

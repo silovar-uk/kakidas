@@ -6150,3 +6150,412 @@ a:focus-visible {
     min-height: 32px;
   }
 }
+
+/* --------------------------------------------------------------------------
+   v0.5.55 — 入力時の項目タグと、カードを揺らさないタグ編集
+   タグ編集を右側の操作列から浮かせ、PCの一行レイアウトを維持する。
+   -------------------------------------------------------------------------- */
+.entry-composer__meta-row {
+  position: relative;
+  display: flex;
+  min-height: 29px;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 7px;
+}
+
+.entry-composer__meta-row .entry-composer__hint {
+  display: block;
+  margin: 0 auto 0 0;
+  color: #988f85;
+  font-size: 10px;
+  line-height: 1.35;
+}
+
+.entry-composer__tag-picker {
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 auto;
+}
+
+.entry-composer__tag-trigger {
+  display: inline-flex;
+  min-height: 28px;
+  align-items: center;
+  gap: 5px;
+  padding: 0 8px;
+  border: 1px dashed #d8d0c5;
+  border-radius: 999px;
+  color: #766d63;
+  background: #fffefa;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 740;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.entry-composer__tag-trigger:hover:not(:disabled),
+.entry-composer__tag-trigger:focus-visible {
+  border-style: solid;
+  border-color: #c4b29f;
+  color: #624c3d;
+  background: #fff8f0;
+  outline: 0;
+}
+
+.entry-composer__tag-trigger.entry-tag-tone--0,
+.entry-composer__tag-trigger.entry-tag-tone--1,
+.entry-composer__tag-trigger.entry-tag-tone--2,
+.entry-composer__tag-trigger.entry-tag-tone--3,
+.entry-composer__tag-trigger.entry-tag-tone--4,
+.entry-composer__tag-trigger.entry-tag-tone--5 {
+  border-style: solid;
+  border-color: var(--entry-tag-border);
+  color: var(--entry-tag-color);
+  background: var(--entry-tag-background);
+}
+
+.entry-composer__tag-trigger svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+}
+
+.entry-composer__tag-backdrop {
+  display: none;
+}
+
+.entry-composer__tag-popover {
+  position: absolute;
+  z-index: 52;
+  top: calc(100% + 7px);
+  right: 0;
+  display: grid;
+  width: min(320px, calc(100vw - 40px));
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid #dcd5ca;
+  border-radius: 12px;
+  color: #5d554d;
+  background: #fffefa;
+  box-shadow: 0 14px 30px rgba(62, 50, 40, 0.16);
+}
+
+.entry-composer__tag-popover-header,
+.entry-tag-control__popover-header {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: #75685d;
+  font-size: 11px;
+  font-weight: 780;
+}
+
+.entry-composer__tag-popover-header button,
+.entry-tag-control__popover-header button {
+  display: inline-grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  color: #88786d;
+  background: transparent;
+  font-size: 16px;
+  line-height: 1;
+}
+
+.entry-composer__tag-popover-header button:hover:not(:disabled),
+.entry-tag-control__popover-header button:hover:not(:disabled) {
+  color: #834d42;
+  background: #fff0ed;
+}
+
+.entry-composer__tag-popover > input,
+.entry-tag-control__popover > input {
+  width: 100%;
+  min-height: 34px;
+  padding: 0 9px;
+  border: 1px solid #dcd4ca;
+  border-radius: 8px;
+  color: #464039;
+  background: #fff;
+  font: inherit;
+  font-size: 13px;
+  outline: 0;
+}
+
+.entry-composer__tag-popover > input:focus,
+.entry-tag-control__popover > input:focus {
+  border-color: #b7a18a;
+  box-shadow: 0 0 0 3px rgba(183, 161, 138, 0.15);
+}
+
+.entry-composer__tag-suggestions,
+.entry-tag-control__suggestions {
+  display: flex;
+  min-width: 0;
+  gap: 5px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.entry-composer__tag-suggestions::-webkit-scrollbar,
+.entry-tag-control__suggestions::-webkit-scrollbar {
+  display: none;
+}
+
+.entry-composer__tag-suggestions button,
+.entry-tag-control__suggestions button {
+  flex: 0 0 auto;
+  min-height: 25px;
+  padding: 0 8px;
+  border: 1px solid #e0d9cf;
+  border-radius: 999px;
+  color: #6e6257;
+  background: #faf8f4;
+  font: inherit;
+  font-size: 10px;
+  font-weight: 730;
+  white-space: nowrap;
+}
+
+.entry-composer__tag-suggestions button:hover:not(:disabled),
+.entry-tag-control__suggestions button:hover:not(:disabled) {
+  border-color: #c9b7a4;
+  color: #594a3f;
+  background: #fff6ed;
+}
+
+.entry-composer__tag-popover-actions,
+.entry-tag-control__popover-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.entry-composer__tag-popover-actions button,
+.entry-tag-control__popover-actions button {
+  min-height: 30px;
+  padding: 0 9px;
+  border: 0;
+  border-radius: 7px;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 760;
+}
+
+.entry-composer__tag-popover-actions > button:first-child,
+.entry-tag-control__clear {
+  color: #8d554b;
+  background: transparent;
+}
+
+.entry-composer__tag-popover-actions > button:first-child:hover:not(:disabled),
+.entry-tag-control__clear:hover:not(:disabled) {
+  background: #fff0ed;
+}
+
+.entry-composer__tag-apply,
+.entry-tag-control__save {
+  color: #fff;
+  background: #6b5a4f;
+}
+
+.entry-composer__tag-apply:hover:not(:disabled),
+.entry-tag-control__save:hover:not(:disabled) {
+  background: #55463d;
+}
+
+.entry-item__tag-chip {
+  display: inline-flex;
+  max-width: min(44%, 250px);
+  min-height: 24px;
+  align-items: center;
+  padding: 0 8px;
+  overflow: hidden;
+  border: 1px solid #ddd6cd;
+  border-radius: 999px;
+  color: #71685e;
+  background: #f8f6f2;
+  font-size: 10px;
+  font-weight: 760;
+  line-height: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.entry-item__tag-chip.entry-tag-tone--0,
+.entry-item__tag-chip.entry-tag-tone--1,
+.entry-item__tag-chip.entry-tag-tone--2,
+.entry-item__tag-chip.entry-tag-tone--3,
+.entry-item__tag-chip.entry-tag-tone--4,
+.entry-item__tag-chip.entry-tag-tone--5 {
+  border-color: var(--entry-tag-border);
+  color: var(--entry-tag-color);
+  background: var(--entry-tag-background);
+}
+
+/* アイコンは常に固定寸法。開いた時も親のflex/gridの幅を変えない。 */
+.entry-tag-control,
+.entry-tag-control--icon {
+  position: relative;
+  display: inline-flex;
+  width: 27px;
+  min-width: 27px;
+  height: 27px;
+  margin: 0;
+  align-self: center;
+}
+
+.entry-tag-control__icon {
+  display: inline-grid;
+  width: 27px;
+  min-width: 27px;
+  height: 27px;
+  min-height: 27px;
+  place-items: center;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: #796c61;
+  background: transparent;
+}
+
+.entry-tag-control__icon:hover:not(:disabled),
+.entry-tag-control__icon:focus-visible {
+  border-color: #d9cfc3;
+  color: #665247;
+  background: #fff7ef;
+  outline: 0;
+}
+
+.entry-tag-control__icon.entry-tag-tone--0,
+.entry-tag-control__icon.entry-tag-tone--1,
+.entry-tag-control__icon.entry-tag-tone--2,
+.entry-tag-control__icon.entry-tag-tone--3,
+.entry-tag-control__icon.entry-tag-tone--4,
+.entry-tag-control__icon.entry-tag-tone--5 {
+  border-color: var(--entry-tag-border);
+  color: var(--entry-tag-color);
+  background: var(--entry-tag-background);
+}
+
+.entry-tag-control__icon svg {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+}
+
+.entry-tag-control__backdrop {
+  display: none;
+}
+
+.entry-tag-control__popover {
+  position: absolute;
+  z-index: 55;
+  top: calc(100% + 7px);
+  right: 0;
+  display: grid;
+  width: min(320px, calc(100vw - 40px));
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid #dcd5ca;
+  border-radius: 12px;
+  color: #5d554d;
+  background: #fffefa;
+  box-shadow: 0 14px 30px rgba(62, 50, 40, 0.16);
+}
+
+.entry-tag-control__error {
+  margin: -2px 0 0;
+  color: #a04a3e;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+@media (max-width: 920px) {
+  .entry-composer__meta-row {
+    min-height: 34px;
+    justify-content: flex-start;
+    margin-top: 8px;
+  }
+
+  .entry-composer__meta-row .entry-composer__hint {
+    display: none;
+  }
+
+  .entry-composer__tag-trigger {
+    min-height: 34px;
+    padding-inline: 10px;
+    border-radius: 10px;
+    font-size: 12px;
+  }
+
+  .entry-composer__tag-backdrop,
+  .entry-tag-control__backdrop {
+    position: fixed;
+    z-index: 70;
+    inset: 0;
+    display: block;
+    width: 100vw;
+    height: 100dvh;
+    padding: 0;
+    border: 0;
+    background: rgba(45, 39, 33, 0.16);
+  }
+
+  .entry-composer__tag-popover,
+  .entry-tag-control__popover {
+    position: fixed;
+    z-index: 71;
+    top: auto;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    width: auto;
+    max-height: min(58dvh, 430px);
+    padding: 15px 16px calc(15px + env(safe-area-inset-bottom));
+    border-right: 0;
+    border-bottom: 0;
+    border-left: 0;
+    border-radius: 18px 18px 0 0;
+    overflow: auto;
+  }
+
+  .entry-item__tag-chip {
+    max-width: 48%;
+    min-height: 26px;
+    font-size: 11px;
+  }
+
+  .entry-tag-control,
+  .entry-tag-control--icon,
+  .entry-tag-control__icon {
+    width: 34px;
+    min-width: 34px;
+    height: 34px;
+    min-height: 34px;
+    margin: 0;
+  }
+
+  .entry-tag-control__icon {
+    border-color: #e2d7cd;
+    border-radius: 10px;
+    background: #fffefa;
+  }
+}

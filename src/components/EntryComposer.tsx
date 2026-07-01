@@ -5,6 +5,7 @@ import {
   forwardRef,
   useEffect,
   useImperativeHandle,
+  useMemo,
   useRef,
   useState,
 } from "react";
@@ -12,7 +13,13 @@ import {
   type EntryKind,
   ENTRY_KIND_LABEL,
   ENTRY_KIND_PLACEHOLDER,
+  normalizeEntryTag,
 } from "../types/memo";
+import {
+  getRecommendedEntryTags,
+  type EntryTagSummary,
+} from "../lib/memoTags";
+import { getEntryTagToneClassName } from "../lib/entryTagGroups";
 
 export type EntryComposerHandle = {
   focus: (options?: { scroll?: boolean; delay?: number }) => void;
@@ -22,8 +29,10 @@ type EntryComposerProps = {
   kind: EntryKind;
   disabled?: boolean;
   targetLabel?: string | null;
+  /** 現在のメモで使われている項目タグ。新規入力時の候補だけに使う。 */
+  tagSuggestions: EntryTagSummary[];
   onClearTarget?: () => void;
-  onSubmit: (content: string) => Promise<unknown> | unknown;
+  onSubmit: (content: string, tag: string | null) => Promise<unknown> | unknown;
 };
 
 type ParagraphResizeOptions = {
@@ -33,6 +42,15 @@ type ParagraphResizeOptions = {
    */
   allowShrink?: boolean;
 };
+
+function TagIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path d="M4.8 4.8h7.5l6.9 6.9-6.6 6.6-7.8-7.8V4.8Z" />
+      <path d="M8.4 8.4h.01" />
+    </svg>
+  );
+}
 
 function readCssPixel(value: string): number | null {
   const parsed = Number.parseFloat(value);
@@ -50,20 +68,31 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
       kind,
       disabled = false,
       targetLabel = null,
+      tagSuggestions,
       onClearTarget,
       onSubmit,
     },
     ref,
   ) {
     const [value, setValue] = useState("");
+    const [tagValue, setTagValue] = useState("");
+    const [tagDraft, setTagDraft] = useState("");
+    const [isTagPickerOpen, setIsTagPickerOpen] = useState(false);
     const [isComposing, setIsComposing] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     const inputRef = useRef<HTMLInputElement | HTMLTextAreaElement | null>(null);
+    const tagInputRef = useRef<HTMLInputElement | null>(null);
+    const tagPickerRef = useRef<HTMLDivElement | null>(null);
     const paragraphResizeFrameRef = useRef<number | null>(null);
     const isComposingRef = useRef(false);
     const isParagraph = kind === "paragraph";
+    const selectedTag = normalizeEntryTag(tagValue);
     const canSubmit = value.trim().length > 0 && !disabled && !isSubmitting;
+    const recommendedTags = useMemo(
+      () => getRecommendedEntryTags(tagSuggestions, tagDraft),
+      [tagDraft, tagSuggestions],
+    );
 
     useEffect(() => {
       return () => {
@@ -72,6 +101,25 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
         }
       };
     }, []);
+
+    useEffect(() => {
+      if (!isTagPickerOpen) return;
+
+      const handlePointerDown = (event: PointerEvent) => {
+        const target = event.target as Node | null;
+        if (target && tagPickerRef.current?.contains(target)) return;
+        setIsTagPickerOpen(false);
+        setTagDraft(selectedTag ?? "");
+      };
+
+      document.addEventListener("pointerdown", handlePointerDown);
+      const frame = window.requestAnimationFrame(() => tagInputRef.current?.focus());
+
+      return () => {
+        document.removeEventListener("pointerdown", handlePointerDown);
+        window.cancelAnimationFrame(frame);
+      };
+    }, [isTagPickerOpen, selectedTag]);
 
     useImperativeHandle(ref, () => ({
       focus: ({ scroll = true, delay = 160 } = {}) => {
@@ -141,6 +189,22 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
       });
     };
 
+    const closeTagPicker = () => {
+      setTagDraft(selectedTag ?? "");
+      setIsTagPickerOpen(false);
+    };
+
+    const applyTag = (rawValue = tagDraft) => {
+      setTagValue(normalizeEntryTag(rawValue) ?? "");
+      setIsTagPickerOpen(false);
+    };
+
+    const clearTag = () => {
+      setTagValue("");
+      setTagDraft("");
+      setIsTagPickerOpen(false);
+    };
+
     const submit = async () => {
       const content = value.trim();
 
@@ -149,8 +213,12 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
       setIsSubmitting(true);
 
       try {
-        await onSubmit(content);
+        await onSubmit(content, selectedTag);
         setValue("");
+        // 新しい項目のタグは、次の項目へ勝手に持ち越さない。
+        setTagValue("");
+        setTagDraft("");
+        setIsTagPickerOpen(false);
         // 送信後は空の基準高へ戻してよい。入力中だけ縮小を抑える。
         scheduleParagraphTextareaResize({ allowShrink: true });
         window.requestAnimationFrame(() => inputRef.current?.focus());
@@ -184,6 +252,21 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
 
       event.preventDefault();
       void submit();
+    };
+
+    const handleTagInputKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+      if (event.nativeEvent.isComposing) return;
+
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closeTagPicker();
+        return;
+      }
+
+      if (event.key === "Enter") {
+        event.preventDefault();
+        applyTag();
+      }
     };
 
     const handleChange = (
@@ -282,11 +365,93 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
           </button>
         </div>
 
-        {isParagraph ? (
-          <p id="paragraph-shortcut-hint" className="entry-composer__hint">
-            Enterで改行。Shift＋Enter／Ctrl＋Enterで置く。
-          </p>
-        ) : null}
+        <div className="entry-composer__meta-row">
+          <div className="entry-composer__tag-picker" ref={tagPickerRef}>
+            <button
+              type="button"
+              className={`entry-composer__tag-trigger ${
+                selectedTag ? getEntryTagToneClassName(selectedTag) : ""
+              }`}
+              disabled={disabled || isSubmitting}
+              onClick={() => {
+                setTagDraft(selectedTag ?? "");
+                setIsTagPickerOpen((open) => !open);
+              }}
+              aria-expanded={isTagPickerOpen}
+              aria-label={selectedTag ? `タグ「${selectedTag}」を変更` : "タグを付ける"}
+              title={selectedTag ? "タグを変更" : "タグを付ける"}
+            >
+              <TagIcon />
+              <span>{selectedTag ? `#${selectedTag}` : "タグ"}</span>
+            </button>
+
+            {isTagPickerOpen ? (
+              <>
+                <button
+                  type="button"
+                  className="entry-composer__tag-backdrop"
+                  aria-label="タグ入力を閉じる"
+                  onClick={closeTagPicker}
+                />
+                <div className="entry-composer__tag-popover" role="dialog" aria-label="項目タグを設定">
+                <div className="entry-composer__tag-popover-header">
+                  <span>この項目のタグ</span>
+                  <button
+                    type="button"
+                    onClick={closeTagPicker}
+                    aria-label="タグ入力を閉じる"
+                    title="閉じる"
+                  >
+                    ×
+                  </button>
+                </div>
+                <input
+                  ref={tagInputRef}
+                  value={tagDraft}
+                  onChange={(event) => setTagDraft(event.target.value)}
+                  onKeyDown={handleTagInputKeyDown}
+                  placeholder="例：後日対応"
+                  maxLength={30}
+                  autoComplete="off"
+                  aria-label="項目タグ"
+                />
+                {recommendedTags.length > 0 ? (
+                  <div className="entry-composer__tag-suggestions" aria-label="過去の項目タグ候補">
+                    {recommendedTags.map((summary) => (
+                      <button
+                        key={summary.key}
+                        type="button"
+                        onMouseDown={(event) => event.preventDefault()}
+                        onClick={() => applyTag(summary.label)}
+                      >
+                        #{summary.label}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+                <div className="entry-composer__tag-popover-actions">
+                  {selectedTag ? (
+                    <button type="button" onClick={clearTag}>
+                      外す
+                    </button>
+                  ) : (
+                    <span />
+                  )}
+                  <button type="button" className="entry-composer__tag-apply" onClick={() => applyTag()}>
+                    決定
+                  </button>
+                </div>
+                </div>
+              </>
+            ) : null}
+          </div>
+
+          {isParagraph ? (
+            <p id="paragraph-shortcut-hint" className="entry-composer__hint">
+              Enterで改行。Shift＋Enter／Ctrl＋Enterで置く。
+            </p>
+          ) : null}
+        </div>
       </form>
     );
   },

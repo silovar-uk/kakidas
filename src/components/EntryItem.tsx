@@ -9,6 +9,7 @@ import {
 import { EntrySatisfactionControl } from "./EntrySatisfactionControl";
 import { EntryTagControl } from "./EntryTagControl";
 import { formatEntryCreatedAt } from "../lib/formatDate";
+import { getEntryTagToneClassName } from "../lib/entryTagGroups";
 import type { EntryTagSummary } from "../lib/memoTags";
 import {
   type EntryKind,
@@ -109,7 +110,6 @@ export function EntryItem({
   const showTagInMeta = Boolean(entry.tag) && (
     tagPresentation === "meta" || tagPresentation === "completed_meta"
   );
-  const showTagAction = !entry.tag || tagPresentation === "group_action";
   const openableLinkUrl = getOpenableLinkUrl(entry.link_url);
   const isEditing = editMode !== null;
   const completionLabel = entry.is_completed ? "未完了に戻す" : "完了にする";
@@ -672,15 +672,13 @@ export function EntryItem({
                 </button>
               ) : null}
 
-              {showTagInMeta ? (
-                <EntryTagControl
-                  tag={entry.tag}
-                  suggestions={tagSuggestions}
-                  disabled={disabled || isSaving}
-                  onSave={async (tag) => {
-                    await onUpdate(entry.id, { tag });
-                  }}
-                />
+              {showTagInMeta && entry.tag ? (
+                <span
+                  className={`entry-item__tag-chip ${getEntryTagToneClassName(entry.tag)}`}
+                  aria-label={`タグ ${entry.tag}`}
+                >
+                  #{entry.tag}
+                </span>
               ) : null}
             </div>
           ) : null}
@@ -804,17 +802,14 @@ export function EntryItem({
             )}
           </div>
 
-          {showTagAction ? (
-            <EntryTagControl
-              tag={entry.tag}
-              suggestions={tagSuggestions}
-              variant="icon"
-              disabled={disabled || isSaving}
-              onSave={async (tag) => {
-                await onUpdate(entry.id, { tag });
-              }}
-            />
-          ) : null}
+          <EntryTagControl
+            tag={entry.tag}
+            suggestions={tagSuggestions}
+            disabled={disabled || isSaving}
+            onSave={async (tag) => {
+              await onUpdate(entry.id, { tag });
+            }}
+          />
 
           <button
             type="button"
