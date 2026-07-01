@@ -8,7 +8,10 @@ import { MobileEntryActionSheet } from "./MobileEntryActionSheet";
 import type { EntryTagSummary } from "../lib/memoTags";
 import {
   ENTRY_LIST_DISPLAY_MODE_LABEL,
+  getEntryCompletedGroupStateKey,
   getEntryTagGroupStateKey,
+  getEntryTagToneClassName,
+  getLegacyEntryTagGroupStateKey,
   groupEntriesByTag,
   readEntryListDisplayMode,
   readEntryTagGroupExpandedState,
@@ -77,6 +80,9 @@ type PendingUndo = {
   deletion: EntryDeletionResult;
   message: string;
 };
+
+type EntryTagPresentation = "meta" | "group_action" | "completed_meta";
+type FoldableGroupType = "untagged" | "tag" | "completed";
 
 const UNDO_WINDOW_MS = 5_500;
 
@@ -424,7 +430,10 @@ export function EntryColumn({
     setMobileActionEntryId(null);
   };
 
-  const renderEntry = (entry: EntryTreeNode) => (
+  const renderEntry = (
+    entry: EntryTreeNode,
+    tagPresentation: EntryTagPresentation = "meta",
+  ) => (
     <EntryItem
       key={entry.id}
       entry={entry}
@@ -435,6 +444,7 @@ export function EntryColumn({
       showEntryNumbers={showEntryNumbers}
       compactView={compactView}
       tagSuggestions={tagSuggestions}
+      tagPresentation={tagPresentation}
       disabled={disabled || isDeletingAll}
       onOpenStructure={openStructureActions}
       onAddChild={selectParent}
@@ -453,8 +463,7 @@ export function EntryColumn({
     />
   );
 
-  const toggleTagGroup = (tag: string) => {
-    const stateKey = getEntryTagGroupStateKey(kind, tag);
+  const toggleTagGroup = (stateKey: string) => {
     const nextState = {
       ...expandedTagGroups,
       [stateKey]: !(expandedTagGroups[stateKey] ?? false),
@@ -464,47 +473,92 @@ export function EntryColumn({
     writeEntryTagGroupExpandedState(nextState);
   };
 
+  const isTagGroupExpanded = (
+    stateKey: string,
+    legacyStateKey?: string,
+  ): boolean => expandedTagGroups[stateKey] ?? (
+    legacyStateKey ? expandedTagGroups[legacyStateKey] : undefined
+  ) ?? false;
+
+  const renderFoldableTagGroup = (
+    groupType: FoldableGroupType,
+    groupEntries: EntryTreeNode[],
+    sectionKey: string,
+    label?: string,
+  ) => {
+    if (groupEntries.length === 0) return null;
+
+    const stateKey = groupType === "completed"
+      ? getEntryCompletedGroupStateKey(kind)
+      : getEntryTagGroupStateKey(kind, groupType === "tag" ? label ?? null : null);
+    const legacyStateKey = groupType === "tag"
+      ? getLegacyEntryTagGroupStateKey(kind, label ?? null)
+      : undefined;
+    const isExpanded = isTagGroupExpanded(stateKey, legacyStateKey);
+    const groupAriaLabel = groupType === "completed"
+      ? "完了済みの項目"
+      : groupType === "untagged"
+        ? "タグなしの項目"
+        : `タグ「${label}」の項目`;
+    const entryTagPresentation: EntryTagPresentation = groupType === "completed"
+      ? "completed_meta"
+      : "group_action";
+
+    return (
+      <section
+        key={`${sectionKey}-${groupType}-${label ?? "untagged"}`}
+        className={`entry-list__tag-group entry-list__tag-group--${groupType}`}
+        aria-label={groupAriaLabel}
+      >
+        <button
+          type="button"
+          className="entry-list__tag-group-toggle"
+          onClick={() => toggleTagGroup(stateKey)}
+          aria-expanded={isExpanded}
+        >
+          {groupType === "tag" ? (
+            <span className={`entry-list__tag-group-label entry-list__tag-group-label--tag ${getEntryTagToneClassName(label ?? null)}`}>
+              #{label}
+            </span>
+          ) : (
+            <span className={`entry-list__tag-group-label entry-list__tag-group-label--${groupType}`}>
+              {groupType === "completed" ? "完了" : "タグなし"}
+            </span>
+          )}
+          <span className="entry-list__tag-group-count">{groupEntries.length}件</span>
+          <span className="entry-list__tag-group-chevron" aria-hidden="true">
+            {isExpanded ? "⌃" : "⌄"}
+          </span>
+        </button>
+
+        {isExpanded ? (
+          <div className="entry-list__tag-group-items">
+            {groupEntries.map((entry) => renderEntry(entry, entryTagPresentation))}
+          </div>
+        ) : null}
+      </section>
+    );
+  };
+
+  /**
+   * タグなし → 未完了のタグ別 → 完了 の順に並べる。
+   * どのグループも初回は閉じ、開閉は区分ごとに記憶する。
+   */
   const renderTagGroupedEntries = (
     sourceEntries: EntryTreeNode[],
     sectionKey: string,
   ) => {
-    const grouped = groupEntriesByTag(sourceEntries);
+    const activeEntries = sourceEntries.filter((entry) => !entry.is_completed);
+    const completed = sourceEntries.filter((entry) => entry.is_completed);
+    const grouped = groupEntriesByTag(activeEntries);
 
     return (
       <>
-        {grouped.untagged.map(renderEntry)}
-
-        {grouped.groups.map((group) => {
-          const stateKey = getEntryTagGroupStateKey(kind, group.label);
-          const isExpanded = expandedTagGroups[stateKey] ?? false;
-
-          return (
-            <section
-              key={`${sectionKey}-${group.key}`}
-              className="entry-list__tag-group"
-              aria-label={`タグ「${group.label}」の項目`}
-            >
-              <button
-                type="button"
-                className="entry-list__tag-group-toggle"
-                onClick={() => toggleTagGroup(group.label)}
-                aria-expanded={isExpanded}
-              >
-                <span className="entry-list__tag-group-label">{group.label}</span>
-                <span className="entry-list__tag-group-count">{group.entries.length}件</span>
-                <span className="entry-list__tag-group-chevron" aria-hidden="true">
-                  {isExpanded ? "⌃" : "⌄"}
-                </span>
-              </button>
-
-              {isExpanded ? (
-                <div className="entry-list__tag-group-items">
-                  {group.entries.map(renderEntry)}
-                </div>
-              ) : null}
-            </section>
-          );
-        })}
+        {renderFoldableTagGroup("untagged", grouped.untagged, sectionKey)}
+        {grouped.groups.map((group) =>
+          renderFoldableTagGroup("tag", group.entries, sectionKey, group.label),
+        )}
+        {renderFoldableTagGroup("completed", completed, sectionKey)}
       </>
     );
   };
@@ -602,12 +656,12 @@ export function EntryColumn({
         ) : compactView ? (
           isTagGrouped
             ? renderTagGroupedEntries(entries, "compact")
-            : entries.map(renderEntry)
+            : entries.map((entry) => renderEntry(entry))
+        ) : isTagGrouped ? (
+          renderTagGroupedEntries(entries, "grouped")
         ) : (
           <>
-            {isTagGrouped
-              ? renderTagGroupedEntries(openEntries, "open")
-              : openEntries.map(renderEntry)}
+            {openEntries.map((entry) => renderEntry(entry))}
 
             {completedEntries.length > 0 ? (
               <section className="entry-list__completed-section" aria-label="完了済み">
@@ -622,9 +676,7 @@ export function EntryColumn({
                 </button>
                 {!isCompletedCollapsed ? (
                   <div className="entry-list__completed-items">
-                    {isTagGrouped
-                      ? renderTagGroupedEntries(completedEntries, "completed")
-                      : completedEntries.map(renderEntry)}
+                    {completedEntries.map((entry) => renderEntry(entry))}
                   </div>
                 ) : null}
               </section>

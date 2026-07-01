@@ -25,6 +25,8 @@ import {
 
 type StructureShortcut = "move-up" | "move-down";
 type EditMode = "content" | "note" | "link" | null;
+/** タグの文脈に応じて、カード内ではチップか編集アイコンだけを見せる。 */
+type EntryTagPresentation = "meta" | "group_action" | "completed_meta";
 
 function LinkIcon() {
   return (
@@ -47,6 +49,8 @@ type EntryItemProps = {
   compactView?: boolean;
   /** 現在のメモで使われている項目タグ。候補表示だけに使う。 */
   tagSuggestions: EntryTagSummary[];
+  /** 通常表示は気持ち行のタグ、タググループ内は右側アイコン、完了内は元タグを再表示する。 */
+  tagPresentation?: EntryTagPresentation;
   disabled?: boolean;
   onOpenStructure: (entryId: string) => void;
   onAddChild: (entryId: string) => void;
@@ -73,6 +77,7 @@ export function EntryItem({
   showEntryNumbers,
   compactView = false,
   tagSuggestions,
+  tagPresentation = "meta",
   disabled = false,
   onOpenStructure,
   onAddChild,
@@ -101,6 +106,10 @@ export function EntryItem({
   const isParagraph = kind === "paragraph";
   const isHierarchical = supportsHierarchy(kind);
   const hasNote = entry.note.trim().length > 0;
+  const showTagInMeta = Boolean(entry.tag) && (
+    tagPresentation === "meta" || tagPresentation === "completed_meta"
+  );
+  const showTagAction = !entry.tag || tagPresentation === "group_action";
   const openableLinkUrl = getOpenableLinkUrl(entry.link_url);
   const isEditing = editMode !== null;
   const completionLabel = entry.is_completed ? "未完了に戻す" : "完了にする";
@@ -648,26 +657,32 @@ export function EntryItem({
             <span className="entry-item__content-text">{entry.content}</span>
           </button>
 
-          <EntryTagControl
-            tag={entry.tag}
-            suggestions={tagSuggestions}
-            disabled={disabled || isSaving}
-            onSave={async (tag) => {
-              await onUpdate(entry.id, { tag });
-            }}
-          />
+          {hasNote || showTagInMeta ? (
+            <div className="entry-item__meta-row">
+              {hasNote ? (
+                <button
+                  type="button"
+                  className="entry-item__note"
+                  onClick={beginNoteEdit}
+                  disabled={disabled}
+                  aria-label="気持ち・備考を編集"
+                >
+                  <span className="entry-item__note-label">気持ち</span>
+                  <span className="entry-item__note-text">{entry.note}</span>
+                </button>
+              ) : null}
 
-          {hasNote ? (
-            <button
-              type="button"
-              className="entry-item__note"
-              onClick={beginNoteEdit}
-              disabled={disabled}
-              aria-label="気持ち・備考を編集"
-            >
-              <span className="entry-item__note-label">気持ち</span>
-              <span className="entry-item__note-text">{entry.note}</span>
-            </button>
+              {showTagInMeta ? (
+                <EntryTagControl
+                  tag={entry.tag}
+                  suggestions={tagSuggestions}
+                  disabled={disabled || isSaving}
+                  onSave={async (tag) => {
+                    await onUpdate(entry.id, { tag });
+                  }}
+                />
+              ) : null}
+            </div>
           ) : null}
 
           <div className="entry-item__inline-actions">
@@ -788,6 +803,18 @@ export function EntryItem({
               </button>
             )}
           </div>
+
+          {showTagAction ? (
+            <EntryTagControl
+              tag={entry.tag}
+              suggestions={tagSuggestions}
+              variant="icon"
+              disabled={disabled || isSaving}
+              onSave={async (tag) => {
+                await onUpdate(entry.id, { tag });
+              }}
+            />
+          ) : null}
 
           <button
             type="button"

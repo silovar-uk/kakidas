@@ -5859,3 +5859,294 @@ a:focus-visible {
     grid-column: 1 / -1;
   }
 }
+
+/* --------------------------------------------------------------------------
+   v0.5.54 — tag hierarchy, quiet colors, and completed-last grouping
+   通常表示ではタグを「気持ち」の行に寄せ、タグなしは右側の小さなアイコンだけにする。
+   タグでまとめる表示では、タグなし → タグ別 → 完了 の順で全て折りたためる。
+   -------------------------------------------------------------------------- */
+.entry-tag-tone--0 {
+  --entry-tag-background: #edf5f7;
+  --entry-tag-border: #c7dbe1;
+  --entry-tag-color: #416d78;
+}
+
+.entry-tag-tone--1 {
+  --entry-tag-background: #f1f5ed;
+  --entry-tag-border: #d0dec3;
+  --entry-tag-color: #5f7750;
+}
+
+.entry-tag-tone--2 {
+  --entry-tag-background: #f8f3e9;
+  --entry-tag-border: #e5d5b8;
+  --entry-tag-color: #80673c;
+}
+
+.entry-tag-tone--3 {
+  --entry-tag-background: #f9eff0;
+  --entry-tag-border: #e5cbd0;
+  --entry-tag-color: #8a5a66;
+}
+
+.entry-tag-tone--4 {
+  --entry-tag-background: #f2eff8;
+  --entry-tag-border: #d6cdea;
+  --entry-tag-color: #655684;
+}
+
+.entry-tag-tone--5 {
+  --entry-tag-background: #f7f0eb;
+  --entry-tag-border: #e5d0c0;
+  --entry-tag-color: #885d48;
+}
+
+.memo-tag-chip.entry-tag-tone--0,
+.memo-tag-chip.entry-tag-tone--1,
+.memo-tag-chip.entry-tag-tone--2,
+.memo-tag-chip.entry-tag-tone--3,
+.memo-tag-chip.entry-tag-tone--4,
+.memo-tag-chip.entry-tag-tone--5,
+.entry-tag-control__icon.entry-tag-tone--0,
+.entry-tag-control__icon.entry-tag-tone--1,
+.entry-tag-control__icon.entry-tag-tone--2,
+.entry-tag-control__icon.entry-tag-tone--3,
+.entry-tag-control__icon.entry-tag-tone--4,
+.entry-tag-control__icon.entry-tag-tone--5,
+.entry-list__tag-group-label--tag.entry-tag-tone--0,
+.entry-list__tag-group-label--tag.entry-tag-tone--1,
+.entry-list__tag-group-label--tag.entry-tag-tone--2,
+.entry-list__tag-group-label--tag.entry-tag-tone--3,
+.entry-list__tag-group-label--tag.entry-tag-tone--4,
+.entry-list__tag-group-label--tag.entry-tag-tone--5 {
+  border-color: var(--entry-tag-border);
+  color: var(--entry-tag-color);
+  background: var(--entry-tag-background);
+}
+
+.entry-item__meta-row {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  align-items: flex-start;
+  gap: 7px;
+  margin-top: 5px;
+  padding-top: 5px;
+  border-top: 1px solid rgba(222, 216, 207, 0.8);
+}
+
+.entry-item__meta-row .entry-item__note {
+  width: auto;
+  min-width: 0;
+  flex: 1 1 auto;
+  margin: 0;
+  padding: 0;
+  border-top: 0;
+}
+
+.entry-item__meta-row .entry-tag-control--chip {
+  flex: 0 1 auto;
+  align-self: flex-start;
+  width: fit-content;
+  max-width: min(44%, 250px);
+  margin: 0;
+}
+
+.entry-item__body--numbered > .entry-item__meta-row {
+  grid-column: 2;
+  min-width: 0;
+}
+
+.entry-tag-control--icon {
+  position: relative;
+  width: 30px;
+  min-width: 30px;
+  height: 30px;
+  margin: 0;
+  align-self: center;
+}
+
+.entry-tag-control__icon {
+  display: inline-grid;
+  width: 30px;
+  min-width: 30px;
+  height: 30px;
+  min-height: 30px;
+  place-items: center;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: #796c61;
+  background: transparent;
+}
+
+.entry-tag-control__icon:hover:not(:disabled),
+.entry-tag-control__icon:focus-visible {
+  border-color: #d9cfc3;
+  color: #665247;
+  background: #fff7ef;
+  outline: 0;
+}
+
+.entry-tag-control__icon svg {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+}
+
+.entry-tag-control--icon.entry-tag-control--editing {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 6px);
+  right: 0;
+  width: min(360px, calc(100vw - 28px));
+  min-width: 0;
+  margin: 0;
+  box-shadow: 0 12px 28px rgba(62, 50, 40, 0.14);
+}
+
+.entry-item__quick-actions {
+  position: relative;
+}
+
+.entry-list__tag-group {
+  border-bottom: 1px solid #eeeae4;
+}
+
+.entry-list__tag-group--untagged {
+  border-top: 1px solid #e7e1d9;
+}
+
+.entry-list__tag-group--completed {
+  margin-top: 12px;
+  border-top: 1px solid #d8d4cc;
+}
+
+.entry-list__tag-group-toggle {
+  min-height: 42px;
+  padding-inline: 2px;
+}
+
+.entry-list__tag-group-label--tag {
+  display: inline-flex;
+  width: fit-content;
+  max-width: 100%;
+  min-height: 24px;
+  align-items: center;
+  padding: 0 8px;
+  overflow: hidden;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 780;
+  line-height: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.entry-list__tag-group-label--tag::before {
+  display: none;
+  content: none;
+}
+
+.entry-list__tag-group-label--untagged,
+.entry-list__tag-group-label--completed {
+  font-size: 12px;
+  font-weight: 780;
+}
+
+.entry-list__tag-group-label--untagged {
+  color: #78726b;
+}
+
+.entry-list__tag-group-label--completed {
+  color: #77726c;
+}
+
+.entry-list__tag-group--untagged .entry-list__tag-group-toggle:hover {
+  color: #5e5952;
+  background: #faf9f6;
+}
+
+.entry-list__tag-group--completed .entry-list__tag-group-toggle:hover {
+  color: #5e5a54;
+  background: #f4f2ee;
+}
+
+.entry-list__tag-group--tag .entry-list__tag-group-toggle:hover {
+  color: inherit;
+  background: #fbfaf7;
+}
+
+.entry-list__tag-group-items {
+  border-top: 1px solid #f0ece7;
+}
+
+@media (min-width: 921px) {
+  .entry-item__quick-actions {
+    flex-wrap: nowrap;
+  }
+
+  .entry-tag-control--icon {
+    width: 27px;
+    min-width: 27px;
+    height: 27px;
+  }
+
+  .entry-tag-control__icon {
+    width: 27px;
+    min-width: 27px;
+    height: 27px;
+    min-height: 27px;
+  }
+}
+
+@media (max-width: 920px) {
+  .entry-item__meta-row {
+    gap: 6px;
+    margin-top: 6px;
+    padding-top: 6px;
+  }
+
+  .entry-item__meta-row .entry-tag-control--chip {
+    max-width: 47%;
+  }
+
+  .entry-tag-control--icon,
+  .entry-tag-control__icon {
+    width: 34px;
+    min-width: 34px;
+    height: 34px;
+    min-height: 34px;
+  }
+
+  .entry-tag-control__icon {
+    border-color: #e2d7cd;
+    border-radius: 10px;
+    background: #fffefa;
+  }
+
+  .entry-tag-control--icon.entry-tag-control--editing {
+    top: calc(100% + 8px);
+    right: 0;
+    width: min(360px, calc(100vw - 24px));
+  }
+
+  .entry-list__tag-group-toggle {
+    min-height: 44px;
+  }
+}
+
+@media (max-width: 370px) {
+  .entry-tag-control--icon,
+  .entry-tag-control__icon {
+    width: 32px;
+    min-width: 32px;
+    height: 32px;
+    min-height: 32px;
+  }
+}

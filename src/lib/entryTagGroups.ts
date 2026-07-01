@@ -21,6 +21,8 @@ export type GroupedEntryList = {
 
 const DISPLAY_MODE_STORAGE_PREFIX = "kakidas.entry-list-display-mode";
 const EXPANDED_GROUPS_STORAGE_KEY = "kakidas.entry-tag-groups-expanded";
+const UNTAGGED_STATE_SUFFIX = "system:untagged";
+const COMPLETED_STATE_SUFFIX = "system:completed";
 
 type ExpandedGroupState = Record<string, boolean>;
 
@@ -63,8 +65,21 @@ function readExpandedGroupState(): ExpandedGroupState {
   }
 }
 
-export function getEntryTagGroupStateKey(kind: EntryKind, tag: string): string {
-  return `${kind}::${getEntryTagKey(tag)}`;
+/**
+ * タググループの開閉キー。タグなしは予約キーで保存し、実際のタグと衝突させない。
+ * v0.5.53で保存された `kind::tagKey` も読み取り側で引き継げるようにしている。
+ */
+export function getEntryTagGroupStateKey(kind: EntryKind, tag: string | null): string {
+  const key = getEntryTagKey(normalizeEntryTag(tag));
+  return key ? `${kind}::tag:${key}` : `${kind}::${UNTAGGED_STATE_SUFFIX}`;
+}
+
+export function getLegacyEntryTagGroupStateKey(kind: EntryKind, tag: string | null): string {
+  return `${kind}::${getEntryTagKey(normalizeEntryTag(tag))}`;
+}
+
+export function getEntryCompletedGroupStateKey(kind: EntryKind): string {
+  return `${kind}::${COMPLETED_STATE_SUFFIX}`;
 }
 
 /** 新しいタググループは閉じた状態で始める。 */
@@ -81,8 +96,23 @@ export function writeEntryTagGroupExpandedState(state: ExpandedGroupState): void
 }
 
 /**
- * 入力済みの表示順を壊さず、タグなしを先頭、タグ付きだけをタグ単位に束ねる。
- * タグ名の表記は、現在の表示順で最初に現れたものを見出しに使う。
+ * タグ名から静かな色相を決める。タグ名が同じなら、どの区分・表示モードでも同じ色になる。
+ */
+export function getEntryTagToneClassName(tag: string | null): string {
+  const normalized = normalizeEntryTag(tag);
+  if (!normalized) return "entry-tag-tone--untagged";
+
+  let hash = 0;
+  for (const character of normalized) {
+    hash = (hash * 31 + character.codePointAt(0)!) >>> 0;
+  }
+
+  return `entry-tag-tone--${hash % 6}`;
+}
+
+/**
+ * 入力済みの表示順を壊さず、タグなしとタグ付きに分ける。
+ * タググループの並びは、現在の表示順で最初に現れた順を使う。
  */
 export function groupEntriesByTag(entries: EntryTreeNode[]): GroupedEntryList {
   const untagged: EntryTreeNode[] = [];

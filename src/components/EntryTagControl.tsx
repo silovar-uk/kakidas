@@ -9,22 +9,37 @@ import {
   getRecommendedEntryTags,
   type EntryTagSummary,
 } from "../lib/memoTags";
+import { getEntryTagToneClassName } from "../lib/entryTagGroups";
 import { normalizeEntryTag } from "../types/memo";
+
+type EntryTagControlVariant = "chip" | "icon";
 
 type EntryTagControlProps = {
   tag: string | null;
   suggestions: EntryTagSummary[];
+  /** iconは右側の操作列向け。タグの有無にかかわらず編集画面を開く。 */
+  variant?: EntryTagControlVariant;
   disabled?: boolean;
   onSave: (tag: string | null) => Promise<void>;
 };
 
+function TagIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path d="M4.8 4.8h7.5l6.9 6.9-6.6 6.6-7.8-7.8V4.8Z" />
+      <path d="M8.4 8.4h.01" />
+    </svg>
+  );
+}
+
 /**
- * 項目にはタグをひとつだけ置く。タグの追加・変更・解除はこの場で確定し、
- * 同じタグをEntryColumnが折りたたみグループとして束ねる。
+ * 項目にはタグをひとつだけ置く。
+ * 通常表示は色付きチップ、グループ内・タグなしは操作列のアイコンで扱う。
  */
 export function EntryTagControl({
   tag,
   suggestions,
+  variant = "chip",
   disabled = false,
   onSave,
 }: EntryTagControlProps) {
@@ -84,19 +99,45 @@ export function EntryTagControl({
     closeWithoutSaving();
   };
 
+  const openEditor = () => {
+    setErrorMessage(null);
+    setIsEditing(true);
+  };
+
+  const toneClassName = getEntryTagToneClassName(tag);
+  const rootClassName = `entry-tag-control memo-tag-control entry-tag-control--${variant}${
+    tag ? " entry-tag-control--has-tag" : ""
+  }`;
+
   if (!isEditing) {
+    if (variant === "icon") {
+      const label = tag ? `タグ「${tag}」を編集` : "タグを設定";
+
+      return (
+        <div className={rootClassName} aria-label="項目のタグ">
+          <button
+            type="button"
+            className={`entry-tag-control__icon ${tag ? toneClassName : ""}`}
+            disabled={disabled}
+            onClick={openEditor}
+            aria-label={label}
+            title={label}
+          >
+            <TagIcon />
+          </button>
+        </div>
+      );
+    }
+
     return (
-      <div className="entry-tag-control memo-tag-control" aria-label="項目のタグ">
+      <div className={rootClassName} aria-label="項目のタグ">
         {tag ? (
           <>
             <button
               type="button"
-              className="memo-tag-chip memo-tag-chip--editable"
+              className={`memo-tag-chip memo-tag-chip--editable ${toneClassName}`}
               disabled={disabled}
-              onClick={() => {
-                setErrorMessage(null);
-                setIsEditing(true);
-              }}
+              onClick={openEditor}
               aria-label={`タグ「${tag}」を編集`}
             >
               #{tag}
@@ -117,10 +158,7 @@ export function EntryTagControl({
             type="button"
             className="memo-tag-control__add"
             disabled={disabled}
-            onClick={() => {
-              setErrorMessage(null);
-              setIsEditing(true);
-            }}
+            onClick={openEditor}
           >
             ＋ タグ
           </button>
@@ -130,7 +168,10 @@ export function EntryTagControl({
   }
 
   return (
-    <div className="entry-tag-control entry-tag-control--editing memo-tag-control memo-tag-control--editing" aria-label="項目のタグを編集">
+    <div
+      className={`${rootClassName} entry-tag-control--editing memo-tag-control--editing`}
+      aria-label="項目のタグを編集"
+    >
       <form className="memo-tag-control__form" onSubmit={handleSubmit}>
         <label>
           <span>タグ</span>
