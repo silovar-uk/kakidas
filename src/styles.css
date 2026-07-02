@@ -7016,3 +7016,37 @@ a:focus-visible {
     font-size: 14px;
   }
 }
+
+/* --------------------------------------------------------------------------
+   v0.5.62 — mobile satisfaction select without native chevrons
+   iPhone Safariの標準select矢印が操作レールの次ボタンへ重ならないよう、
+   モバイルでは数値だけを見せるコンパクトな選択面にする。
+   -------------------------------------------------------------------------- */
+@media (max-width: 920px) {
+  .entry-satisfaction {
+    box-sizing: border-box;
+    width: 34px;
+    min-width: 34px;
+    max-width: 34px;
+    height: 34px;
+    min-height: 34px;
+    padding: 0;
+    -webkit-appearance: none;
+    appearance: none;
+    background-image: none;
+    text-align: center;
+    text-align-last: center;
+  }
+
+  .entry-satisfaction::-ms-expand {
+    display: none;
+  }
+}
+
+@media (max-width: 370px) {
+  .entry-satisfaction {
+    width: 34px;
+    min-width: 34px;
+    max-width: 34px;
+  }
+}
