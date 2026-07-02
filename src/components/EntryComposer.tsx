@@ -10,10 +10,12 @@ import {
   useState,
 } from "react";
 import {
+  type EntryCreateMetadata,
   type EntryKind,
   ENTRY_KIND_LABEL,
   ENTRY_KIND_PLACEHOLDER,
   normalizeEntryTag,
+  normalizeLinkUrlForSave,
 } from "../types/memo";
 import {
   getRecommendedEntryTags,
@@ -32,7 +34,10 @@ type EntryComposerProps = {
   /** 現在のメモで使われている項目タグ。新規入力時の候補だけに使う。 */
   tagSuggestions: EntryTagSummary[];
   onClearTarget?: () => void;
-  onSubmit: (content: string, tag: string | null) => Promise<unknown> | unknown;
+  onSubmit: (
+    content: string,
+    metadata: EntryCreateMetadata,
+  ) => Promise<unknown> | unknown;
 };
 
 type ParagraphResizeOptions = {
@@ -43,11 +48,31 @@ type ParagraphResizeOptions = {
   allowShrink?: boolean;
 };
 
+type MetaPicker = "note" | "link" | "tag" | null;
+
 function TagIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
       <path d="M4.8 4.8h7.5l6.9 6.9-6.6 6.6-7.8-7.8V4.8Z" />
       <path d="M8.4 8.4h.01" />
+    </svg>
+  );
+}
+
+function NoteIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path d="M5.5 4.8h13v14.4H9.3l-3.8 2.4V4.8Z" />
+      <path d="M8.3 9h7.4M8.3 12.6h5.4" />
+    </svg>
+  );
+}
+
+function LinkIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path d="M10.4 13.6a4.3 4.3 0 0 0 6.1 0l2.3-2.3a4.3 4.3 0 0 0-6.1-6.1l-1.3 1.3" />
+      <path d="M13.6 10.4a4.3 4.3 0 0 0-6.1 0l-2.3 2.3a4.3 4.3 0 0 0 6.1 6.1l1.3-1.3" />
     </svg>
   );
 }
@@ -76,23 +101,54 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
   ) {
     const [value, setValue] = useState("");
     const [tagValue, setTagValue] = useState("");
+    const [noteValue, setNoteValue] = useState("");
+    const [linkValue, setLinkValue] = useState("");
     const [tagDraft, setTagDraft] = useState("");
-    const [isTagPickerOpen, setIsTagPickerOpen] = useState(false);
+    const [noteDraft, setNoteDraft] = useState("");
+    const [linkDraft, setLinkDraft] = useState("");
+    const [activeMetaPicker, setActiveMetaPicker] = useState<MetaPicker>(null);
+    const [linkError, setLinkError] = useState<string | null>(null);
     const [isComposing, setIsComposing] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     const inputRef = useRef<HTMLInputElement | HTMLTextAreaElement | null>(null);
     const tagInputRef = useRef<HTMLInputElement | null>(null);
-    const tagPickerRef = useRef<HTMLDivElement | null>(null);
+    const noteInputRef = useRef<HTMLTextAreaElement | null>(null);
+    const linkInputRef = useRef<HTMLInputElement | null>(null);
+    const metaPickerRef = useRef<HTMLDivElement | null>(null);
     const paragraphResizeFrameRef = useRef<number | null>(null);
     const isComposingRef = useRef(false);
     const isParagraph = kind === "paragraph";
     const selectedTag = normalizeEntryTag(tagValue);
+    const hasNote = noteValue.trim().length > 0;
+    const hasLink = linkValue.trim().length > 0;
     const canSubmit = value.trim().length > 0 && !disabled && !isSubmitting;
     const recommendedTags = useMemo(
       () => getRecommendedEntryTags(tagSuggestions, tagDraft),
       [tagDraft, tagSuggestions],
     );
+
+    function resetMetaDrafts() {
+      setTagDraft(selectedTag ?? "");
+      setNoteDraft(noteValue);
+      setLinkDraft(linkValue);
+      setLinkError(null);
+    }
+
+    function closeMetaPicker() {
+      resetMetaDrafts();
+      setActiveMetaPicker(null);
+    }
+
+    function openMetaPicker(picker: Exclude<MetaPicker, null>) {
+      if (activeMetaPicker === picker) {
+        closeMetaPicker();
+        return;
+      }
+
+      resetMetaDrafts();
+      setActiveMetaPicker(picker);
+    }
 
     useEffect(() => {
       return () => {
@@ -103,23 +159,28 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
     }, []);
 
     useEffect(() => {
-      if (!isTagPickerOpen) return;
+      if (!activeMetaPicker) return;
 
       const handlePointerDown = (event: PointerEvent) => {
         const target = event.target as Node | null;
-        if (target && tagPickerRef.current?.contains(target)) return;
-        setIsTagPickerOpen(false);
-        setTagDraft(selectedTag ?? "");
+        if (target && metaPickerRef.current?.contains(target)) return;
+        closeMetaPicker();
       };
 
+      const focusTarget = activeMetaPicker === "tag"
+        ? tagInputRef.current
+        : activeMetaPicker === "note"
+          ? noteInputRef.current
+          : linkInputRef.current;
+
       document.addEventListener("pointerdown", handlePointerDown);
-      const frame = window.requestAnimationFrame(() => tagInputRef.current?.focus());
+      const frame = window.requestAnimationFrame(() => focusTarget?.focus());
 
       return () => {
         document.removeEventListener("pointerdown", handlePointerDown);
         window.cancelAnimationFrame(frame);
       };
-    }, [isTagPickerOpen, selectedTag]);
+    }, [activeMetaPicker, linkValue, noteValue, selectedTag]);
 
     useImperativeHandle(ref, () => ({
       focus: ({ scroll = true, delay = 160 } = {}) => {
@@ -189,20 +250,46 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
       });
     };
 
-    const closeTagPicker = () => {
-      setTagDraft(selectedTag ?? "");
-      setIsTagPickerOpen(false);
-    };
-
     const applyTag = (rawValue = tagDraft) => {
       setTagValue(normalizeEntryTag(rawValue) ?? "");
-      setIsTagPickerOpen(false);
+      setActiveMetaPicker(null);
+      setLinkError(null);
     };
 
     const clearTag = () => {
       setTagValue("");
       setTagDraft("");
-      setIsTagPickerOpen(false);
+      setActiveMetaPicker(null);
+    };
+
+    const applyNote = () => {
+      setNoteValue(noteDraft.trim());
+      setActiveMetaPicker(null);
+    };
+
+    const clearNote = () => {
+      setNoteValue("");
+      setNoteDraft("");
+      setActiveMetaPicker(null);
+    };
+
+    const applyLink = () => {
+      try {
+        setLinkValue(normalizeLinkUrlForSave(linkDraft));
+        setLinkError(null);
+        setActiveMetaPicker(null);
+      } catch (error) {
+        setLinkError(
+          error instanceof Error ? error.message : "リンクのURLを確認してください。",
+        );
+      }
+    };
+
+    const clearLink = () => {
+      setLinkValue("");
+      setLinkDraft("");
+      setLinkError(null);
+      setActiveMetaPicker(null);
     };
 
     const submit = async () => {
@@ -210,15 +297,37 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
 
       if (!content || isSubmitting || disabled) return;
 
+      let normalizedLink = "";
+
+      try {
+        normalizedLink = normalizeLinkUrlForSave(linkValue);
+      } catch (error) {
+        setLinkDraft(linkValue);
+        setLinkError(
+          error instanceof Error ? error.message : "リンクのURLを確認してください。",
+        );
+        setActiveMetaPicker("link");
+        return;
+      }
+
       setIsSubmitting(true);
 
       try {
-        await onSubmit(content, selectedTag);
+        await onSubmit(content, {
+          tag: selectedTag,
+          note: noteValue.trim(),
+          link_url: normalizedLink,
+        });
         setValue("");
-        // 新しい項目のタグは、次の項目へ勝手に持ち越さない。
+        // 補助情報は新しい項目へ勝手に持ち越さない。
         setTagValue("");
+        setNoteValue("");
+        setLinkValue("");
         setTagDraft("");
-        setIsTagPickerOpen(false);
+        setNoteDraft("");
+        setLinkDraft("");
+        setLinkError(null);
+        setActiveMetaPicker(null);
         // 送信後は空の基準高へ戻してよい。入力中だけ縮小を抑える。
         scheduleParagraphTextareaResize({ allowShrink: true });
         window.requestAnimationFrame(() => inputRef.current?.focus());
@@ -254,18 +363,38 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
       void submit();
     };
 
-    const handleTagInputKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    const handlePickerInputKeyDown = (
+      event: KeyboardEvent<HTMLInputElement>,
+      apply: () => void,
+    ) => {
       if (event.nativeEvent.isComposing) return;
 
       if (event.key === "Escape") {
         event.preventDefault();
-        closeTagPicker();
+        closeMetaPicker();
         return;
       }
 
       if (event.key === "Enter") {
         event.preventDefault();
-        applyTag();
+        apply();
+      }
+    };
+
+    const handleNoteInputKeyDown = (
+      event: KeyboardEvent<HTMLTextAreaElement>,
+    ) => {
+      if (event.nativeEvent.isComposing) return;
+
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closeMetaPicker();
+        return;
+      }
+
+      if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+        event.preventDefault();
+        applyNote();
       }
     };
 
@@ -305,6 +434,7 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
       onCompositionStart: handleCompositionStart,
       onCompositionEnd: handleCompositionEnd,
     };
+
 
     return (
       <form className="entry-composer" onSubmit={handleSubmit}>
@@ -366,93 +496,255 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
         </div>
 
         <div className="entry-composer__meta-row">
-          <div className="entry-composer__tag-picker" ref={tagPickerRef}>
-            <button
-              type="button"
-              className={`entry-composer__tag-trigger ${
-                selectedTag ? getEntryTagToneClassName(selectedTag) : ""
-              }`}
-              disabled={disabled || isSubmitting}
-              onClick={() => {
-                setTagDraft(selectedTag ?? "");
-                setIsTagPickerOpen((open) => !open);
-              }}
-              aria-expanded={isTagPickerOpen}
-              aria-label={selectedTag ? `タグ「${selectedTag}」を変更` : "タグを付ける"}
-              title={selectedTag ? "タグを変更" : "タグを付ける"}
-            >
-              <TagIcon />
-              <span>{selectedTag ? `#${selectedTag}` : "タグ"}</span>
-            </button>
-
-            {isTagPickerOpen ? (
-              <>
-                <button
-                  type="button"
-                  className="entry-composer__tag-backdrop"
-                  aria-label="タグ入力を閉じる"
-                  onClick={closeTagPicker}
-                />
-                <div className="entry-composer__tag-popover" role="dialog" aria-label="項目タグを設定">
-                <div className="entry-composer__tag-popover-header">
-                  <span>この項目のタグ</span>
-                  <button
-                    type="button"
-                    onClick={closeTagPicker}
-                    aria-label="タグ入力を閉じる"
-                    title="閉じる"
-                  >
-                    ×
-                  </button>
-                </div>
-                <input
-                  ref={tagInputRef}
-                  value={tagDraft}
-                  onChange={(event) => setTagDraft(event.target.value)}
-                  onKeyDown={handleTagInputKeyDown}
-                  placeholder="例：後日対応"
-                  maxLength={30}
-                  autoComplete="off"
-                  aria-label="項目タグ"
-                />
-                {recommendedTags.length > 0 ? (
-                  <div className="entry-composer__tag-suggestions" aria-label="過去の項目タグ候補">
-                    {recommendedTags.map((summary) => (
-                      <button
-                        key={summary.key}
-                        type="button"
-                        className={getEntryTagToneClassName(summary.label)}
-                        onMouseDown={(event) => event.preventDefault()}
-                        onClick={() => applyTag(summary.label)}
-                      >
-                        #{summary.label}
-                      </button>
-                    ))}
-                  </div>
-                ) : null}
-                <div className="entry-composer__tag-popover-actions">
-                  {selectedTag ? (
-                    <button type="button" onClick={clearTag}>
-                      外す
-                    </button>
-                  ) : (
-                    <span />
-                  )}
-                  <button type="button" className="entry-composer__tag-apply" onClick={() => applyTag()}>
-                    決定
-                  </button>
-                </div>
-                </div>
-              </>
-            ) : null}
-          </div>
-
           {isParagraph ? (
             <p id="paragraph-shortcut-hint" className="entry-composer__hint">
               Enterで改行。Shift＋Enter／Ctrl＋Enterで置く。
             </p>
           ) : null}
+
+          <div className="entry-composer__meta-controls" ref={metaPickerRef}>
+            <div className="entry-composer__meta-picker">
+              <button
+                type="button"
+                className={`entry-composer__meta-trigger ${
+                  hasNote ? "entry-composer__meta-trigger--active" : ""
+                }`}
+                disabled={disabled || isSubmitting}
+                onClick={() => openMetaPicker("note")}
+                aria-expanded={activeMetaPicker === "note"}
+                aria-label={hasNote ? "気持ち・備考を変更" : "気持ち・備考を付ける"}
+                title={hasNote ? "気持ち・備考を変更" : "気持ち・備考を付ける"}
+              >
+                <NoteIcon />
+                <span>{hasNote ? "気持ちあり" : "気持ち"}</span>
+              </button>
+
+              {activeMetaPicker === "note" ? (
+                <>
+                  <button
+                    type="button"
+                    className="entry-composer__meta-backdrop"
+                    aria-label="気持ち・備考入力を閉じる"
+                    onClick={closeMetaPicker}
+                  />
+                  <div
+                    className="entry-composer__meta-popover"
+                    role="dialog"
+                    aria-label="この項目の気持ち・備考を設定"
+                  >
+                    <div className="entry-composer__meta-popover-header">
+                      <span>この項目の気持ち・備考</span>
+                      <button
+                        type="button"
+                        onClick={closeMetaPicker}
+                        aria-label="気持ち・備考入力を閉じる"
+                        title="閉じる"
+                      >
+                        ×
+                      </button>
+                    </div>
+                    <textarea
+                      ref={noteInputRef}
+                      value={noteDraft}
+                      onChange={(event) => setNoteDraft(event.target.value)}
+                      onKeyDown={handleNoteInputKeyDown}
+                      placeholder="例：あとで確認したい"
+                      rows={3}
+                      aria-label="気持ち・備考"
+                    />
+                    <div className="entry-composer__meta-popover-actions">
+                      {hasNote || noteDraft.trim() ? (
+                        <button type="button" onClick={clearNote}>
+                          外す
+                        </button>
+                      ) : (
+                        <span />
+                      )}
+                      <button
+                        type="button"
+                        className="entry-composer__meta-apply"
+                        onClick={applyNote}
+                      >
+                        決定
+                      </button>
+                    </div>
+                  </div>
+                </>
+              ) : null}
+            </div>
+
+            <div className="entry-composer__meta-picker">
+              <button
+                type="button"
+                className={`entry-composer__meta-trigger ${
+                  hasLink ? "entry-composer__meta-trigger--active" : ""
+                }`}
+                disabled={disabled || isSubmitting}
+                onClick={() => openMetaPicker("link")}
+                aria-expanded={activeMetaPicker === "link"}
+                aria-label={hasLink ? "リンクを変更" : "リンクを付ける"}
+                title={hasLink ? "リンクを変更" : "リンクを付ける"}
+              >
+                <LinkIcon />
+                <span>{hasLink ? "リンクあり" : "リンク"}</span>
+              </button>
+
+              {activeMetaPicker === "link" ? (
+                <>
+                  <button
+                    type="button"
+                    className="entry-composer__meta-backdrop"
+                    aria-label="リンク入力を閉じる"
+                    onClick={closeMetaPicker}
+                  />
+                  <div
+                    className="entry-composer__meta-popover"
+                    role="dialog"
+                    aria-label="この項目のリンクを設定"
+                  >
+                    <div className="entry-composer__meta-popover-header">
+                      <span>この項目のリンク</span>
+                      <button
+                        type="button"
+                        onClick={closeMetaPicker}
+                        aria-label="リンク入力を閉じる"
+                        title="閉じる"
+                      >
+                        ×
+                      </button>
+                    </div>
+                    <input
+                      ref={linkInputRef}
+                      value={linkDraft}
+                      onChange={(event) => {
+                        setLinkDraft(event.target.value);
+                        setLinkError(null);
+                      }}
+                      onKeyDown={(event) => handlePickerInputKeyDown(event, applyLink)}
+                      placeholder="https://example.com"
+                      type="url"
+                      inputMode="url"
+                      autoComplete="url"
+                      aria-label="リンクのURL"
+                      aria-invalid={linkError ? true : undefined}
+                    />
+                    {linkError ? (
+                      <p className="entry-composer__meta-error" role="alert">
+                        {linkError}
+                      </p>
+                    ) : null}
+                    <div className="entry-composer__meta-popover-actions">
+                      {hasLink || linkDraft.trim() ? (
+                        <button type="button" onClick={clearLink}>
+                          外す
+                        </button>
+                      ) : (
+                        <span />
+                      )}
+                      <button
+                        type="button"
+                        className="entry-composer__meta-apply"
+                        onClick={applyLink}
+                      >
+                        決定
+                      </button>
+                    </div>
+                  </div>
+                </>
+              ) : null}
+            </div>
+
+            <div className="entry-composer__tag-picker">
+              <button
+                type="button"
+                className={`entry-composer__tag-trigger ${
+                  selectedTag ? getEntryTagToneClassName(selectedTag) : ""
+                }`}
+                disabled={disabled || isSubmitting}
+                onClick={() => openMetaPicker("tag")}
+                aria-expanded={activeMetaPicker === "tag"}
+                aria-label={selectedTag ? `タグ「${selectedTag}」を変更` : "タグを付ける"}
+                title={selectedTag ? "タグを変更" : "タグを付ける"}
+              >
+                <TagIcon />
+                <span>{selectedTag ? `#${selectedTag}` : "タグ"}</span>
+              </button>
+
+              {activeMetaPicker === "tag" ? (
+                <>
+                  <button
+                    type="button"
+                    className="entry-composer__meta-backdrop"
+                    aria-label="タグ入力を閉じる"
+                    onClick={closeMetaPicker}
+                  />
+                  <div
+                    className="entry-composer__tag-popover"
+                    role="dialog"
+                    aria-label="項目タグを設定"
+                  >
+                    <div className="entry-composer__tag-popover-header">
+                      <span>この項目のタグ</span>
+                      <button
+                        type="button"
+                        onClick={closeMetaPicker}
+                        aria-label="タグ入力を閉じる"
+                        title="閉じる"
+                      >
+                        ×
+                      </button>
+                    </div>
+                    <input
+                      ref={tagInputRef}
+                      value={tagDraft}
+                      onChange={(event) => setTagDraft(event.target.value)}
+                      onKeyDown={(event) => handlePickerInputKeyDown(event, applyTag)}
+                      placeholder="例：後日対応"
+                      maxLength={30}
+                      autoComplete="off"
+                      aria-label="項目タグ"
+                    />
+                    {recommendedTags.length > 0 ? (
+                      <div
+                        className="entry-composer__tag-suggestions"
+                        aria-label="過去の項目タグ候補"
+                      >
+                        {recommendedTags.map((summary) => (
+                          <button
+                            key={summary.key}
+                            type="button"
+                            className={getEntryTagToneClassName(summary.label)}
+                            onMouseDown={(event) => event.preventDefault()}
+                            onClick={() => applyTag(summary.label)}
+                          >
+                            #{summary.label}
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
+                    <div className="entry-composer__tag-popover-actions">
+                      {selectedTag ? (
+                        <button type="button" onClick={clearTag}>
+                          外す
+                        </button>
+                      ) : (
+                        <span />
+                      )}
+                      <button
+                        type="button"
+                        className="entry-composer__tag-apply"
+                        onClick={() => applyTag()}
+                      >
+                        決定
+                      </button>
+                    </div>
+                  </div>
+                </>
+              ) : null}
+            </div>
+          </div>
         </div>
+
       </form>
     );
   },

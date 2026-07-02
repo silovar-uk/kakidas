@@ -14,6 +14,8 @@ type MobileEntryActionSheetProps = {
   kind: EntryKind;
   /** 見出しに振り番を含めるか。 */
   showEntryNumbers: boolean;
+  /** タグでまとめる表示では、親のグループ内番号を受け取る。 */
+  displayNumber?: string;
   disabled?: boolean;
   onClose: () => void;
   onToggleCompleted: (entryId: string) => Promise<unknown> | unknown;
@@ -42,6 +44,7 @@ export function MobileEntryActionSheet({
   entry,
   kind,
   showEntryNumbers,
+  displayNumber,
   disabled = false,
   onClose,
   onToggleCompleted,
@@ -102,6 +105,7 @@ export function MobileEntryActionSheet({
 
   const isHierarchical = supportsHierarchy(kind);
   const moveTargets = ENTRY_KIND_MOVE_TARGETS[kind];
+  const visibleNumber = displayNumber ?? entry.outline_number;
   const close = () => onCloseRef.current();
 
   const run = async (
@@ -150,7 +154,7 @@ export function MobileEntryActionSheet({
           <div>
             <p>操作</p>
             <h2 id="mobile-action-sheet-title">
-              {showEntryNumbers ? `${entry.outline_number} ${entry.content}` : entry.content}
+              {showEntryNumbers ? `${visibleNumber} ${entry.content}` : entry.content}
             </h2>
           </div>
 

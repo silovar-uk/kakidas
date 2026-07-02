@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   EntryComposer,
   type EntryComposerHandle,
@@ -21,6 +21,7 @@ import {
 } from "../lib/entryTagGroups";
 import { UndoToast } from "./UndoToast";
 import {
+  type EntryCreateMetadata,
   type EntryDeletionResult,
   type EntryKind,
   type EntryInsertPosition,
@@ -54,7 +55,7 @@ type EntryColumnProps = {
   onCreate: (
     kind: EntryKind,
     content: string,
-    tag?: string | null,
+    metadata?: EntryCreateMetadata,
     parentId?: string | null,
     position?: EntryInsertPosition,
   ) => Promise<unknown>;
@@ -154,6 +155,35 @@ export function EntryColumn({
   const completedEntries = entries.filter((entry) => entry.is_completed);
   const isTagGrouped = displayMode === "tag_grouped";
 
+  /**
+   * タグでまとめる時だけ、画面の振り番はグループごとに振り直す。
+   * 保存済みの階層番号は変えず、通常表示・コピー・.txt出力は従来どおり
+   * `outline_number` を使う。完了済みは一番下の「完了」グループ内で通番にする。
+   */
+  const tagGroupedDisplayNumbers = useMemo(() => {
+    const numberByEntryId = new Map<string, string>();
+    const assignNumbers = (groupEntries: EntryTreeNode[]) => {
+      groupEntries.forEach((entry, index) => {
+        numberByEntryId.set(entry.id, String(index + 1));
+      });
+    };
+
+    const activeEntries = entries.filter((entry) => !entry.is_completed);
+    const grouped = groupEntriesByTag(activeEntries);
+
+    assignNumbers(grouped.untagged);
+    grouped.groups.forEach((group) => assignNumbers(group.entries));
+    assignNumbers(entries.filter((entry) => entry.is_completed));
+
+    return numberByEntryId;
+  }, [entries]);
+
+  const getEntryDisplayNumber = (entry: EntryTreeNode): string => {
+    if (!isTagGrouped) return entry.outline_number;
+
+    return tagGroupedDisplayNumbers.get(entry.id) ?? entry.outline_number;
+  };
+
   const clearUndo = () => {
     if (undoTimerRef.current !== null) {
       window.clearTimeout(undoTimerRef.current);
@@ -252,11 +282,14 @@ export function EntryColumn({
     setStructureEntryId((current) => (current === entryId ? null : entryId));
   };
 
-  const handleCreate = async (content: string, tag: string | null) => {
+  const handleCreate = async (
+    content: string,
+    metadata: EntryCreateMetadata,
+  ) => {
     await onCreate(
       kind,
       content,
-      tag,
+      metadata,
       isHierarchical ? parentId : null,
       addAtBottom ? "bottom" : "top",
     );
@@ -435,6 +468,7 @@ export function EntryColumn({
   const renderEntry = (
     entry: EntryTreeNode,
     tagPresentation: EntryTagPresentation = "meta",
+    displayNumber = getEntryDisplayNumber(entry),
   ) => (
     <EntryItem
       key={entry.id}
@@ -444,6 +478,7 @@ export function EntryColumn({
       isMobileActionOpen={mobileActionEntryId === entry.id}
       showCreatedAt={showCreatedAt}
       showEntryNumbers={showEntryNumbers}
+      displayNumber={displayNumber}
       compactView={compactView}
       tagSuggestions={tagSuggestions}
       tagPresentation={tagPresentation}
@@ -535,7 +570,9 @@ export function EntryColumn({
 
         {isExpanded ? (
           <div className="entry-list__tag-group-items">
-            {groupEntries.map((entry) => renderEntry(entry, entryTagPresentation))}
+            {groupEntries.map((entry, index) =>
+              renderEntry(entry, entryTagPresentation, String(index + 1)),
+            )}
           </div>
         ) : null}
       </section>
@@ -693,6 +730,9 @@ export function EntryColumn({
           entry={mobileActionEntry}
           kind={kind}
           showEntryNumbers={showEntryNumbers}
+          displayNumber={
+            mobileActionEntry ? getEntryDisplayNumber(mobileActionEntry) : undefined
+          }
           disabled={disabled || isDeletingAll}
           onClose={() => setMobileActionEntryId(null)}
           onToggleCompleted={toggleCompleted}

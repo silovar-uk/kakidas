@@ -46,6 +46,8 @@ type EntryItemProps = {
   showCreatedAt: boolean;
   /** 表示に振り番を含めるか。 */
   showEntryNumbers: boolean;
+  /** 現在の表示文脈で見せる振り番。タグ表示時はグループ内番号を受け取る。 */
+  displayNumber?: string;
   /** 補助情報と操作を隠し、本文だけを密に表示するか。 */
   compactView?: boolean;
   /** 現在のメモで使われている項目タグ。候補表示だけに使う。 */
@@ -76,6 +78,7 @@ export function EntryItem({
   isMobileActionOpen,
   showCreatedAt,
   showEntryNumbers,
+  displayNumber,
   compactView = false,
   tagSuggestions,
   tagPresentation = "meta",
@@ -397,6 +400,7 @@ export function EntryItem({
   const completionClassName = entry.is_completed ? "entry-item--completed" : "";
   const satisfactionClassName = `entry-item--satisfaction-${normalizeSatisfaction(entry.satisfaction)}`;
   const numberVisibilityClassName = showEntryNumbers ? "entry-item--numbered" : "";
+  const visibleNumber = displayNumber ?? entry.outline_number;
 
   if (compactView) {
     return (
@@ -432,7 +436,7 @@ export function EntryItem({
               className="entry-item__number entry-item__number--editing"
               aria-hidden="true"
             >
-              {entry.outline_number}
+              {visibleNumber}
             </span>
           ) : null}
 
@@ -637,7 +641,7 @@ export function EntryItem({
         >
           {showEntryNumbers ? (
             <span className="entry-item__number" aria-hidden="true">
-              {entry.outline_number}
+              {visibleNumber}
             </span>
           ) : null}
 
@@ -649,7 +653,7 @@ export function EntryItem({
             disabled={disabled}
             aria-label={
               showEntryNumbers
-                ? `${entry.outline_number} ${entry.content}を編集`
+                ? `${visibleNumber} ${entry.content}を編集`
                 : "編集する"
             }
             aria-keyshortcuts={hierarchyKeyShortcuts}

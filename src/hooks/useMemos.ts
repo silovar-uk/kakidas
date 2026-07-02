@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import {
   type BackupPayload,
   type CompletedEntriesDeletionResult,
+  type EntryCreateMetadata,
   type EntryDeletionResult,
   type EntryKind,
   type EntryInsertPosition,
@@ -254,7 +255,7 @@ export function useMemoDetail(memoId: string | undefined) {
     async (
       kind: EntryKind,
       content: string,
-      tag: string | null = null,
+      metadata: EntryCreateMetadata = {},
       parentId: string | null = null,
       position: EntryInsertPosition = "bottom",
     ): Promise<EntryRow> => {
@@ -268,7 +269,7 @@ export function useMemoDetail(memoId: string | undefined) {
           kind,
           parent_id: parentId,
           content,
-          tag,
+          ...metadata,
         }, position);
 
         await refreshAfterWrite();

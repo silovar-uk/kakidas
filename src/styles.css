@@ -6658,3 +6658,236 @@ a:focus-visible {
     min-width: 44px;
   }
 }
+
+/* --------------------------------------------------------------------------
+   v0.5.59 — 新規項目の気持ち・リンク入力
+   入力欄の補助情報はカードと同じく、操作時だけ浮く小さなUIに分ける。
+   -------------------------------------------------------------------------- */
+.entry-composer__meta-row {
+  justify-content: space-between;
+}
+
+.entry-composer__meta-controls {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.entry-composer__meta-picker,
+.entry-composer__tag-picker {
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 auto;
+}
+
+.entry-composer__meta-trigger {
+  display: inline-flex;
+  min-height: 28px;
+  align-items: center;
+  gap: 5px;
+  padding: 0 8px;
+  border: 1px dashed #d8d0c5;
+  border-radius: 999px;
+  color: #766d63;
+  background: #fffefa;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 740;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.entry-composer__meta-trigger:hover:not(:disabled),
+.entry-composer__meta-trigger:focus-visible {
+  border-style: solid;
+  border-color: #c4b29f;
+  color: #624c3d;
+  background: #fff8f0;
+  outline: 0;
+}
+
+.entry-composer__meta-trigger--active {
+  border-style: solid;
+  border-color: #d4c2b1;
+  color: #655144;
+  background: #fff7ef;
+}
+
+.entry-composer__meta-trigger svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+}
+
+.entry-composer__meta-backdrop {
+  display: none;
+}
+
+.entry-composer__meta-popover {
+  position: absolute;
+  z-index: 52;
+  top: calc(100% + 7px);
+  right: 0;
+  display: grid;
+  width: min(320px, calc(100vw - 40px));
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid #dcd5ca;
+  border-radius: 12px;
+  color: #5d554d;
+  background: #fffefa;
+  box-shadow: 0 14px 30px rgba(62, 50, 40, 0.16);
+}
+
+.entry-composer__meta-popover-header {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: #75685d;
+  font-size: 11px;
+  font-weight: 780;
+}
+
+.entry-composer__meta-popover-header button {
+  display: inline-grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  color: #88786d;
+  background: transparent;
+  font-size: 16px;
+  line-height: 1;
+}
+
+.entry-composer__meta-popover-header button:hover:not(:disabled) {
+  color: #834d42;
+  background: #fff0ed;
+}
+
+.entry-composer__meta-popover > input,
+.entry-composer__meta-popover > textarea {
+  width: 100%;
+  border: 1px solid #dcd4ca;
+  border-radius: 8px;
+  color: #464039;
+  background: #fff;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.5;
+  outline: 0;
+}
+
+.entry-composer__meta-popover > input {
+  min-height: 34px;
+  padding: 0 9px;
+}
+
+.entry-composer__meta-popover > textarea {
+  min-height: 82px;
+  padding: 8px 9px;
+  resize: vertical;
+}
+
+.entry-composer__meta-popover > input:focus,
+.entry-composer__meta-popover > textarea:focus {
+  border-color: #b7a18a;
+  box-shadow: 0 0 0 3px rgba(183, 161, 138, 0.15);
+}
+
+.entry-composer__meta-error {
+  margin: -2px 0 0;
+  color: #a04a3e;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.entry-composer__meta-popover-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.entry-composer__meta-popover-actions button {
+  min-height: 30px;
+  padding: 0 9px;
+  border: 0;
+  border-radius: 7px;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 760;
+}
+
+.entry-composer__meta-popover-actions > button:first-child {
+  color: #8d554b;
+  background: transparent;
+}
+
+.entry-composer__meta-popover-actions > button:first-child:hover:not(:disabled) {
+  background: #fff0ed;
+}
+
+.entry-composer__meta-apply {
+  color: #fff;
+  background: #6b5a4f;
+}
+
+.entry-composer__meta-apply:hover:not(:disabled) {
+  background: #55463d;
+}
+
+@media (max-width: 920px) {
+  .entry-composer__meta-controls {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    margin-left: 0;
+  }
+
+  .entry-composer__meta-trigger {
+    min-height: 34px;
+    padding-inline: 10px;
+    border-radius: 10px;
+    font-size: 12px;
+  }
+
+  .entry-composer__meta-backdrop {
+    position: fixed;
+    z-index: 70;
+    inset: 0;
+    display: block;
+    width: 100vw;
+    height: 100dvh;
+    padding: 0;
+    border: 0;
+    background: rgba(45, 39, 33, 0.16);
+  }
+
+  .entry-composer__meta-popover {
+    position: fixed;
+    z-index: 71;
+    top: auto;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    width: auto;
+    max-height: min(58dvh, 430px);
+    padding: 15px 16px calc(15px + env(safe-area-inset-bottom));
+    border-right: 0;
+    border-bottom: 0;
+    border-left: 0;
+    border-radius: 18px 18px 0 0;
+    overflow: auto;
+  }
+}

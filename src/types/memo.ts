@@ -151,6 +151,12 @@ export type EntryInsert = {
   deleted_at?: string | null;
 };
 
+/**
+ * 新規項目の入力欄で任意指定できる補助情報。
+ * 本文・親子関係・並び位置とは分け、入力UIからRepositoryへそのまま渡す。
+ */
+export type EntryCreateMetadata = Pick<EntryInsert, "tag" | "note" | "link_url">;
+
 export type EntryUpdate = Partial<
   Pick<
     EntryRow,
