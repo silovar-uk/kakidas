@@ -421,6 +421,7 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
                       <button
                         key={summary.key}
                         type="button"
+                        className={getEntryTagToneClassName(summary.label)}
                         onMouseDown={(event) => event.preventDefault()}
                         onClick={() => applyTag(summary.label)}
                       >

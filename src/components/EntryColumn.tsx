@@ -128,7 +128,7 @@ export function EntryColumn({
   const [isDeletingAll, setIsDeletingAll] = useState(false);
   const [pendingUndo, setPendingUndo] = useState<PendingUndo | null>(null);
   const [isUndoing, setIsUndoing] = useState(false);
-  /** 単語／文／段落ごとに記憶する表示方法。初期状態は従来の通常表示。 */
+  /** 単語／文／段落ごとに記憶する表示方法。未設定の区分はタグでまとめる。 */
   const [displayMode, setDisplayMode] = useState<EntryListDisplayMode>(
     () => readEntryListDisplayMode(kind),
   );

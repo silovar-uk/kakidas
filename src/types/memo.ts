@@ -102,7 +102,7 @@ export type EntryRow = {
   note: string;
   /** 任意の外部リンク。空文字ならリンクボタンは追加用として扱う。 */
   link_url: string;
-  /** 0〜5の満足度。0が初期値で、画面上ではタップごとに1ずつ進む。 */
+  /** 0〜5の満足度。0が初期値で、画面上ではプルダウンから選ぶ。 */
   satisfaction: number;
   /** 完了済みなら一覧の末尾へ寄せ、コピー対象から除外できる。 */
   is_completed: boolean;

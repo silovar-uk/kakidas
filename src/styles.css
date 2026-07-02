@@ -4616,7 +4616,7 @@ a:focus-visible {
 
   .editor-display-options__actions {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 1fr) auto auto;
     gap: 7px;
     padding-top: 9px;
   }
@@ -4628,6 +4628,14 @@ a:focus-visible {
 }
 
 @media (max-width: 370px) {
+  .editor-display-options__actions {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .editor-display-options__actions .cloud-upload-button {
+    grid-column: 1 / -1;
+  }
+
   .entry-sort-control--editor > span {
     display: none;
   }
@@ -6557,5 +6565,96 @@ a:focus-visible {
     border-color: #e2d7cd;
     border-radius: 10px;
     background: #fffefa;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   v0.5.56 — grouped-by-tag default and colored tag recommendations
+   新規入力・既存項目の候補も、一覧のチップ／見出しと同じ色で見せる。
+   -------------------------------------------------------------------------- */
+.entry-composer__tag-suggestions button.entry-tag-tone--0,
+.entry-composer__tag-suggestions button.entry-tag-tone--1,
+.entry-composer__tag-suggestions button.entry-tag-tone--2,
+.entry-composer__tag-suggestions button.entry-tag-tone--3,
+.entry-composer__tag-suggestions button.entry-tag-tone--4,
+.entry-composer__tag-suggestions button.entry-tag-tone--5,
+.entry-tag-control__suggestions button.entry-tag-tone--0,
+.entry-tag-control__suggestions button.entry-tag-tone--1,
+.entry-tag-control__suggestions button.entry-tag-tone--2,
+.entry-tag-control__suggestions button.entry-tag-tone--3,
+.entry-tag-control__suggestions button.entry-tag-tone--4,
+.entry-tag-control__suggestions button.entry-tag-tone--5 {
+  border-color: var(--entry-tag-border);
+  color: var(--entry-tag-color);
+  background: var(--entry-tag-background);
+}
+
+.entry-composer__tag-suggestions button.entry-tag-tone--0:hover:not(:disabled),
+.entry-composer__tag-suggestions button.entry-tag-tone--1:hover:not(:disabled),
+.entry-composer__tag-suggestions button.entry-tag-tone--2:hover:not(:disabled),
+.entry-composer__tag-suggestions button.entry-tag-tone--3:hover:not(:disabled),
+.entry-composer__tag-suggestions button.entry-tag-tone--4:hover:not(:disabled),
+.entry-composer__tag-suggestions button.entry-tag-tone--5:hover:not(:disabled),
+.entry-tag-control__suggestions button.entry-tag-tone--0:hover:not(:disabled),
+.entry-tag-control__suggestions button.entry-tag-tone--1:hover:not(:disabled),
+.entry-tag-control__suggestions button.entry-tag-tone--2:hover:not(:disabled),
+.entry-tag-control__suggestions button.entry-tag-tone--3:hover:not(:disabled),
+.entry-tag-control__suggestions button.entry-tag-tone--4:hover:not(:disabled),
+.entry-tag-control__suggestions button.entry-tag-tone--5:hover:not(:disabled) {
+  border-color: var(--entry-tag-color);
+  background: var(--entry-tag-background);
+}
+
+/* --------------------------------------------------------------------------
+   v0.5.58 — 満足度を一度で選べるプルダウンへ
+   評価順でカードが移動する場合でも、循環タップを繰り返さずに済む。
+   -------------------------------------------------------------------------- */
+.entry-satisfaction {
+  display: inline-block;
+  width: 46px;
+  min-width: 46px;
+  height: 28px;
+  min-height: 28px;
+  padding: 0 4px 0 7px;
+  cursor: pointer;
+  appearance: auto;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 760;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  text-align: center;
+  text-align-last: center;
+}
+
+.entry-satisfaction:hover:not(:disabled) {
+  transform: none;
+  border-color: var(--satisfaction-color, #697fa2);
+}
+
+.entry-satisfaction:active:not(:disabled) {
+  transform: none;
+}
+
+.entry-satisfaction:disabled {
+  cursor: wait;
+}
+
+@media (max-width: 920px) {
+  .entry-satisfaction {
+    width: 46px;
+    min-width: 46px;
+    height: 34px;
+    min-height: 34px;
+    padding-inline: 5px 3px;
+    border-radius: 10px;
+    font-size: 13px;
+  }
+}
+
+@media (max-width: 370px) {
+  .entry-satisfaction {
+    width: 44px;
+    min-width: 44px;
   }
 }

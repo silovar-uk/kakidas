@@ -26,13 +26,23 @@ const COMPLETED_STATE_SUFFIX = "system:completed";
 
 type ExpandedGroupState = Record<string, boolean>;
 
+/**
+ * 新しい区分は、タグを見返す導線を主役にするため「タグでまとめる」から始める。
+ * すでにこの端末で選んだ通常表示／タグ表示は、そのまま尊重する。
+ */
+export const DEFAULT_ENTRY_LIST_DISPLAY_MODE: EntryListDisplayMode = "tag_grouped";
+
 export function readEntryListDisplayMode(kind: EntryKind): EntryListDisplayMode {
   try {
-    return window.localStorage.getItem(`${DISPLAY_MODE_STORAGE_PREFIX}.${kind}`) === "tag_grouped"
-      ? "tag_grouped"
-      : "plain";
+    const saved = window.localStorage.getItem(`${DISPLAY_MODE_STORAGE_PREFIX}.${kind}`);
+
+    if (saved === "plain" || saved === "tag_grouped") {
+      return saved;
+    }
+
+    return DEFAULT_ENTRY_LIST_DISPLAY_MODE;
   } catch {
-    return "plain";
+    return DEFAULT_ENTRY_LIST_DISPLAY_MODE;
   }
 }
 

@@ -203,6 +203,7 @@ export function EntryTagControl({
                   <button
                     key={summary.key}
                     type="button"
+                    className={getEntryTagToneClassName(summary.label)}
                     disabled={disabled || isSaving}
                     onMouseDown={(event) => event.preventDefault()}
                     onClick={() => void save(summary.label)}

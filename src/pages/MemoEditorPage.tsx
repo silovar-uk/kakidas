@@ -173,6 +173,7 @@ export function MemoEditorPage() {
     setNoticeState({ id: noticeIdRef.current, message });
   }, []);
   const [copyingKind, setCopyingKind] = useState<EntryKind | null>(null);
+  const [isCopyingMemo, setIsCopyingMemo] = useState(false);
   const [isCloudDialogOpen, setIsCloudDialogOpen] = useState(false);
   const [isUploadDialogOpen, setIsUploadDialogOpen] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
@@ -376,6 +377,42 @@ export function MemoEditorPage() {
     );
 
     setNotice("テキストを書き出しました。");
+  };
+
+  /** メモ全体を、現在の出力設定でクリップボードへコピーする。 */
+  const handleCopyMemo = async () => {
+    if (!memo || isCopyingMemo) return;
+
+    setIsCopyingMemo(true);
+    setNotice(null);
+
+    try {
+      const completedCount = memo.entries.filter((entry) => entry.is_completed).length;
+
+      await copyToClipboard(
+        formatMemoText(memo, {
+          includeEntryNumbers: showEntryNumbers,
+          excludeCompleted: !includeCompletedInCopy,
+          entrySortMode,
+        }),
+      );
+
+      const completionNotice = includeCompletedInCopy && completedCount > 0
+        ? `完了済み${completedCount}件も含めました。`
+        : !includeCompletedInCopy && completedCount > 0
+          ? `完了済み${completedCount}件は含めていません。`
+          : "";
+
+      setNotice(`メモをコピーしました。${completionNotice}`);
+    } catch (copyError) {
+      setNotice(
+        copyError instanceof Error
+          ? copyError.message
+          : "メモをコピーできませんでした。",
+      );
+    } finally {
+      setIsCopyingMemo(false);
+    }
   };
 
   const handleCopyKind = async (kind: EntryKind) => {
@@ -825,6 +862,15 @@ export function MemoEditorPage() {
               <button
                 type="button"
                 className="secondary-button"
+                onClick={() => void handleCopyMemo()}
+                disabled={isCopyingMemo}
+                title={includeCompletedInCopy ? "完了済みを含めてメモ全体をコピー" : "完了済みを除いてメモ全体をコピー"}
+              >
+                {isCopyingMemo ? "コピー中…" : "コピー"}
+              </button>
+              <button
+                type="button"
+                className="secondary-button"
                 onClick={handleDownload}
               >
                 .txt出力
@@ -832,7 +878,7 @@ export function MemoEditorPage() {
             </div>
 
             <p>
-              並び順と番号は、コピー・.txt出力にも反映されます。{includeCompletedInCopy
+              並び順と番号は、メモコピー・区分コピー・.txt出力にも反映されます。{includeCompletedInCopy
                 ? "コピーには完了済みも含めます。"
                 : "コピーでは完了済みを除きます。"}
             </p>

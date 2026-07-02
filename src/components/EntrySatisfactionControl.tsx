@@ -7,10 +7,12 @@ type EntrySatisfactionControlProps = {
   onChange: (nextValue: number) => Promise<unknown> | unknown;
 };
 
+const SATISFACTION_VALUES = [0, 1, 2, 3, 4, 5] as const;
+
 /**
- * 0〜5を一つの小さな数字で示す満足度コントロール。
- * タップごとに 0 → 1 → … → 5 → 0 と循環する。
- * 色は青から赤へ寄せるが、kakidasの落ち着いた紙色に馴染む低彩度に留める。
+ * 0〜5を選ぶコンパクトなプルダウン。
+ * 以前の循環ボタンと違い、目的の値を一度で選べるため、
+ * 評価順の表示で項目が移動しても連続操作にならない。
  */
 export function EntrySatisfactionControl({
   value,
@@ -30,42 +32,48 @@ export function EntrySatisfactionControl({
     if (!isSaving) {
       setDisplayValue(normalized);
     }
-  }, [value]);
+  }, [value, isSaving]);
 
-  const advance = async () => {
+  const change = async (nextValue: number) => {
     if (disabled || isSaving) return;
 
-    const current = normalizeSatisfaction(displayValue);
-    const next = current >= 5 ? 0 : current + 1;
+    const normalized = normalizeSatisfaction(nextValue);
+    const previous = normalizeSatisfaction(displayValue);
 
-    // 先に数字だけ更新する。小さな操作なので、体感を止めずに反映する。
-    setDisplayValue(next);
+    if (normalized === previous) return;
+
+    // プルダウンを閉じた直後にも、選んだ値を即座に反映する。
+    setDisplayValue(normalized);
     setIsSaving(true);
 
     try {
-      await onChange(next);
-      savedValueRef.current = next;
+      await onChange(normalized);
+      savedValueRef.current = normalized;
     } catch {
-      // 保存に失敗した場合だけ、画面上の数字を直前の値へ戻す。
+      // 保存に失敗した場合だけ、選択を直前の値へ戻す。
       setDisplayValue(savedValueRef.current);
     } finally {
       setIsSaving(false);
     }
   };
 
-  const label = `満足度 ${displayValue} / 5。タップで1ずつ上がり、5の次は0になります。`;
+  const label = `満足度 ${displayValue} / 5`;
 
   return (
-    <button
-      type="button"
+    <select
       className="entry-satisfaction"
+      value={displayValue}
       data-satisfaction={displayValue}
-      onClick={() => void advance()}
+      onChange={(event) => void change(Number(event.target.value))}
       disabled={disabled || isSaving}
       aria-label={label}
       title={label}
     >
-      {displayValue}
-    </button>
+      {SATISFACTION_VALUES.map((score) => (
+        <option key={score} value={score}>
+          {score}
+        </option>
+      ))}
+    </select>
   );
 }
