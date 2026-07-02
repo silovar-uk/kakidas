@@ -1,5 +1,5 @@
 .
-├── public
+├── public/
 │   ├── android-chrome-192x192.png
 │   ├── android-chrome-512x512.png
 │   ├── apple-touch-icon.png
@@ -12,10 +12,10 @@
 │   ├── mstile-150x150.png
 │   ├── README.md
 │   └── site.webmanifest
-├── src
-│   ├── auth
+├── src/
+│   ├── auth/
 │   │   └── AuthProvider.tsx
-│   ├── components
+│   ├── components/
 │   │   ├── CloudAccountDialog.tsx
 │   │   ├── CloudImportDialog.tsx
 │   │   ├── CloudStatusBadge.tsx
@@ -30,10 +30,10 @@
 │   │   ├── MobileEntryActionSheet.tsx
 │   │   ├── NoticeToast.tsx
 │   │   └── UndoToast.tsx
-│   ├── hooks
+│   ├── hooks/
 │   │   ├── useCloudMemos.ts
 │   │   └── useMemos.ts
-│   ├── lib
+│   ├── lib/
 │   │   ├── bodyScrollLock.ts
 │   │   ├── clipboard.ts
 │   │   ├── copyPreferences.ts
@@ -44,20 +44,20 @@
 │   │   ├── memoTags.ts
 │   │   ├── memoText.ts
 │   │   └── supabase.ts
-│   ├── pages
+│   ├── pages/
 │   │   ├── MemoEditorPage.tsx
 │   │   ├── MemoListPage.tsx
 │   │   └── TagManagerPage.tsx
-│   ├── repositories
+│   ├── repositories/
 │   │   ├── cloudMemoRepository.ts
 │   │   └── memoRepository.ts
-│   ├── types
+│   ├── types/
 │   │   └── memo.ts
 │   ├── App.tsx
 │   ├── main.tsx
 │   ├── styles.css
 │   └── vite-env.d.ts
-├── supabase
+├── supabase/
 │   ├── MIGRATE_v0.5.11.sql
 │   ├── MIGRATE_v0.5.13.sql
 │   ├── MIGRATE_v0.5.14.sql

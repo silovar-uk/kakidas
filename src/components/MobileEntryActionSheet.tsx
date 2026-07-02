@@ -6,7 +6,6 @@ import {
   type EntryTreeNode,
   ENTRY_KIND_LABEL,
   ENTRY_KIND_MOVE_TARGETS,
-  supportsHierarchy,
 } from "../types/memo";
 
 type MobileEntryActionSheetProps = {
@@ -19,11 +18,6 @@ type MobileEntryActionSheetProps = {
   disabled?: boolean;
   onClose: () => void;
   onToggleCompleted: (entryId: string) => Promise<unknown> | unknown;
-  onAddChild: (entryId: string) => Promise<unknown> | unknown;
-  onMove: (
-    entryId: string,
-    direction: "top" | "up" | "down" | "bottom",
-  ) => Promise<unknown> | unknown;
   /** falseを返した場合は、確認を取り消したものとしてシートを閉じない。 */
   onMoveToKind: (
     entryId: string,
@@ -48,8 +42,6 @@ export function MobileEntryActionSheet({
   disabled = false,
   onClose,
   onToggleCompleted,
-  onAddChild,
-  onMove,
   onMoveToKind,
   onCopy,
   onCreateMemoFromEntry,
@@ -103,7 +95,6 @@ export function MobileEntryActionSheet({
 
   if (!entry || typeof document === "undefined") return null;
 
-  const isHierarchical = supportsHierarchy(kind);
   const moveTargets = ENTRY_KIND_MOVE_TARGETS[kind];
   const visibleNumber = displayNumber ?? entry.outline_number;
   const close = () => onCloseRef.current();
@@ -199,66 +190,6 @@ export function MobileEntryActionSheet({
           <span aria-hidden="true">↗</span>
           新しいメモにする
         </button>
-
-        {isHierarchical ? (
-          <>
-            <button
-              type="button"
-              className="mobile-action-sheet__primary"
-              onClick={() => void run(() => onAddChild(entry.id))}
-              disabled={disabled || isWorking}
-            >
-              <span aria-hidden="true">＋</span>
-              下に追加
-            </button>
-
-            <div className="mobile-action-sheet__grid mobile-action-sheet__grid--operations">
-              <button
-                type="button"
-                className="mobile-action-sheet__tile mobile-action-sheet__tile--jump"
-                onClick={() => void run(() => onMove(entry.id, "top"))}
-                disabled={disabled || isWorking || !entry.can_move_up}
-              >
-                <span aria-hidden="true">⇡</span>
-                一番上に移動
-              </button>
-
-              <button
-                type="button"
-                className="mobile-action-sheet__tile"
-                onClick={() =>
-                  void run(() => onMove(entry.id, "up"), { keepOpen: true })
-                }
-                disabled={disabled || isWorking || !entry.can_move_up}
-              >
-                <span aria-hidden="true">↑</span>
-                上へ移動
-              </button>
-
-              <button
-                type="button"
-                className="mobile-action-sheet__tile"
-                onClick={() =>
-                  void run(() => onMove(entry.id, "down"), { keepOpen: true })
-                }
-                disabled={disabled || isWorking || !entry.can_move_down}
-              >
-                <span aria-hidden="true">↓</span>
-                下へ移動
-              </button>
-
-              <button
-                type="button"
-                className="mobile-action-sheet__tile mobile-action-sheet__tile--jump"
-                onClick={() => void run(() => onMove(entry.id, "bottom"))}
-                disabled={disabled || isWorking || !entry.can_move_down}
-              >
-                <span aria-hidden="true">⇣</span>
-                一番下に移動
-              </button>
-            </div>
-          </>
-        ) : null}
 
         {moveTargets.length > 0 ? (
           <section className="mobile-action-sheet__section" aria-label="区分を移動">

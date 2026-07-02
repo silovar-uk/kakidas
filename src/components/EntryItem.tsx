@@ -13,7 +13,6 @@ import { getEntryTagToneClassName } from "../lib/entryTagGroups";
 import type { EntryTagSummary } from "../lib/memoTags";
 import {
   type EntryKind,
-  type EntryMoveDirection,
   type EntryTreeNode,
   type EntryUpdate,
   ENTRY_KIND_LABEL,
@@ -24,7 +23,6 @@ import {
   supportsHierarchy,
 } from "../types/memo";
 
-type StructureShortcut = "move-up" | "move-down";
 type EditMode = "content" | "note" | "link" | null;
 /** タグの文脈に応じて、カード内ではチップか編集アイコンだけを見せる。 */
 type EntryTagPresentation = "meta" | "group_action" | "completed_meta";
@@ -56,8 +54,6 @@ type EntryItemProps = {
   tagPresentation?: EntryTagPresentation;
   disabled?: boolean;
   onOpenStructure: (entryId: string) => void;
-  onAddChild: (entryId: string) => void;
-  onMove: (entryId: string, direction: EntryMoveDirection) => Promise<unknown>;
   onMoveToKind: (entryId: string, targetKind: EntryKind) => Promise<unknown>;
   /** 「…」から本文をそのままコピーする。 */
   onCopy: (entryId: string) => Promise<boolean>;
@@ -84,8 +80,6 @@ export function EntryItem({
   tagPresentation = "meta",
   disabled = false,
   onOpenStructure,
-  onAddChild,
-  onMove,
   onMoveToKind,
   onCopy,
   onCreateMemoFromEntry,
@@ -105,7 +99,6 @@ export function EntryItem({
   const contentInputRef = useRef<HTMLInputElement | HTMLTextAreaElement | null>(null);
   const noteInputRef = useRef<HTMLTextAreaElement | null>(null);
   const linkInputRef = useRef<HTMLInputElement | null>(null);
-  const structureActionInFlightRef = useRef(false);
 
   const isParagraph = kind === "paragraph";
   const isHierarchical = supportsHierarchy(kind);
@@ -232,74 +225,10 @@ export function EntryItem({
     setEditMode(null);
   };
 
-  const canRunStructureShortcut = (shortcut: StructureShortcut): boolean => {
-    switch (shortcut) {
-      case "move-up":
-        return entry.can_move_up;
-      case "move-down":
-        return entry.can_move_down;
-    }
-  };
-
-  const runStructureShortcut = async (shortcut: StructureShortcut) => {
-    if (
-      !isHierarchical ||
-      disabled ||
-      isSaving ||
-      structureActionInFlightRef.current ||
-      !canRunStructureShortcut(shortcut)
-    ) {
-      return;
-    }
-
-    structureActionInFlightRef.current = true;
-
-    try {
-      const canContinue = await persist(false);
-      if (!canContinue) return;
-
-      if (shortcut === "move-up") await onMove(entry.id, "up");
-      if (shortcut === "move-down") await onMove(entry.id, "down");
-
-      window.requestAnimationFrame(() => contentInputRef.current?.focus());
-    } finally {
-      structureActionInFlightRef.current = false;
-    }
-  };
-
-  const getStructureShortcut = (
-    event: Pick<
-      KeyboardEvent<Element>,
-      "key" | "shiftKey" | "ctrlKey" | "metaKey" | "altKey"
-    >,
-  ): StructureShortcut | null => {
-    if (!isHierarchical || disabled) return null;
-
-    const hasShiftedModifier =
-      event.shiftKey && (event.ctrlKey || event.metaKey || event.altKey);
-
-    if (!hasShiftedModifier) return null;
-    if (event.key === "ArrowUp") return "move-up";
-    if (event.key === "ArrowDown") return "move-down";
-
-    return null;
-  };
-
-  const handleStructureShortcut = (event: KeyboardEvent<Element>): boolean => {
-    const shortcut = getStructureShortcut(event);
-    if (!shortcut) return false;
-
-    event.preventDefault();
-    void runStructureShortcut(shortcut);
-    return true;
-  };
-
   const handleContentKeyDown = (
     event: KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>,
   ) => {
     if (event.nativeEvent.isComposing || isComposing) return;
-    if (handleStructureShortcut(event)) return;
-
     if (event.key === "Escape") {
       event.preventDefault();
       cancel();
@@ -355,10 +284,6 @@ export function EntryItem({
     }
   };
 
-  const handleReadOnlyKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
-    void handleStructureShortcut(event);
-  };
-
   const handleEditorBlur = (event: FocusEvent<HTMLElement>) => {
     if (!isEditing || isSaving) return;
 
@@ -391,10 +316,6 @@ export function EntryItem({
   const style = {
     "--entry-depth": Math.min(entry.depth, 6),
   } as CSSProperties;
-
-  const hierarchyKeyShortcuts = isHierarchical
-    ? "Tab Shift+Tab Control+Shift+ArrowRight Control+Shift+ArrowLeft Control+Shift+ArrowUp Control+Shift+ArrowDown"
-    : undefined;
 
   const createdAtLabel = formatEntryCreatedAt(entry.created_at);
   const completionClassName = entry.is_completed ? "entry-item--completed" : "";
@@ -469,7 +390,6 @@ export function EntryItem({
                     onCompositionStart={() => setIsComposing(true)}
                     onCompositionEnd={() => setIsComposing(false)}
                     aria-label="項目を編集"
-                    aria-keyshortcuts={hierarchyKeyShortcuts}
                   />
                 )
               ) : (
@@ -649,14 +569,12 @@ export function EntryItem({
             type="button"
             className="entry-item__content"
             onClick={beginContentEdit}
-            onKeyDown={handleReadOnlyKeyDown}
             disabled={disabled}
             aria-label={
               showEntryNumbers
                 ? `${visibleNumber} ${entry.content}を編集`
                 : "編集する"
             }
-            aria-keyshortcuts={hierarchyKeyShortcuts}
           >
             <span className="entry-item__content-text">{entry.content}</span>
           </button>
@@ -851,54 +769,6 @@ export function EntryItem({
           >
             ↗ 新しいメモにする
           </button>
-          {isHierarchical ? (
-            <>
-              <button
-                type="button"
-                className="structure-action structure-action--child"
-                onClick={() => onAddChild(entry.id)}
-                disabled={disabled}
-              >
-                ＋ 下に追加
-              </button>
-              <button
-                type="button"
-                className="structure-action structure-action--jump"
-                onClick={() => void onMove(entry.id, "top")}
-                disabled={disabled || !entry.can_move_up}
-                title="一番上に移動"
-              >
-                ⇡ 一番上
-              </button>
-              <button
-                type="button"
-                className="structure-action"
-                onClick={() => void onMove(entry.id, "up")}
-                disabled={disabled || !entry.can_move_up}
-                title="上へ移動"
-              >
-                ↑ 上へ移動
-              </button>
-              <button
-                type="button"
-                className="structure-action"
-                onClick={() => void onMove(entry.id, "down")}
-                disabled={disabled || !entry.can_move_down}
-                title="下へ移動"
-              >
-                ↓ 下へ移動
-              </button>
-              <button
-                type="button"
-                className="structure-action structure-action--jump"
-                onClick={() => void onMove(entry.id, "bottom")}
-                disabled={disabled || !entry.can_move_down}
-                title="一番下に移動"
-              >
-                ⇣ 一番下
-              </button>
-            </>
-          ) : null}
           {moveTargets.length > 0 ? (
             <div className="entry-item__kind-actions" aria-label="区分を移動">
               {moveTargets.map((targetKind) => (

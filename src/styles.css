@@ -6891,3 +6891,128 @@ a:focus-visible {
     overflow: auto;
   }
 }
+
+
+/* --------------------------------------------------------------------------
+   v0.5.61 — グループ見出しからのタグ一括名称変更
+   折りたたみと編集を別ボタンにし、見出し全体の開閉操作を邪魔しない。
+   -------------------------------------------------------------------------- */
+.entry-list__tag-group-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 4px;
+  padding-right: 2px;
+}
+
+.entry-list__tag-group-header .entry-list__tag-group-toggle {
+  width: 100%;
+}
+
+.entry-list__tag-group-rename {
+  display: inline-grid;
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  place-items: center;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  color: #776d64;
+  background: transparent;
+  font: inherit;
+  font-size: 15px;
+  line-height: 1;
+}
+
+.entry-list__tag-group-rename:hover:not(:disabled),
+.entry-list__tag-group-rename:focus-visible {
+  border-color: #d9cfc3;
+  color: #5d5045;
+  background: #fff8f1;
+  outline: 0;
+}
+
+.entry-list__tag-group-rename:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.entry-list__tag-rename-form {
+  display: grid;
+  gap: 8px;
+  margin: 0 2px 9px;
+  padding: 10px;
+  border: 1px solid #e3dacf;
+  border-radius: 10px;
+  background: #fffdf9;
+}
+
+.entry-list__tag-rename-form > p {
+  margin: 0;
+  color: #766e66;
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.entry-list__tag-rename-form label {
+  display: grid;
+  gap: 4px;
+  color: #655d55;
+  font-size: 11px;
+  font-weight: 720;
+}
+
+.entry-list__tag-rename-form input {
+  width: 100%;
+  min-height: 34px;
+  padding: 6px 9px;
+  border: 1px solid #d8cec2;
+  border-radius: 7px;
+  color: #3d3833;
+  background: #fff;
+  font: inherit;
+  font-size: 13px;
+}
+
+.entry-list__tag-rename-form input:focus {
+  border-color: #a89480;
+  outline: 3px solid rgba(168, 148, 128, 0.16);
+}
+
+.entry-list__tag-rename-error {
+  margin: 0 !important;
+  color: #a54f48 !important;
+}
+
+.entry-list__tag-rename-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+@media (max-width: 920px) {
+  .entry-list__tag-group-header {
+    gap: 6px;
+    padding-right: 3px;
+  }
+
+  .entry-list__tag-group-rename {
+    width: 34px;
+    min-width: 34px;
+    height: 34px;
+    border-color: #e2d7cd;
+    border-radius: 9px;
+    background: #fffefa;
+  }
+
+  .entry-list__tag-rename-form {
+    margin-inline: 3px;
+    padding: 11px;
+  }
+
+  .entry-list__tag-rename-form input {
+    min-height: 38px;
+    font-size: 14px;
+  }
+}

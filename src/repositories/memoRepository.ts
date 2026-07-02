@@ -7,7 +7,6 @@ import {
   type EntryInsert,
   type EntryInsertPosition,
   type EntryKind,
-  type EntryMoveDirection,
   type EntryRow,
   type EntryUpdate,
   canMoveEntryToKind,
@@ -28,6 +27,7 @@ import {
   formatDerivedMemoTitle,
   isCloudLinked,
   getMemoTagKey,
+  getEntryTagKey,
   normalizeMemoRow,
   normalizeMemoTag,
   normalizeEntryTag,
@@ -63,6 +63,15 @@ export type MemoTagBulkUpdateResult = {
   memo_ids: string[];
 };
 
+/** 同じメモ・同じ区分の項目タグをまとめて別名へ置き換えた結果。 */
+export type EntryTagBulkUpdateResult = {
+  memo_id: string;
+  kind: EntryKind;
+  previous_tag: string;
+  tag: string;
+  updated_count: number;
+};
+
 export interface MemoRepository {
   listMemos(): Promise<MemoListItem[]>;
   getMemo(memoId: string): Promise<MemoWithEntries | null>;
@@ -90,6 +99,13 @@ export interface MemoRepository {
     position?: EntryInsertPosition,
   ): Promise<EntryRow>;
   updateEntry(entryId: string, patch: EntryUpdate): Promise<EntryRow>;
+  /** 同じメモ・同じ区分の項目タグをまとめて別名へ置き換える。 */
+  renameEntryTag(
+    memoId: string,
+    kind: EntryKind,
+    currentTag: string,
+    nextTag: string,
+  ): Promise<EntryTagBulkUpdateResult>;
   /** 個別削除。親の場合は子孫もまとめてソフト削除し、Undo用の情報を返す。 */
   deleteEntry(entryId: string): Promise<EntryDeletionResult>;
   /** 直前の個別削除を元に戻す。 */
@@ -99,8 +115,6 @@ export interface MemoRepository {
   /** 完了済みだけをまとめてソフト削除する。未完了の子孫は残す。 */
   deleteCompletedEntries(memoId: string): Promise<CompletedEntriesDeletionResult>;
 
-  /** 同じ親・同じ完了状態の中で順序を入れ替える。 */
-  moveEntry(entryId: string, direction: EntryMoveDirection): Promise<void>;
   /** 別の区分へ移す。移動先ではルート項目になる。 */
   moveEntryToKind(entryId: string, targetKind: EntryKind): Promise<void>;
 
@@ -792,6 +806,102 @@ class IndexedDbMemoRepository implements MemoRepository {
     return next;
   }
 
+  /**
+   * 現在のメモ・現在の区分にある同じ項目タグを、完了状態を問わず一度に変更する。
+   * タグでまとめる表示の見出しから呼び出すため、ほかの区分や別メモには影響させない。
+   */
+  async renameEntryTag(
+    memoId: string,
+    kind: EntryKind,
+    currentTag: string,
+    nextTag: string,
+  ): Promise<EntryTagBulkUpdateResult> {
+    const currentKey = getEntryTagKey(currentTag);
+    const normalizedNextTag = normalizeEntryTag(nextTag);
+
+    if (!currentKey) {
+      throw new Error("変更するタグを確認してください。");
+    }
+
+    if (!normalizedNextTag) {
+      throw new Error("新しいタグ名を入力してください。");
+    }
+
+    const db = await getDatabase();
+    const transaction = db.transaction(
+      [STORE_NAMES.memos, STORE_NAMES.entries, STORE_NAMES.memoSyncMeta],
+      "readwrite",
+    );
+    const memoStore = transaction.objectStore(STORE_NAMES.memos);
+    const entryStore = transaction.objectStore(STORE_NAMES.entries);
+    const syncMetaStore = transaction.objectStore(STORE_NAMES.memoSyncMeta);
+
+    const rawMemo = await requestToPromise(
+      memoStore.get(memoId) as IDBRequest<LegacyMemoRow | undefined>,
+    );
+    const memo = rawMemo ? normalizeMemoRow(rawMemo) : null;
+
+    if (!memo || memo.deleted_at !== null) {
+      transaction.abort();
+      throw new Error("対象のメモが見つかりません。");
+    }
+
+    const rawEntries = await requestToPromise(
+      entryStore.getAll() as IDBRequest<LegacyEntryRow[]>,
+    );
+    const matchingEntries = rawEntries
+      .map(normalizeEntryRow)
+      .filter(
+        (entry) =>
+          entry.memo_id === memoId &&
+          entry.kind === kind &&
+          entry.deleted_at === null &&
+          getEntryTagKey(entry.tag) === currentKey,
+      );
+
+    const entriesToUpdate = matchingEntries.filter(
+      (entry) => entry.tag !== normalizedNextTag,
+    );
+
+    if (entriesToUpdate.length === 0) {
+      await transactionToPromise(transaction);
+      return {
+        memo_id: memoId,
+        kind,
+        previous_tag: normalizeEntryTag(currentTag) ?? currentTag,
+        tag: normalizedNextTag,
+        updated_count: 0,
+      };
+    }
+
+    const timestamp = nowIso();
+
+    for (const entry of entriesToUpdate) {
+      entryStore.put({
+        ...entry,
+        tag: normalizedNextTag,
+        updated_at: timestamp,
+      } satisfies EntryRow);
+    }
+
+    await this.touchMemoWithinTransaction(memoStore, memoId, timestamp);
+    await this.markMemoChangedWithinTransaction(
+      syncMetaStore,
+      memoId,
+      timestamp,
+    );
+
+    await transactionToPromise(transaction);
+
+    return {
+      memo_id: memoId,
+      kind,
+      previous_tag: normalizeEntryTag(currentTag) ?? currentTag,
+      tag: normalizedNextTag,
+      updated_count: entriesToUpdate.length,
+    };
+  }
+
   async deleteEntry(entryId: string): Promise<EntryDeletionResult> {
     const db = await getDatabase();
 
@@ -1084,70 +1194,6 @@ class IndexedDbMemoRepository implements MemoRepository {
     await transactionToPromise(transaction);
 
     return targets.length;
-  }
-
-  async moveEntry(
-    entryId: string,
-    direction: EntryMoveDirection,
-  ): Promise<void> {
-    const db = await getDatabase();
-
-    const transaction = db.transaction(
-      [STORE_NAMES.memos, STORE_NAMES.entries, STORE_NAMES.memoSyncMeta],
-      "readwrite",
-    );
-
-    const memoStore = transaction.objectStore(STORE_NAMES.memos);
-    const entryStore = transaction.objectStore(STORE_NAMES.entries);
-    const syncMetaStore = transaction.objectStore(STORE_NAMES.memoSyncMeta);
-    const current = await this.requireActiveEntry(entryStore, entryId, transaction);
-    const entries = await this.getEntriesForMemo(entryStore, current.memo_id);
-
-    const siblings = this.getActiveSiblings(entries, current.kind, current.parent_id);
-    const currentIndex = siblings.findIndex((entry) => entry.id === current.id);
-    const sameCompletionIndexes = siblings
-      .map((entry, index) => (entry.is_completed === current.is_completed ? index : -1))
-      .filter((index) => index >= 0);
-
-    const firstIndex = sameCompletionIndexes[0] ?? -1;
-    const lastIndex = sameCompletionIndexes.at(-1) ?? -1;
-    const targetIndex =
-      direction === "top"
-        ? firstIndex
-        : direction === "bottom"
-          ? lastIndex
-          : direction === "up"
-            ? currentIndex - 1
-            : currentIndex + 1;
-
-    const target = siblings[targetIndex];
-
-    if (
-      currentIndex < 0 ||
-      targetIndex < 0 ||
-      targetIndex >= siblings.length ||
-      targetIndex === currentIndex ||
-      !target ||
-      target.is_completed !== current.is_completed
-    ) {
-      transaction.abort();
-      throw new Error("これ以上移動できません。");
-    }
-
-    const reordered = [...siblings];
-    const [moved] = reordered.splice(currentIndex, 1);
-    reordered.splice(targetIndex, 0, moved);
-
-    const timestamp = nowIso();
-    this.writeOrderedEntries(entryStore, reordered, timestamp);
-
-    await this.touchMemoWithinTransaction(memoStore, current.memo_id, timestamp);
-    await this.markMemoChangedWithinTransaction(
-      syncMetaStore,
-      current.memo_id,
-      timestamp,
-    );
-    await transactionToPromise(transaction);
   }
 
   /**

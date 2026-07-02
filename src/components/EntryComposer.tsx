@@ -30,10 +30,8 @@ export type EntryComposerHandle = {
 type EntryComposerProps = {
   kind: EntryKind;
   disabled?: boolean;
-  targetLabel?: string | null;
   /** 現在のメモで使われている項目タグ。新規入力時の候補だけに使う。 */
   tagSuggestions: EntryTagSummary[];
-  onClearTarget?: () => void;
   onSubmit: (
     content: string,
     metadata: EntryCreateMetadata,
@@ -92,9 +90,7 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
     {
       kind,
       disabled = false,
-      targetLabel = null,
       tagSuggestions,
-      onClearTarget,
       onSubmit,
     },
     ref,
@@ -426,9 +422,7 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
     const commonProps = {
       value,
       disabled: disabled || isSubmitting,
-      placeholder: targetLabel
-        ? `「${targetLabel}」の下に追加`
-        : ENTRY_KIND_PLACEHOLDER[kind],
+      placeholder: ENTRY_KIND_PLACEHOLDER[kind],
       onChange: handleChange,
       onKeyDown: handleKeyDown,
       onCompositionStart: handleCompositionStart,
@@ -438,23 +432,6 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
 
     return (
       <form className="entry-composer" onSubmit={handleSubmit}>
-        {targetLabel ? (
-          <div className="entry-composer__target" role="status">
-            <span>
-              <strong>下に追加</strong>
-              <span>{`「${targetLabel}」の下`}</span>
-            </span>
-            <button
-              type="button"
-              className="entry-composer__target-clear"
-              onClick={onClearTarget}
-              aria-label="追加先を解除"
-              title="追加先を解除"
-            >
-              ×
-            </button>
-          </div>
-        ) : null}
 
         <div
           className={`entry-composer__control-row ${

@@ -17,9 +17,6 @@ export type EntryKind = (typeof ENTRY_KINDS)[number];
 /** 新しい項目を同じ階層の先頭／末尾どちらに置くか。DBには保存しないUI設定。 */
 export type EntryInsertPosition = "top" | "bottom";
 
-/** 同じ階層の中で項目を並べ替える方向。 */
-export type EntryMoveDirection = "top" | "up" | "down" | "bottom";
-
 /**
  * 項目の表示・出力に使う並び順。
  * DBの sort_order や作成日時は書き換えず、画面とコピーの順番だけを切り替える。

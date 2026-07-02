@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
   EntryComposer,
   type EntryComposerHandle,
@@ -25,10 +25,10 @@ import {
   type EntryDeletionResult,
   type EntryKind,
   type EntryInsertPosition,
-  type EntryMoveDirection,
   type EntryUpdate,
   type EntryTreeNode,
   ENTRY_KIND_LABEL,
+  normalizeEntryTag,
   supportsHierarchy,
 } from "../types/memo";
 
@@ -74,8 +74,9 @@ type EntryColumnProps = {
   /** 元の項目を残したまま、新しい大きなメモへ展開する。 */
   onCreateMemoFromEntry: (entryId: string) => Promise<unknown>;
   isCopying?: boolean;
-  onMove: (entryId: string, direction: EntryMoveDirection) => Promise<unknown>;
   onMoveToKind: (entryId: string, targetKind: EntryKind) => Promise<unknown>;
+  /** タグでまとめる見出しから、現在の区分にある同名タグを一括変更する。 */
+  onRenameTag: (currentTag: string, nextTag: string) => Promise<unknown>;
 };
 
 type PendingUndo = {
@@ -85,6 +86,14 @@ type PendingUndo = {
 
 type EntryTagPresentation = "meta" | "group_action" | "completed_meta";
 type FoldableGroupType = "untagged" | "tag" | "completed";
+
+type TagRenameState = {
+  sourceTag: string;
+  stateKey: string;
+  legacyStateKey?: string;
+  draft: string;
+  error: string | null;
+};
 
 const UNDO_WINDOW_MS = 5_500;
 
@@ -116,10 +125,9 @@ export function EntryColumn({
   onCopyEntry,
   onCreateMemoFromEntry,
   isCopying = false,
-  onMove,
   onMoveToKind,
+  onRenameTag,
 }: EntryColumnProps) {
-  const [parentId, setParentId] = useState<string | null>(null);
   const [structureEntryId, setStructureEntryId] = useState<string | null>(null);
   const [mobileActionEntryId, setMobileActionEntryId] = useState<string | null>(
     null,
@@ -137,15 +145,14 @@ export function EntryColumn({
   const [expandedTagGroups, setExpandedTagGroups] = useState(
     readEntryTagGroupExpandedState,
   );
+  const [tagRenameState, setTagRenameState] = useState<TagRenameState | null>(null);
+  const [isRenamingTag, setIsRenamingTag] = useState(false);
 
   const composerRef = useRef<EntryComposerHandle | null>(null);
+  const tagRenameInputRef = useRef<HTMLInputElement | null>(null);
   const undoTimerRef = useRef<number | null>(null);
   const didAutoFocusRef = useRef(false);
   const isHierarchical = supportsHierarchy(kind);
-
-  const parentEntry = parentId
-    ? entries.find((entry) => entry.id === parentId) ?? null
-    : null;
 
   const mobileActionEntry = mobileActionEntryId
     ? entries.find((entry) => entry.id === mobileActionEntryId) ?? null
@@ -200,12 +207,6 @@ export function EntryColumn({
     };
   }, []);
 
-  useEffect(() => {
-    if (parentId && !parentEntry) {
-      setParentId(null);
-    }
-  }, [parentEntry, parentId]);
-
   // タブ切替後に、非表示の列のボトムシート・小メニューが前面へ残らないようにする。
   useEffect(() => {
     if (!isActiveOnMobile) {
@@ -219,7 +220,6 @@ export function EntryColumn({
   useEffect(() => {
     if (!compactView) return;
 
-    setParentId(null);
     setStructureEntryId(null);
     setMobileActionEntryId(null);
     setIsHeaderMenuOpen(false);
@@ -250,6 +250,22 @@ export function EntryColumn({
   }, [displayMode, kind]);
 
   useEffect(() => {
+    if (isTagGrouped) return;
+    setTagRenameState(null);
+  }, [isTagGrouped]);
+
+  useEffect(() => {
+    if (!tagRenameState) return;
+
+    const frame = window.requestAnimationFrame(() => {
+      tagRenameInputRef.current?.focus();
+      tagRenameInputRef.current?.select();
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [tagRenameState?.stateKey]);
+
+  useEffect(() => {
     if (!autoFocusComposer || !isActiveOnMobile || didAutoFocusRef.current) {
       return;
     }
@@ -263,14 +279,6 @@ export function EntryColumn({
 
     return () => window.cancelAnimationFrame(frame);
   }, [autoFocusComposer, isActiveOnMobile, onAutoFocusHandled]);
-
-  const selectParent = (entryId: string) => {
-    setParentId(entryId);
-    setStructureEntryId(null);
-    setMobileActionEntryId(null);
-
-    window.requestAnimationFrame(() => composerRef.current?.focus());
-  };
 
   const openStructureActions = (entryId: string) => {
     if (isMobileViewport()) {
@@ -290,7 +298,7 @@ export function EntryColumn({
       kind,
       content,
       metadata,
-      isHierarchical ? parentId : null,
+      null,
       addAtBottom ? "bottom" : "top",
     );
   };
@@ -357,10 +365,6 @@ export function EntryColumn({
 
     const deletion = await onDelete(entryId);
 
-    if (parentId === entryId) {
-      setParentId(null);
-    }
-
     setStructureEntryId(null);
     setMobileActionEntryId(null);
     openUndo(deletion);
@@ -405,26 +409,12 @@ export function EntryColumn({
 
     try {
       await onDeleteAll(kind);
-      setParentId(null);
       setStructureEntryId(null);
       setMobileActionEntryId(null);
       clearUndo();
     } finally {
       setIsDeletingAll(false);
     }
-  };
-
-  const runStructureAction = async (
-    action: (entryId: string) => Promise<unknown>,
-    entryId: string,
-    { keepMenuOpen = false }: { keepMenuOpen?: boolean } = {},
-  ) => {
-    await action(entryId);
-
-    if (keepMenuOpen) return;
-
-    setStructureEntryId(null);
-    setMobileActionEntryId(null);
   };
 
   /**
@@ -450,7 +440,6 @@ export function EntryColumn({
     }
 
     await onMoveToKind(entryId, targetKind);
-    setParentId(null);
     setStructureEntryId(null);
     setMobileActionEntryId(null);
     return true;
@@ -484,14 +473,6 @@ export function EntryColumn({
       tagPresentation={tagPresentation}
       disabled={disabled || isDeletingAll}
       onOpenStructure={openStructureActions}
-      onAddChild={selectParent}
-      onMove={(entryId, direction) =>
-        runStructureAction(
-          (id) => onMove(id, direction),
-          entryId,
-          { keepMenuOpen: direction === "up" || direction === "down" },
-        )
-      }
       onMoveToKind={requestMoveToKind}
       onCopy={requestCopyEntry}
       onCreateMemoFromEntry={requestCreateMemoFromEntry}
@@ -516,6 +497,75 @@ export function EntryColumn({
   ): boolean => expandedTagGroups[stateKey] ?? (
     legacyStateKey ? expandedTagGroups[legacyStateKey] : undefined
   ) ?? false;
+
+  const openTagRename = (
+    sourceTag: string,
+    stateKey: string,
+    legacyStateKey?: string,
+  ) => {
+    if (disabled || isDeletingAll) return;
+
+    setTagRenameState({
+      sourceTag,
+      stateKey,
+      legacyStateKey,
+      draft: sourceTag,
+      error: null,
+    });
+  };
+
+  const handleTagRename = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    if (!tagRenameState || disabled || isDeletingAll || isRenamingTag) {
+      return;
+    }
+
+    const nextTag = normalizeEntryTag(tagRenameState.draft);
+
+    if (!nextTag) {
+      setTagRenameState((current) => current ? {
+        ...current,
+        error: "新しいタグ名を入力してください。",
+      } : current);
+      return;
+    }
+
+    const wasExpanded = isTagGroupExpanded(
+      tagRenameState.stateKey,
+      tagRenameState.legacyStateKey,
+    );
+
+    setIsRenamingTag(true);
+
+    try {
+      await onRenameTag(tagRenameState.sourceTag, nextTag);
+
+      const nextStateKey = getEntryTagGroupStateKey(kind, nextTag);
+      const nextExpandedState = { ...expandedTagGroups };
+
+      if (nextStateKey !== tagRenameState.stateKey) {
+        if (nextExpandedState[nextStateKey] === undefined) {
+          nextExpandedState[nextStateKey] = wasExpanded;
+        }
+        delete nextExpandedState[tagRenameState.stateKey];
+        if (tagRenameState.legacyStateKey) {
+          delete nextExpandedState[tagRenameState.legacyStateKey];
+        }
+        setExpandedTagGroups(nextExpandedState);
+        writeEntryTagGroupExpandedState(nextExpandedState);
+      }
+
+      setTagRenameState(null);
+    } catch (error) {
+      setTagRenameState((current) => current ? {
+        ...current,
+        error: error instanceof Error ? error.message : "タグ名を変更できませんでした。",
+      } : current);
+    } finally {
+      setIsRenamingTag(false);
+    }
+  };
 
   const renderFoldableTagGroup = (
     groupType: FoldableGroupType,
@@ -547,26 +597,90 @@ export function EntryColumn({
         className={`entry-list__tag-group entry-list__tag-group--${groupType}`}
         aria-label={groupAriaLabel}
       >
-        <button
-          type="button"
-          className="entry-list__tag-group-toggle"
-          onClick={() => toggleTagGroup(stateKey)}
-          aria-expanded={isExpanded}
-        >
-          {groupType === "tag" ? (
-            <span className={`entry-list__tag-group-label entry-list__tag-group-label--tag ${getEntryTagToneClassName(label ?? null)}`}>
-              #{label}
+        <div className="entry-list__tag-group-header">
+          <button
+            type="button"
+            className="entry-list__tag-group-toggle"
+            onClick={() => toggleTagGroup(stateKey)}
+            aria-expanded={isExpanded}
+          >
+            {groupType === "tag" ? (
+              <span className={`entry-list__tag-group-label entry-list__tag-group-label--tag ${getEntryTagToneClassName(label ?? null)}`}>
+                #{label}
+              </span>
+            ) : (
+              <span className={`entry-list__tag-group-label entry-list__tag-group-label--${groupType}`}>
+                {groupType === "completed" ? "完了" : "タグなし"}
+              </span>
+            )}
+            <span className="entry-list__tag-group-count">{groupEntries.length}件</span>
+            <span className="entry-list__tag-group-chevron" aria-hidden="true">
+              {isExpanded ? "⌃" : "⌄"}
             </span>
-          ) : (
-            <span className={`entry-list__tag-group-label entry-list__tag-group-label--${groupType}`}>
-              {groupType === "completed" ? "完了" : "タグなし"}
-            </span>
-          )}
-          <span className="entry-list__tag-group-count">{groupEntries.length}件</span>
-          <span className="entry-list__tag-group-chevron" aria-hidden="true">
-            {isExpanded ? "⌃" : "⌄"}
-          </span>
-        </button>
+          </button>
+
+          {groupType === "tag" && label && !compactView ? (
+            <button
+              type="button"
+              className="entry-list__tag-group-rename"
+              onClick={() => openTagRename(label, stateKey, legacyStateKey)}
+              disabled={disabled || isDeletingAll}
+              aria-label={`タグ「${label}」の名前をまとめて変更`}
+              title="タグ名をまとめて変更"
+            >
+              ✎
+            </button>
+          ) : null}
+        </div>
+
+        {groupType === "tag" && label && !compactView && tagRenameState?.stateKey === stateKey ? (
+          <form
+            className="entry-list__tag-rename-form"
+            onSubmit={handleTagRename}
+          >
+            <p>この{ENTRY_KIND_LABEL[kind]}の同じタグ（完了を含む）をまとめて変更します。</p>
+            <label htmlFor={`entry-tag-rename-${kind}-${stateKey}`}>
+              タグ名
+              <input
+                id={`entry-tag-rename-${kind}-${stateKey}`}
+                ref={tagRenameInputRef}
+                value={tagRenameState.draft}
+                maxLength={30}
+                disabled={isRenamingTag || disabled || isDeletingAll}
+                onChange={(event) => {
+                  const draft = event.target.value;
+                  setTagRenameState((current) => current ? {
+                    ...current,
+                    draft,
+                    error: null,
+                  } : current);
+                }}
+              />
+            </label>
+            {tagRenameState.error ? (
+              <p className="entry-list__tag-rename-error" role="alert">
+                {tagRenameState.error}
+              </p>
+            ) : null}
+            <div className="entry-list__tag-rename-actions">
+              <button
+                type="button"
+                className="text-button"
+                disabled={isRenamingTag}
+                onClick={() => setTagRenameState(null)}
+              >
+                取り消す
+              </button>
+              <button
+                type="submit"
+                className="text-button text-button--strong"
+                disabled={isRenamingTag || disabled || isDeletingAll}
+              >
+                {isRenamingTag ? "変更中…" : "名前を変更"}
+              </button>
+            </div>
+          </form>
+        ) : null}
 
         {isExpanded ? (
           <div className="entry-list__tag-group-items">
@@ -683,9 +797,7 @@ export function EntryColumn({
           ref={composerRef}
           kind={kind}
           disabled={disabled || isDeletingAll}
-          targetLabel={isHierarchical ? parentEntry?.content ?? null : null}
           tagSuggestions={tagSuggestions}
-          onClearTarget={() => setParentId(null)}
           onSubmit={handleCreate}
         />
       ) : null}
@@ -736,14 +848,6 @@ export function EntryColumn({
           disabled={disabled || isDeletingAll}
           onClose={() => setMobileActionEntryId(null)}
           onToggleCompleted={toggleCompleted}
-          onAddChild={selectParent}
-          onMove={(entryId, direction) =>
-            runStructureAction(
-              (id) => onMove(id, direction),
-              entryId,
-              { keepMenuOpen: direction === "up" || direction === "down" },
-            )
-          }
           onMoveToKind={requestMoveToKind}
           onCopy={requestCopyEntry}
           onCreateMemoFromEntry={requestCreateMemoFromEntry}

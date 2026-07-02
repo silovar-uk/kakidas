@@ -150,7 +150,7 @@ export function MemoEditorPage() {
     restoreEntries,
     deleteEntriesByKind,
     deleteCompletedEntries,
-    moveEntry,
+    renameEntryTag,
     moveEntryToKind,
     createMemoFromEntry,
     deleteMemo,
@@ -950,7 +950,9 @@ export function MemoEditorPage() {
             onCopyEntry={handleCopyEntry}
             onCreateMemoFromEntry={handleCreateMemoFromEntry}
             isCopying={copyingKind === kind}
-            onMove={moveEntry}
+            onRenameTag={(currentTag, nextTag) =>
+              renameEntryTag(kind, currentTag, nextTag)
+            }
             onMoveToKind={moveEntryToKind}
           />
         ))}

@@ -6,7 +6,6 @@ import {
   type EntryDeletionResult,
   type EntryKind,
   type EntryInsertPosition,
-  type EntryMoveDirection,
   type EntryRow,
   type EntryUpdate,
   type MemoListItem,
@@ -17,6 +16,7 @@ import {
 } from "../types/memo";
 import {
   memoRepository,
+  type EntryTagBulkUpdateResult,
   type MemoFromEntryResult,
   type MemoTagBulkUpdateResult,
 } from "../repositories/memoRepository";
@@ -348,14 +348,29 @@ export function useMemoDetail(memoId: string | undefined) {
     [memoId, refreshAfterWrite, runWrite],
   );
 
-  const moveEntry = useCallback(
-    async (entryId: string, direction: EntryMoveDirection): Promise<void> => {
+  /** タググループ見出しから、同じメモ・同じ区分の項目タグをまとめて変更する。 */
+  const renameEntryTag = useCallback(
+    async (
+      kind: EntryKind,
+      currentTag: string,
+      nextTag: string,
+    ): Promise<EntryTagBulkUpdateResult> => {
+      if (!memoId) {
+        throw new Error("メモIDがありません。");
+      }
+
       return runWrite(async () => {
-        await memoRepository.moveEntry(entryId, direction);
+        const result = await memoRepository.renameEntryTag(
+          memoId,
+          kind,
+          currentTag,
+          nextTag,
+        );
         await refreshAfterWrite();
+        return result;
       });
     },
-    [refreshAfterWrite, runWrite],
+    [memoId, refreshAfterWrite, runWrite],
   );
 
   const moveEntryToKind = useCallback(
@@ -394,7 +409,7 @@ export function useMemoDetail(memoId: string | undefined) {
     restoreEntries,
     deleteEntriesByKind,
     deleteCompletedEntries,
-    moveEntry,
+    renameEntryTag,
     moveEntryToKind,
     deleteMemo,
   };
