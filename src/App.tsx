@@ -7,7 +7,7 @@ import { TagManagerPage } from "./pages/TagManagerPage";
 export default function App() {
   return (
     <AuthProvider>
-      <BrowserRouter>
+      <BrowserRouter basename={import.meta.env.BASE_URL}>
         <Routes>
           <Route path="/" element={<MemoListPage />} />
           <Route path="/tags" element={<TagManagerPage />} />
