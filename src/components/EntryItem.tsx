@@ -1,4 +1,5 @@
 import {
+  type ChangeEvent,
   type CSSProperties,
   type FocusEvent,
   type KeyboardEvent,
@@ -8,6 +9,7 @@ import {
 } from "react";
 import { EntrySatisfactionControl } from "./EntrySatisfactionControl";
 import { EntryTagControl } from "./EntryTagControl";
+import { MobileParagraphEditorSheet } from "./MobileParagraphEditorSheet";
 import { formatEntryCreatedAt } from "../lib/formatDate";
 import { getEntryTagToneClassName } from "../lib/entryTagGroups";
 import type { EntryTagSummary } from "../lib/memoTags";
@@ -24,6 +26,7 @@ import {
 } from "../types/memo";
 
 type EditMode = "content" | "note" | "link" | null;
+type MobileParagraphEditorFocus = "content" | "note" | "link";
 /** タグの文脈に応じて、カード内ではチップか編集アイコンだけを見せる。 */
 type EntryTagPresentation = "meta" | "group_action" | "completed_meta";
 
@@ -34,6 +37,11 @@ function LinkIcon() {
       <path d="M13.6 10.4a4.3 4.3 0 0 0-6.1 0l-2.3 2.3a4.3 4.3 0 0 0 6.1 6.1l1.3-1.3" />
     </svg>
   );
+}
+
+function readCssPixel(value: string): number | null {
+  const parsed = Number.parseFloat(value);
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 type EntryItemProps = {
@@ -95,10 +103,16 @@ export function EntryItem({
   const [linkError, setLinkError] = useState<string | null>(null);
   const [isComposing, setIsComposing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  /** 段落はスマホだけ専用編集シートに分け、背景の一覧を動かさない。 */
+  const [mobileParagraphEditorFocus, setMobileParagraphEditorFocus] = useState<
+    MobileParagraphEditorFocus | null
+  >(null);
 
   const contentInputRef = useRef<HTMLInputElement | HTMLTextAreaElement | null>(null);
   const noteInputRef = useRef<HTMLTextAreaElement | null>(null);
   const linkInputRef = useRef<HTMLInputElement | null>(null);
+  const paragraphResizeFrameRef = useRef<number | null>(null);
+  const paragraphCompositionRef = useRef(false);
 
   const isParagraph = kind === "paragraph";
   const isHierarchical = supportsHierarchy(kind);
@@ -136,8 +150,83 @@ export function EntryItem({
     }
   }, [editMode]);
 
+  useEffect(() => {
+    return () => {
+      if (paragraphResizeFrameRef.current !== null) {
+        window.cancelAnimationFrame(paragraphResizeFrameRef.current);
+      }
+    };
+  }, []);
+
+  const adjustParagraphTextareaHeight = ({ allowShrink = false } = {}) => {
+    const textarea = contentInputRef.current;
+
+    if (!(textarea instanceof HTMLTextAreaElement)) return;
+
+    const computedStyle = window.getComputedStyle(textarea);
+    const minHeight = readCssPixel(computedStyle.minHeight) ?? 180;
+    const maxHeight = readCssPixel(computedStyle.maxHeight) ?? Number.POSITIVE_INFINITY;
+    const currentHeight = textarea.getBoundingClientRect().height;
+
+    /**
+     * 編集開始時だけ自然高を測り直す。入力中は縮めず、必要な時だけ伸ばす。
+     * iPhone Safariのキーボード表示中にページ位置が少しずつ動くのを避ける。
+     */
+    if (allowShrink) {
+      textarea.style.height = "auto";
+    }
+
+    const contentHeight = textarea.scrollHeight;
+    const nextHeight = Math.min(Math.max(contentHeight, minHeight), maxHeight);
+
+    if (allowShrink || nextHeight > currentHeight + 0.5) {
+      textarea.style.height = `${nextHeight}px`;
+    }
+
+    const nextOverflow = contentHeight > maxHeight + 0.5 ? "auto" : "hidden";
+    if (textarea.style.overflowY !== nextOverflow) {
+      textarea.style.overflowY = nextOverflow;
+    }
+  };
+
+  const scheduleParagraphTextareaResize = ({ allowShrink = false } = {}) => {
+    if (!isParagraph) return;
+
+    if (paragraphResizeFrameRef.current !== null) {
+      window.cancelAnimationFrame(paragraphResizeFrameRef.current);
+    }
+
+    paragraphResizeFrameRef.current = window.requestAnimationFrame(() => {
+      paragraphResizeFrameRef.current = null;
+      adjustParagraphTextareaHeight({ allowShrink });
+    });
+  };
+
+  useEffect(() => {
+    if (!isParagraph || editMode !== "content") return;
+
+    const frame = window.requestAnimationFrame(() => {
+      scheduleParagraphTextareaResize({ allowShrink: true });
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [editMode, isParagraph]);
+
+  const usesMobileParagraphSheet = () =>
+    isParagraph &&
+    typeof window !== "undefined" &&
+    window.matchMedia("(max-width: 920px)").matches;
+
+  const openMobileParagraphEditor = (focus: MobileParagraphEditorFocus): boolean => {
+    if (!usesMobileParagraphSheet()) return false;
+
+    setMobileParagraphEditorFocus(focus);
+    return true;
+  };
+
   const beginContentEdit = () => {
     if (disabled) return;
+    if (openMobileParagraphEditor("content")) return;
     setValue(entry.content);
     setNoteValue(entry.note);
     setLinkValue(entry.link_url);
@@ -149,6 +238,7 @@ export function EntryItem({
 
   const beginNoteEdit = () => {
     if (disabled) return;
+    if (openMobileParagraphEditor("note")) return;
     setValue(entry.content);
     setNoteValue(entry.note);
     setLinkValue(entry.link_url);
@@ -160,6 +250,7 @@ export function EntryItem({
 
   const beginLinkEdit = () => {
     if (disabled) return;
+    if (openMobileParagraphEditor("link")) return;
     setValue(entry.content);
     setNoteValue(entry.note);
     setLinkValue(entry.link_url);
@@ -223,6 +314,14 @@ export function EntryItem({
     setShowLinkEditor(Boolean(entry.link_url.trim()));
     setLinkError(null);
     setEditMode(null);
+  };
+
+  const handleContentChange = (event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    setValue(event.target.value);
+
+    if (isParagraph && !paragraphCompositionRef.current) {
+      scheduleParagraphTextareaResize();
+    }
   };
 
   const handleContentKeyDown = (
@@ -341,7 +440,9 @@ export function EntryItem({
   if (isEditing) {
     return (
       <article
-        className={`entry-item entry-item--editing ${completionClassName} ${satisfactionClassName} ${numberVisibilityClassName} ${
+        className={`entry-item entry-item--editing ${
+          isParagraph && editMode === "content" ? "entry-item--paragraph-editing" : ""
+        } ${completionClassName} ${satisfactionClassName} ${numberVisibilityClassName} ${
           isHierarchical ? "entry-item--hierarchical" : ""
         } ${entry.depth > 0 ? "entry-item--nested" : ""}`}
         style={style}
@@ -369,13 +470,21 @@ export function EntryItem({
                     ref={(element) => {
                       contentInputRef.current = element;
                     }}
+                    className="entry-item__paragraph-editor"
                     value={value}
                     disabled={disabled || isSaving}
-                    onChange={(event) => setValue(event.target.value)}
+                    onChange={handleContentChange}
                     onKeyDown={handleContentKeyDown}
-                    onCompositionStart={() => setIsComposing(true)}
-                    onCompositionEnd={() => setIsComposing(false)}
-                    rows={4}
+                    onCompositionStart={() => {
+                      setIsComposing(true);
+                      paragraphCompositionRef.current = true;
+                    }}
+                    onCompositionEnd={() => {
+                      setIsComposing(false);
+                      paragraphCompositionRef.current = false;
+                      scheduleParagraphTextareaResize();
+                    }}
+                    rows={6}
                     aria-label="段落を編集"
                   />
                 ) : (
@@ -385,7 +494,7 @@ export function EntryItem({
                     }}
                     value={value}
                     disabled={disabled || isSaving}
-                    onChange={(event) => setValue(event.target.value)}
+                    onChange={handleContentChange}
                     onKeyDown={handleContentKeyDown}
                     onCompositionStart={() => setIsComposing(true)}
                     onCompositionEnd={() => setIsComposing(false)}
@@ -500,25 +609,29 @@ export function EntryItem({
         </div>
 
         <div className="entry-item__edit-actions">
-          <button
-            type="button"
-            className="text-button entry-item__complete-text"
-            disabled={disabled || isSaving}
-            onMouseDown={(event) => event.preventDefault()}
-            onClick={() => void toggleCompletion()}
-          >
-            {entry.is_completed ? "未完了に戻す" : "完了にする"}
-          </button>
-          <button
-            type="button"
-            className="text-button text-button--danger"
-            onMouseDown={(event) => {
-              event.preventDefault();
-              void remove();
-            }}
-          >
-            削除
-          </button>
+          {!(isParagraph && editMode === "content") ? (
+            <>
+              <button
+                type="button"
+                className="text-button entry-item__complete-text"
+                disabled={disabled || isSaving}
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => void toggleCompletion()}
+              >
+                {entry.is_completed ? "未完了に戻す" : "完了にする"}
+              </button>
+              <button
+                type="button"
+                className="text-button text-button--danger"
+                onMouseDown={(event) => {
+                  event.preventDefault();
+                  void remove();
+                }}
+              >
+                削除
+              </button>
+            </>
+          ) : null}
           <button
             type="button"
             className="text-button"
@@ -545,12 +658,15 @@ export function EntryItem({
   }
 
   return (
-    <article
+    <>
+      <article
       className={`entry-item ${completionClassName} ${satisfactionClassName} ${numberVisibilityClassName} ${
         isHierarchical ? "entry-item--hierarchical" : ""
       } ${entry.depth > 0 ? "entry-item--nested" : ""} ${
         isStructureOpen ? "entry-item--structure-open" : ""
-      } ${isMobileActionOpen ? "entry-item--mobile-action-open" : ""}`}
+      } ${isMobileActionOpen ? "entry-item--mobile-action-open" : ""} ${
+        mobileParagraphEditorFocus ? "entry-item--mobile-paragraph-editing" : ""
+      }`}
       style={style}
     >
       <div className="entry-item__row">
@@ -794,6 +910,19 @@ export function EntryItem({
           </button>
         </div>
       ) : null}
-    </article>
+      </article>
+      <MobileParagraphEditorSheet
+        key={mobileParagraphEditorFocus ? `${entry.id}-${mobileParagraphEditorFocus}` : "closed"}
+        entry={mobileParagraphEditorFocus ? entry : null}
+        showEntryNumbers={showEntryNumbers}
+        displayNumber={visibleNumber}
+        initialFocus={mobileParagraphEditorFocus ?? "content"}
+        disabled={disabled || isSaving}
+        onClose={() => setMobileParagraphEditorFocus(null)}
+        onSave={async (_entryId, patch) => {
+          await onUpdate(entry.id, patch);
+        }}
+      />
+    </>
   );
 }

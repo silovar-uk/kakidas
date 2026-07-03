@@ -95,6 +95,11 @@ type TagRenameState = {
   error: string | null;
 };
 
+type TagGroupComposerState = {
+  tag: string;
+  stateKey: string;
+};
+
 const UNDO_WINDOW_MS = 5_500;
 
 function isMobileViewport() {
@@ -147,8 +152,11 @@ export function EntryColumn({
   );
   const [tagRenameState, setTagRenameState] = useState<TagRenameState | null>(null);
   const [isRenamingTag, setIsRenamingTag] = useState(false);
+  /** 未完了タグ見出しから開く、固定タグ付きの簡易入力欄。 */
+  const [tagGroupComposerState, setTagGroupComposerState] = useState<TagGroupComposerState | null>(null);
 
   const composerRef = useRef<EntryComposerHandle | null>(null);
+  const tagGroupComposerRef = useRef<EntryComposerHandle | null>(null);
   const tagRenameInputRef = useRef<HTMLInputElement | null>(null);
   const undoTimerRef = useRef<number | null>(null);
   const didAutoFocusRef = useRef(false);
@@ -213,6 +221,7 @@ export function EntryColumn({
       setMobileActionEntryId(null);
       setStructureEntryId(null);
       setIsHeaderMenuOpen(false);
+      setTagGroupComposerState(null);
     }
   }, [isActiveOnMobile]);
 
@@ -223,6 +232,7 @@ export function EntryColumn({
     setStructureEntryId(null);
     setMobileActionEntryId(null);
     setIsHeaderMenuOpen(false);
+    setTagGroupComposerState(null);
   }, [compactView]);
 
   useEffect(() => {
@@ -252,7 +262,22 @@ export function EntryColumn({
   useEffect(() => {
     if (isTagGrouped) return;
     setTagRenameState(null);
+    setTagGroupComposerState(null);
   }, [isTagGrouped]);
+
+  /**
+   * タグを押した直後だけ本文入力へフォーカスする。scrollIntoViewは使わず、
+   * 既存グループを開かないため、スマホでも一覧の視界を急に動かさない。
+   */
+  useEffect(() => {
+    if (!tagGroupComposerState || compactView || !isTagGrouped) return;
+
+    const frame = window.requestAnimationFrame(() => {
+      tagGroupComposerRef.current?.focus({ scroll: false, delay: 0 });
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [compactView, isTagGrouped, tagGroupComposerState?.stateKey]);
 
   useEffect(() => {
     if (!tagRenameState) return;
@@ -298,6 +323,21 @@ export function EntryColumn({
       kind,
       content,
       metadata,
+      null,
+      addAtBottom ? "bottom" : "top",
+    );
+  };
+
+  /** タグ見出しからの追加は、見出しのタグを固定して保存する。 */
+  const handleCreateForTagGroup = async (
+    tag: string,
+    content: string,
+    metadata: EntryCreateMetadata,
+  ) => {
+    await onCreate(
+      kind,
+      content,
+      { ...metadata, tag },
       null,
       addAtBottom ? "bottom" : "top",
     );
@@ -491,6 +531,15 @@ export function EntryColumn({
     writeEntryTagGroupExpandedState(nextState);
   };
 
+  const toggleTagGroupComposer = (tag: string, stateKey: string) => {
+    if (disabled || isDeletingAll || compactView) return;
+
+    setTagRenameState(null);
+    setTagGroupComposerState((current) => (
+      current?.stateKey === stateKey ? null : { tag, stateKey }
+    ));
+  };
+
   const isTagGroupExpanded = (
     stateKey: string,
     legacyStateKey?: string,
@@ -505,6 +554,7 @@ export function EntryColumn({
   ) => {
     if (disabled || isDeletingAll) return;
 
+    setTagGroupComposerState(null);
     setTagRenameState({
       sourceTag,
       stateKey,
@@ -582,6 +632,10 @@ export function EntryColumn({
       ? getLegacyEntryTagGroupStateKey(kind, label ?? null)
       : undefined;
     const isExpanded = isTagGroupExpanded(stateKey, legacyStateKey);
+    const isTagComposerOpen = groupType === "tag" && label
+      ? tagGroupComposerState?.stateKey === stateKey
+      : false;
+    const composerId = `entry-tag-group-composer-${kind}-${stateKey}`;
     const groupAriaLabel = groupType === "completed"
       ? "完了済みの項目"
       : groupType === "untagged"
@@ -597,22 +651,35 @@ export function EntryColumn({
         className={`entry-list__tag-group entry-list__tag-group--${groupType}`}
         aria-label={groupAriaLabel}
       >
-        <div className="entry-list__tag-group-header">
+        <div className={`entry-list__tag-group-header entry-list__tag-group-header--${groupType}`}>
+          {groupType === "tag" && label ? (
+            <button
+              type="button"
+              className={`entry-list__tag-group-add ${getEntryTagToneClassName(label)}`}
+              onClick={() => toggleTagGroupComposer(label, stateKey)}
+              disabled={disabled || isDeletingAll || compactView}
+              aria-expanded={isTagComposerOpen}
+              aria-controls={composerId}
+              aria-label={`タグ「${label}」に${ENTRY_KIND_LABEL[kind]}を追加`}
+              title={`#${label} に追加`}
+            >
+              <span className="entry-list__tag-group-add-label">#{label}</span>
+              <span className="entry-list__tag-group-add-plus" aria-hidden="true">＋</span>
+            </button>
+          ) : null}
+
           <button
             type="button"
             className="entry-list__tag-group-toggle"
             onClick={() => toggleTagGroup(stateKey)}
             aria-expanded={isExpanded}
+            aria-label={isExpanded ? `${groupAriaLabel}を閉じる` : `${groupAriaLabel}を開く`}
           >
-            {groupType === "tag" ? (
-              <span className={`entry-list__tag-group-label entry-list__tag-group-label--tag ${getEntryTagToneClassName(label ?? null)}`}>
-                #{label}
-              </span>
-            ) : (
+            {groupType !== "tag" ? (
               <span className={`entry-list__tag-group-label entry-list__tag-group-label--${groupType}`}>
                 {groupType === "completed" ? "完了" : "タグなし"}
               </span>
-            )}
+            ) : null}
             <span className="entry-list__tag-group-count">{groupEntries.length}件</span>
             <span className="entry-list__tag-group-chevron" aria-hidden="true">
               {isExpanded ? "⌃" : "⌄"}
@@ -632,6 +699,27 @@ export function EntryColumn({
             </button>
           ) : null}
         </div>
+
+        {groupType === "tag" && label && !compactView && isTagComposerOpen ? (
+          <div
+            id={composerId}
+            className="entry-list__tag-group-composer"
+            aria-label={`タグ「${label}」に${ENTRY_KIND_LABEL[kind]}を追加`}
+          >
+            <EntryComposer
+              ref={tagGroupComposerRef}
+              kind={kind}
+              compact
+              fixedTag={label}
+              disabled={disabled || isDeletingAll}
+              tagSuggestions={tagSuggestions}
+              onDismiss={() => setTagGroupComposerState(null)}
+              onSubmit={(content, metadata) =>
+                handleCreateForTagGroup(label, content, metadata)
+              }
+            />
+          </div>
+        ) : null}
 
         {groupType === "tag" && label && !compactView && tagRenameState?.stateKey === stateKey ? (
           <form

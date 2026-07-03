@@ -32,6 +32,12 @@ type EntryComposerProps = {
   disabled?: boolean;
   /** 現在のメモで使われている項目タグ。新規入力時の候補だけに使う。 */
   tagSuggestions: EntryTagSummary[];
+  /** 指定時は、このタグへ直接追加する専用入力として使う。 */
+  fixedTag?: string;
+  /** タグ見出し直下で使う、余白を抑えた入力面。 */
+  compact?: boolean;
+  /** タグ見出しから開いた専用入力を閉じる。 */
+  onDismiss?: () => void;
   onSubmit: (
     content: string,
     metadata: EntryCreateMetadata,
@@ -91,6 +97,9 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
       kind,
       disabled = false,
       tagSuggestions,
+      fixedTag,
+      compact = false,
+      onDismiss,
       onSubmit,
     },
     ref,
@@ -115,7 +124,8 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
     const paragraphResizeFrameRef = useRef<number | null>(null);
     const isComposingRef = useRef(false);
     const isParagraph = kind === "paragraph";
-    const selectedTag = normalizeEntryTag(tagValue);
+    const lockedTag = normalizeEntryTag(fixedTag);
+    const selectedTag = lockedTag ?? normalizeEntryTag(tagValue);
     const hasNote = noteValue.trim().length > 0;
     const hasLink = linkValue.trim().length > 0;
     const canSubmit = value.trim().length > 0 && !disabled && !isSubmitting;
@@ -431,7 +441,33 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
 
 
     return (
-      <form className="entry-composer" onSubmit={handleSubmit}>
+      <form
+        className={`entry-composer ${compact ? "entry-composer--tag-group" : ""}`}
+        onSubmit={handleSubmit}
+      >
+        {lockedTag ? (
+          <div className="entry-composer__tag-group-context">
+            <span
+              className={`entry-composer__tag-group-context-tag ${getEntryTagToneClassName(lockedTag)}`}
+            >
+              <TagIcon />
+              <span>#{lockedTag}</span>
+            </span>
+            <span className="entry-composer__tag-group-context-copy">に追加</span>
+            {onDismiss ? (
+              <button
+                type="button"
+                className="entry-composer__tag-group-context-close"
+                onClick={onDismiss}
+                disabled={disabled || isSubmitting}
+                aria-label={`タグ「${lockedTag}」への追加を閉じる`}
+                title="閉じる"
+              >
+                ×
+              </button>
+            ) : null}
+          </div>
+        ) : null}
 
         <div
           className={`entry-composer__control-row ${
@@ -631,7 +667,8 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
               ) : null}
             </div>
 
-            <div className="entry-composer__tag-picker">
+            {!lockedTag ? (
+              <div className="entry-composer__tag-picker">
               <button
                 type="button"
                 className={`entry-composer__tag-trigger ${
@@ -718,7 +755,8 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
                   </div>
                 </>
               ) : null}
-            </div>
+              </div>
+            ) : null}
           </div>
         </div>
 

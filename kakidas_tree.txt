@@ -28,6 +28,7 @@
 │   │   ├── MemoDeleteDialog.tsx
 │   │   ├── MemoTagControl.tsx
 │   │   ├── MobileEntryActionSheet.tsx
+│   │   ├── MobileParagraphEditorSheet.tsx
 │   │   ├── NoticeToast.tsx
 │   │   └── UndoToast.tsx
 │   ├── hooks/
