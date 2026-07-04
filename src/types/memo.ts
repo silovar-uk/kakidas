@@ -618,8 +618,11 @@ function compareEntriesForDisplay(
   a: EntryRow,
   b: EntryRow,
   sortMode: EntrySortMode,
+  keepCompletedInPlace = false,
 ): number {
-  if (a.is_completed !== b.is_completed) {
+  // 順番固定のタグ表示では、完了操作だけでカードの位置を動かさない。
+  // 通常表示や「完了を集める」表示は従来どおり完了済みを後ろへ寄せる。
+  if (!keepCompletedInPlace && a.is_completed !== b.is_completed) {
     return Number(a.is_completed) - Number(b.is_completed);
   }
 
@@ -647,11 +650,13 @@ export function getEntryTree(
   entries: EntryRow[],
   kind: EntryKind,
   sortMode: EntrySortMode = "created_desc",
+  /** タグでまとめる＋順番固定の時だけ、完了状態を並び替え条件から外す。 */
+  keepCompletedInPlace = false,
 ): EntryTreeNode[] {
   const activeEntries = entries
     .filter((entry) => entry.kind === kind && entry.deleted_at === null)
     .map(normalizeEntryRow)
-    .sort((a, b) => compareEntriesForDisplay(a, b, sortMode));
+    .sort((a, b) => compareEntriesForDisplay(a, b, sortMode, keepCompletedInPlace));
 
   const entryById = new Map(activeEntries.map((entry) => [entry.id, entry]));
   const childrenByParent = new Map<string | null, EntryRow[]>();
@@ -670,7 +675,7 @@ export function getEntryTree(
   }
 
   for (const siblings of childrenByParent.values()) {
-    siblings.sort((a, b) => compareEntriesForDisplay(a, b, sortMode));
+    siblings.sort((a, b) => compareEntriesForDisplay(a, b, sortMode, keepCompletedInPlace));
   }
 
   const countDescendants = (entryId: string, seen: Set<string>): number => {
@@ -741,7 +746,7 @@ export function getEntryTree(
         (candidate.parent_id === entry.parent_id || candidate.id === entry.id),
     );
 
-    siblings.sort((a, b) => compareEntriesForDisplay(a, b, sortMode)).forEach((orphan, index) => {
+    siblings.sort((a, b) => compareEntriesForDisplay(a, b, sortMode, keepCompletedInPlace)).forEach((orphan, index) => {
       if (visited.has(orphan.id)) return;
 
       visited.add(orphan.id);

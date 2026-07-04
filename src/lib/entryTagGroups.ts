@@ -20,6 +20,7 @@ export type GroupedEntryList = {
 };
 
 const DISPLAY_MODE_STORAGE_PREFIX = "kakidas.entry-list-display-mode";
+const ORDER_LOCKED_STORAGE_PREFIX = "kakidas.entry-tag-order-locked";
 const EXPANDED_GROUPS_STORAGE_KEY = "kakidas.entry-tag-groups-expanded";
 const UNTAGGED_STATE_SUFFIX = "system:untagged";
 const COMPLETED_STATE_SUFFIX = "system:completed";
@@ -31,6 +32,12 @@ type ExpandedGroupState = Record<string, boolean>;
  * すでにこの端末で選んだ通常表示／タグ表示は、そのまま尊重する。
  */
 export const DEFAULT_ENTRY_LIST_DISPLAY_MODE: EntryListDisplayMode = "tag_grouped";
+
+/**
+ * タグでまとめる表示では、完了操作中に視線の対象が動かないよう順番固定を初期値にする。
+ * 記憶は単語／文／段落ごとのブラウザ設定で、項目データには保存しない。
+ */
+export const DEFAULT_ENTRY_TAG_ORDER_LOCKED = true;
 
 export function readEntryListDisplayMode(kind: EntryKind): EntryListDisplayMode {
   try {
@@ -52,6 +59,34 @@ export function writeEntryListDisplayMode(
 ): void {
   try {
     window.localStorage.setItem(`${DISPLAY_MODE_STORAGE_PREFIX}.${kind}`, mode);
+  } catch {
+    // 保存できない場合も、その場の表示切替を優先する。
+  }
+}
+
+/**
+ * ONなら完了済みも現在のタグ・表示順に残す。OFFの時だけ完了グループへ集約する。
+ * 未設定の端末はONとして扱い、既存の表示設定を壊さない。
+ */
+export function readEntryTagOrderLocked(kind: EntryKind): boolean {
+  try {
+    const saved = window.localStorage.getItem(`${ORDER_LOCKED_STORAGE_PREFIX}.${kind}`);
+
+    if (saved === "true") return true;
+    if (saved === "false") return false;
+
+    return DEFAULT_ENTRY_TAG_ORDER_LOCKED;
+  } catch {
+    return DEFAULT_ENTRY_TAG_ORDER_LOCKED;
+  }
+}
+
+export function writeEntryTagOrderLocked(kind: EntryKind, isLocked: boolean): void {
+  try {
+    window.localStorage.setItem(
+      `${ORDER_LOCKED_STORAGE_PREFIX}.${kind}`,
+      String(isLocked),
+    );
   } catch {
     // 保存できない場合も、その場の表示切替を優先する。
   }

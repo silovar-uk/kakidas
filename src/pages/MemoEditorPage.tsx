@@ -25,6 +25,10 @@ import {
   getMemoTagSummaries,
   type MemoTagSummary,
 } from "../lib/memoTags";
+import {
+  readEntryListDisplayMode,
+  readEntryTagOrderLocked,
+} from "../lib/entryTagGroups";
 import { uploadMemoToCloud } from "../repositories/cloudMemoRepository";
 import { memoRepository } from "../repositories/memoRepository";
 import {
@@ -203,6 +207,8 @@ export function MemoEditorPage() {
   const [entrySortMode, setEntrySortMode] = useState<EntrySortMode>(
     readEntrySortMode,
   );
+  /** 区分ヘッダーで表示モード／順番固定を切り替えた時、表示ツリーを再導出するためのキー。 */
+  const [entryPresentationVersion, setEntryPresentationVersion] = useState(0);
   /** コピーだけに適用する設定。完了の表示／非表示とは独立させる。 */
   const [includeCompletedInCopy, setIncludeCompletedInCopy] = useState(
     readCopyIncludeCompleted,
@@ -641,12 +647,22 @@ export function MemoEditorPage() {
       ? allEntries.filter((entry) => !entry.is_completed)
       : allEntries;
 
+    const keepsCompletedInPlace = (kind: EntryKind) => (
+      readEntryListDisplayMode(kind) === "tag_grouped" &&
+      readEntryTagOrderLocked(kind)
+    );
+
     return {
-      word: getEntryTree(entries, "word", entrySortMode),
-      sentence: getEntryTree(entries, "sentence", entrySortMode),
-      paragraph: getEntryTree(entries, "paragraph", entrySortMode),
+      word: getEntryTree(entries, "word", entrySortMode, keepsCompletedInPlace("word")),
+      sentence: getEntryTree(entries, "sentence", entrySortMode, keepsCompletedInPlace("sentence")),
+      paragraph: getEntryTree(entries, "paragraph", entrySortMode, keepsCompletedInPlace("paragraph")),
     };
-  }, [entrySortMode, hideCompletedEntries, memo?.entries]);
+  }, [
+    entryPresentationVersion,
+    entrySortMode,
+    hideCompletedEntries,
+    memo?.entries,
+  ]);
 
   const cloudUploadTarget = useMemo<CloudUploadTarget[]>(() => {
     if (!memo) return [];
@@ -676,6 +692,11 @@ export function MemoEditorPage() {
 
   const handleComposerAutoFocusHandled = useCallback(() => {
     setShouldFocusNewMemoComposer(false);
+  }, []);
+
+  const handleEntryPresentationPreferenceChange = useCallback(() => {
+    // 順番固定の切替は項目データを変えず、今回の画面用ツリーだけを作り直す。
+    setEntryPresentationVersion((version) => version + 1);
   }, []);
 
   const handleUploadConfirm = async () => {
@@ -989,6 +1010,7 @@ export function MemoEditorPage() {
             onRenameTag={(currentTag, nextTag) =>
               renameEntryTag(kind, currentTag, nextTag)
             }
+            onDisplayPreferenceChange={handleEntryPresentationPreferenceChange}
             onMoveToKind={moveEntryToKind}
           />
         ))}

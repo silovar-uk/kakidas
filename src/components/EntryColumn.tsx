@@ -15,9 +15,11 @@ import {
   groupEntriesByTag,
   readEntryListDisplayMode,
   readEntryTagGroupExpandedState,
+  readEntryTagOrderLocked,
   type EntryListDisplayMode,
   writeEntryListDisplayMode,
   writeEntryTagGroupExpandedState,
+  writeEntryTagOrderLocked,
 } from "../lib/entryTagGroups";
 import { UndoToast } from "./UndoToast";
 import {
@@ -77,6 +79,8 @@ type EntryColumnProps = {
   onMoveToKind: (entryId: string, targetKind: EntryKind) => Promise<unknown>;
   /** タグでまとめる見出しから、現在の区分にある同名タグを一括変更する。 */
   onRenameTag: (currentTag: string, nextTag: string) => Promise<unknown>;
+  /** 表示モード／順番固定を切り替えた時、親の並び導出を更新する。 */
+  onDisplayPreferenceChange?: () => void;
 };
 
 type PendingUndo = {
@@ -132,6 +136,7 @@ export function EntryColumn({
   isCopying = false,
   onMoveToKind,
   onRenameTag,
+  onDisplayPreferenceChange,
 }: EntryColumnProps) {
   const [structureEntryId, setStructureEntryId] = useState<string | null>(null);
   const [mobileActionEntryId, setMobileActionEntryId] = useState<string | null>(
@@ -145,6 +150,10 @@ export function EntryColumn({
   /** 単語／文／段落ごとに記憶する表示方法。未設定の区分はタグでまとめる。 */
   const [displayMode, setDisplayMode] = useState<EntryListDisplayMode>(
     () => readEntryListDisplayMode(kind),
+  );
+  /** ONなら、完了しても現在のタグ・表示順へ残す。未設定の区分はONから始める。 */
+  const [isTagOrderLocked, setIsTagOrderLocked] = useState(
+    () => readEntryTagOrderLocked(kind),
   );
   /** タググループは初期状態では閉じ、開閉だけをブラウザ内に記憶する。 */
   const [expandedTagGroups, setExpandedTagGroups] = useState(
@@ -183,15 +192,20 @@ export function EntryColumn({
       });
     };
 
-    const activeEntries = entries.filter((entry) => !entry.is_completed);
-    const grouped = groupEntriesByTag(activeEntries);
+    const groupingSource = isTagOrderLocked
+      ? entries
+      : entries.filter((entry) => !entry.is_completed);
+    const grouped = groupEntriesByTag(groupingSource);
 
     assignNumbers(grouped.untagged);
     grouped.groups.forEach((group) => assignNumbers(group.entries));
-    assignNumbers(entries.filter((entry) => entry.is_completed));
+
+    if (!isTagOrderLocked) {
+      assignNumbers(entries.filter((entry) => entry.is_completed));
+    }
 
     return numberByEntryId;
-  }, [entries]);
+  }, [entries, isTagOrderLocked]);
 
   const getEntryDisplayNumber = (entry: EntryTreeNode): string => {
     if (!isTagGrouped) return entry.outline_number;
@@ -258,6 +272,10 @@ export function EntryColumn({
   useEffect(() => {
     writeEntryListDisplayMode(kind, displayMode);
   }, [displayMode, kind]);
+
+  useEffect(() => {
+    writeEntryTagOrderLocked(kind, isTagOrderLocked);
+  }, [isTagOrderLocked, kind]);
 
   useEffect(() => {
     if (isTagGrouped) return;
@@ -617,6 +635,21 @@ export function EntryColumn({
     }
   };
 
+  const changeDisplayMode = (nextMode: EntryListDisplayMode) => {
+    // 親が同じ描画で「完了を後ろへ寄せる」比較を切り替えられるよう、
+    // localStorageへの書き込みを先に済ませてから通知する。
+    setDisplayMode(nextMode);
+    writeEntryListDisplayMode(kind, nextMode);
+    onDisplayPreferenceChange?.();
+  };
+
+  const toggleTagOrderLock = () => {
+    const nextValue = !isTagOrderLocked;
+    setIsTagOrderLocked(nextValue);
+    writeEntryTagOrderLocked(kind, nextValue);
+    onDisplayPreferenceChange?.();
+  };
+
   const renderFoldableTagGroup = (
     groupType: FoldableGroupType,
     groupEntries: EntryTreeNode[],
@@ -789,6 +822,21 @@ export function EntryColumn({
     sourceEntries: EntryTreeNode[],
     sectionKey: string,
   ) => {
+    // 順番固定ONでは、完了済みも同じタググループの現在位置に残す。
+    // OFFの時だけ、従来どおり最後の「完了」グループへ集める。
+    if (isTagOrderLocked) {
+      const grouped = groupEntriesByTag(sourceEntries);
+
+      return (
+        <>
+          {renderFoldableTagGroup("untagged", grouped.untagged, sectionKey)}
+          {grouped.groups.map((group) =>
+            renderFoldableTagGroup("tag", group.entries, sectionKey, group.label),
+          )}
+        </>
+      );
+    }
+
     const activeEntries = sourceEntries.filter((entry) => !entry.is_completed);
     const completed = sourceEntries.filter((entry) => entry.is_completed);
     const grouped = groupEntriesByTag(activeEntries);
@@ -815,13 +863,19 @@ export function EntryColumn({
         <h2 id={`${kind}-heading`}>{ENTRY_KIND_LABEL[kind]}</h2>
 
         <div className="entry-column__header-actions">
-          <span className="entry-column__count">{entries.length}</span>
+          <span
+            className="entry-column__count"
+            aria-label={`未完了の${ENTRY_KIND_LABEL[kind]} ${openEntries.length}件`}
+            title="未完了の項目数"
+          >
+            {openEntries.length}
+          </span>
           <label className="entry-column__display-mode">
             <span>表示</span>
             <select
               value={displayMode}
               onChange={(event) =>
-                setDisplayMode(event.target.value as EntryListDisplayMode)
+                changeDisplayMode(event.target.value as EntryListDisplayMode)
               }
               aria-label={`${ENTRY_KIND_LABEL[kind]}の表示方法`}
             >
@@ -832,6 +886,22 @@ export function EntryColumn({
               ))}
             </select>
           </label>
+          {isTagGrouped ? (
+            <button
+              type="button"
+              className={`entry-column__order-lock ${isTagOrderLocked ? "entry-column__order-lock--active" : ""}`}
+              onClick={toggleTagOrderLock}
+              aria-pressed={isTagOrderLocked}
+              aria-label={`${ENTRY_KIND_LABEL[kind]}の順番固定を${isTagOrderLocked ? "オフ" : "オン"}にする`}
+              title={isTagOrderLocked
+                ? "順番固定：完了しても同じタグ・位置に残す"
+                : "順番固定オフ：完了を最後へ集める"}
+            >
+              <span className="entry-column__order-lock-label entry-column__order-lock-label--full">順番固定</span>
+              <span className="entry-column__order-lock-label entry-column__order-lock-label--compact">順固定</span>
+              <span className="entry-column__order-lock-value">{isTagOrderLocked ? "ON" : "OFF"}</span>
+            </button>
+          ) : null}
           {!compactView ? (
             <>
               <button
