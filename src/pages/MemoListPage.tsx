@@ -334,7 +334,7 @@ export function MemoListPage() {
     try {
       const memo = await createMemo();
       navigate(`/memos/${memo.id}`, {
-        state: { focusComposer: true },
+        state: { focusTitle: true },
       });
     } catch (createError) {
       setNotice(

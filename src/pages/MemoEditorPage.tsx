@@ -58,6 +58,8 @@ function downloadText(filename: string, content: string) {
 }
 
 type EditorNavigationState = {
+  /** 新規の空メモでは、日付タイトルのかぎ括弧内から題名を書き始める。 */
+  focusTitle?: boolean;
   focusComposer?: boolean;
   /** 新しいメモへ展開した時、元の区分で続きを書けるようにする。 */
   activeKind?: EntryKind;
@@ -129,6 +131,9 @@ export function MemoEditorPage() {
   const location = useLocation();
   const { user } = useAuth();
   const initialNavigationState = location.state as EditorNavigationState | null;
+  const [shouldFocusNewMemoTitle, setShouldFocusNewMemoTitle] = useState(
+    () => Boolean(initialNavigationState?.focusTitle),
+  );
   const [shouldFocusNewMemoComposer, setShouldFocusNewMemoComposer] = useState(
     () => Boolean(initialNavigationState?.focusComposer),
   );
@@ -157,6 +162,7 @@ export function MemoEditorPage() {
   } = useMemoDetail(memoId);
 
   const [title, setTitle] = useState("");
+  const titleInputRef = useRef<HTMLInputElement | null>(null);
   const [tagSuggestions, setTagSuggestions] = useState<MemoTagSummary[]>([]);
   const [activeKind, setActiveKind] = useState<EntryKind>(
     () => getNavigationKind(initialNavigationState),
@@ -307,9 +313,15 @@ export function MemoEditorPage() {
       title.trim() || formatDefaultMemoTitle(new Date(memo.created_at));
   }, [memo?.created_at, memo?.id, title]);
 
-  // 同じ編集画面のまま別メモへ遷移する場合にも、元の区分で続きを書けるようにする。
+  // 新規の空メモは、日付タイトルのかぎ括弧内から名前を書き始める。
+  // 既存メモや項目から展開したメモまで自動フォーカスしないよう、遷移時に明示された場合だけ行う。
   useEffect(() => {
     const navigationState = location.state as EditorNavigationState | null;
+
+    if (navigationState?.focusTitle) {
+      setShouldFocusNewMemoTitle(true);
+      setShouldFocusNewMemoComposer(false);
+    }
 
     if (!navigationState?.focusComposer) return;
 
@@ -318,6 +330,29 @@ export function MemoEditorPage() {
     setActiveKind(nextKind);
     setShouldFocusNewMemoComposer(true);
   }, [location.key, location.state]);
+
+  useEffect(() => {
+    if (!memo || !shouldFocusNewMemoTitle) return;
+
+    const defaultTitle = formatDefaultMemoTitle(new Date(memo.created_at));
+
+    // 非同期で読み込んだタイトルが反映された後だけ、空のかぎ括弧内に置く。
+    if (title !== defaultTitle) return;
+
+    const frame = window.requestAnimationFrame(() => {
+      const input = titleInputRef.current;
+      const openingQuoteIndex = defaultTitle.indexOf("「");
+
+      if (!input || openingQuoteIndex < 0) return;
+
+      const caretPosition = openingQuoteIndex + 1;
+      input.focus({ preventScroll: true });
+      input.setSelectionRange(caretPosition, caretPosition);
+      setShouldFocusNewMemoTitle(false);
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [memo, shouldFocusNewMemoTitle, title]);
 
   useEffect(() => {
     if (shouldFocusNewMemoComposer) {
@@ -708,6 +743,7 @@ export function MemoEditorPage() {
 
       <section className="editor-title-row" aria-label="メモのタイトル">
         <input
+          ref={titleInputRef}
           className="memo-title-input"
           value={title}
           onChange={(event) => setTitle(event.target.value)}

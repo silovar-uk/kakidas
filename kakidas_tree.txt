@@ -1,83 +1,72 @@
-.
-├── public/
-│   ├── android-chrome-192x192.png
-│   ├── android-chrome-512x512.png
-│   ├── apple-touch-icon.png
-│   ├── browserconfig.xml
-│   ├── favicon-16x16.png
-│   ├── favicon-32x32.png
-│   ├── favicon-48x48.png
-│   ├── favicon-head.html
-│   ├── favicon.ico
-│   ├── mstile-150x150.png
-│   ├── README.md
-│   └── site.webmanifest
-├── src/
-│   ├── auth/
-│   │   └── AuthProvider.tsx
-│   ├── components/
-│   │   ├── CloudAccountDialog.tsx
-│   │   ├── CloudImportDialog.tsx
-│   │   ├── CloudStatusBadge.tsx
-│   │   ├── CloudUploadDialog.tsx
-│   │   ├── EntryColumn.tsx
-│   │   ├── EntryComposer.tsx
-│   │   ├── EntryItem.tsx
-│   │   ├── EntrySatisfactionControl.tsx
-│   │   ├── EntryTagControl.tsx
-│   │   ├── MemoDeleteDialog.tsx
-│   │   ├── MemoTagControl.tsx
-│   │   ├── MobileEntryActionSheet.tsx
-│   │   ├── MobileParagraphEditorSheet.tsx
-│   │   ├── NoticeToast.tsx
-│   │   └── UndoToast.tsx
-│   ├── hooks/
-│   │   ├── useCloudMemos.ts
-│   │   └── useMemos.ts
-│   ├── lib/
-│   │   ├── bodyScrollLock.ts
-│   │   ├── clipboard.ts
-│   │   ├── copyPreferences.ts
-│   │   ├── db.ts
-│   │   ├── entryTagGroups.ts
-│   │   ├── formatDate.ts
-│   │   ├── memoListPreferences.ts
-│   │   ├── memoTags.ts
-│   │   ├── memoText.ts
-│   │   └── supabase.ts
-│   ├── pages/
-│   │   ├── MemoEditorPage.tsx
-│   │   ├── MemoListPage.tsx
-│   │   └── TagManagerPage.tsx
-│   ├── repositories/
-│   │   ├── cloudMemoRepository.ts
-│   │   └── memoRepository.ts
-│   ├── types/
-│   │   └── memo.ts
-│   ├── App.tsx
-│   ├── main.tsx
-│   ├── styles.css
-│   └── vite-env.d.ts
-├── supabase/
-│   ├── MIGRATE_v0.5.11.sql
-│   ├── MIGRATE_v0.5.13.sql
-│   ├── MIGRATE_v0.5.14.sql
-│   ├── MIGRATE_v0.5.31.sql
-│   ├── MIGRATE_v0.5.44.sql
-│   ├── MIGRATE_v0.5.53.sql
-│   └── schema.sql
-├── .env.example
-├── .gitignore
-├── .npmrc
-├── HANDOVER.md
-├── index.html
-├── kakidas_tree.txt
-├── package-lock.json
-├── package.json
-├── README.md
-├── RELEASE_NOTES.md
-├── tsconfig.app.json
-├── tsconfig.json
-├── tsconfig.node.json
-├── vercel.json
-└── vite.config.ts
+.env.example
+.gitignore
+.npmrc
+HANDOVER.md
+README.md
+RELEASE_NOTES.md
+index.html
+kakidas_tree.txt
+package-lock.json
+package.json
+public/README.md
+public/android-chrome-192x192.png
+public/android-chrome-512x512.png
+public/apple-touch-icon.png
+public/browserconfig.xml
+public/favicon-16x16.png
+public/favicon-32x32.png
+public/favicon-48x48.png
+public/favicon-head.html
+public/favicon.ico
+public/mstile-150x150.png
+public/site.webmanifest
+src/App.tsx
+src/auth/AuthProvider.tsx
+src/components/CloudAccountDialog.tsx
+src/components/CloudImportDialog.tsx
+src/components/CloudStatusBadge.tsx
+src/components/CloudUploadDialog.tsx
+src/components/EntryColumn.tsx
+src/components/EntryComposer.tsx
+src/components/EntryItem.tsx
+src/components/EntrySatisfactionControl.tsx
+src/components/EntryTagControl.tsx
+src/components/MemoDeleteDialog.tsx
+src/components/MemoTagControl.tsx
+src/components/MobileEntryActionSheet.tsx
+src/components/MobileParagraphEditorSheet.tsx
+src/components/NoticeToast.tsx
+src/components/UndoToast.tsx
+src/hooks/useCloudMemos.ts
+src/hooks/useMemos.ts
+src/lib/bodyScrollLock.ts
+src/lib/clipboard.ts
+src/lib/copyPreferences.ts
+src/lib/db.ts
+src/lib/entryTagGroups.ts
+src/lib/formatDate.ts
+src/lib/memoListPreferences.ts
+src/lib/memoTags.ts
+src/lib/memoText.ts
+src/lib/supabase.ts
+src/main.tsx
+src/pages/MemoEditorPage.tsx
+src/pages/MemoListPage.tsx
+src/pages/TagManagerPage.tsx
+src/repositories/cloudMemoRepository.ts
+src/repositories/memoRepository.ts
+src/styles.css
+src/types/memo.ts
+src/vite-env.d.ts
+supabase/MIGRATE_v0.5.11.sql
+supabase/MIGRATE_v0.5.13.sql
+supabase/MIGRATE_v0.5.14.sql
+supabase/MIGRATE_v0.5.31.sql
+supabase/MIGRATE_v0.5.44.sql
+supabase/MIGRATE_v0.5.53.sql
+supabase/schema.sql
+tsconfig.app.json
+tsconfig.json
+tsconfig.node.json
+vercel.json
+vite.config.ts

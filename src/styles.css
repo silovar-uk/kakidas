@@ -3105,6 +3105,9 @@ a:focus-visible {
 }
 
 .entry-item__add-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   margin-top: 9px;
   padding: 3px 2px;
   border: 0;
@@ -3112,6 +3115,18 @@ a:focus-visible {
   background: transparent;
   font-size: 11px;
   font-weight: 700;
+}
+
+.entry-item__add-note svg,
+.entry-item__note-trigger svg {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 auto;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
 }
 
 .entry-item__add-note:hover:not(:disabled) {
@@ -3612,16 +3627,14 @@ a:focus-visible {
     font-size: 0;
   }
 
-  .entry-item__note-trigger::before {
-    content: "+";
-    font-size: 18px;
-    font-weight: 500;
-    line-height: 1;
+  .entry-item__note-trigger::before,
+  .entry-item__note-trigger[aria-label="気持ち・備考を編集"]::before {
+    content: none;
   }
 
-  .entry-item__note-trigger[aria-label="気持ち・備考を編集"]::before {
-    content: "✎";
-    font-size: 16px;
+  .entry-item__note-trigger svg {
+    width: 16px;
+    height: 16px;
   }
 
   .entry-item__delete {
@@ -4166,7 +4179,7 @@ a:focus-visible {
 
 
 /* --------------------------------------------------------------------------
-   v0.5.20 — クラウド削除とモバイル備考＋
+   v0.5.20 — クラウド削除とモバイル気持ち入力
    -------------------------------------------------------------------------- */
 .cloud-library-card__actions {
   display: grid;
@@ -4195,7 +4208,7 @@ a:focus-visible {
   background: transparent;
 }
 
-/* PCは本文下の小さな＋、モバイルは右側の＋で備考を開く。 */
+/* PC・モバイルとも、ペンの入口から気持ち・備考を書く。 */
 .entry-item__note-trigger--rail {
   display: none;
 }
@@ -4206,9 +4219,6 @@ a:focus-visible {
   }
 
   .entry-item__note-trigger--rail {
-    /* 実テキストではなく擬似要素の記号だけを使う。
-       これで「＋」と ::before の「+」が二重に見えない。 */
-    font-size: 0;
     display: inline-grid;
     width: 34px;
     min-width: 34px;
@@ -4221,9 +4231,13 @@ a:focus-visible {
     border-radius: 10px;
     color: #806c5d;
     background: #fffefa;
-    font-size: 18px;
-    font-weight: 500;
+    font-size: 0;
     line-height: 1;
+  }
+
+  .entry-item__note-trigger--rail svg {
+    width: 16px;
+    height: 16px;
   }
 
   .entry-item__note-trigger--rail:hover:not(:disabled),
@@ -5572,8 +5586,8 @@ a:focus-visible {
 
 /* --------------------------------------------------------------------------
    v0.5.49 — PCの項目補助操作を右側の一列へ
-   備考＋とリンクを「完了」の右へ寄せ、本文下の余白を減らす。
-   モバイルの本文下リンク／右側＋は既存配置を維持する。
+   気持ち用ペンとリンクを「完了」の右へ寄せ、本文下の余白を減らす。
+   モバイルも右側のペン入口を同じ位置に保つ。
    -------------------------------------------------------------------------- */
 .entry-item__desktop-inline-actions {
   display: none;

@@ -39,6 +39,16 @@ function LinkIcon() {
   );
 }
 
+/** 気持ち・備考を書く入口。追加と編集で見た目を変えず、常に「書く」操作として扱う。 */
+function NoteIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path d="m4 16.7-.7 4 4-.7L18.7 8.6l-3.3-3.3L4 16.7Z" />
+      <path d="m13.9 6.8 3.3 3.3" />
+    </svg>
+  );
+}
+
 function readCssPixel(value: string): number | null {
   const parsed = Number.parseFloat(value);
   return Number.isFinite(parsed) ? parsed : null;
@@ -548,7 +558,8 @@ export function EntryItem({
                   setEditMode("note");
                 }}
               >
-                ＋ 気持ち・備考
+                <NoteIcon />
+                <span>気持ち・備考</span>
               </button>
             ) : null}
 
@@ -730,7 +741,7 @@ export function EntryItem({
               aria-label={hasNote ? "気持ち・備考を編集" : "気持ち・備考を追加"}
               title={hasNote ? "気持ち・備考を編集" : "気持ち・備考を追加"}
             >
-              ＋
+              <NoteIcon />
             </button>
 
             {openableLinkUrl ? (
@@ -785,7 +796,9 @@ export function EntryItem({
             disabled={disabled || isSaving}
             aria-label={hasNote ? "気持ち・備考を編集" : "気持ち・備考を追加"}
             title={hasNote ? "気持ち・備考を編集" : "気持ち・備考を追加"}
-          />
+          >
+            <NoteIcon />
+          </button>
 
           <button
             type="button"
@@ -801,8 +814,8 @@ export function EntryItem({
             {entry.is_completed ? "戻す" : "完了"}
           </button>
 
-          {/* PCでは、備考とリンクを完了ボタンの右側へまとめる。
-              スマホは本文下のリンクと右側の＋を既存配置のまま使う。 */}
+          {/* PCでは、気持ち用のペンとリンクを完了ボタンの右側へまとめる。
+              スマホも同じペンの入口を右側に置き、位置は変えない。 */}
           <div className="entry-item__desktop-inline-actions">
             <button
               type="button"
@@ -812,7 +825,7 @@ export function EntryItem({
               aria-label={hasNote ? "気持ち・備考を編集" : "気持ち・備考を追加"}
               title={hasNote ? "気持ち・備考を編集" : "気持ち・備考を追加"}
             >
-              ＋
+              <NoteIcon />
             </button>
 
             {openableLinkUrl ? (
