@@ -34,7 +34,8 @@ type ExpandedGroupState = Record<string, boolean>;
 export const DEFAULT_ENTRY_LIST_DISPLAY_MODE: EntryListDisplayMode = "tag_grouped";
 
 /**
- * タグでまとめる表示では、完了操作中に視線の対象が動かないよう順番固定を初期値にする。
+ * タグでまとめる表示では、未完了の作業束を見失わないよう順番固定を初期値にする。
+ * 完了項目は常に最下部の完了グループへ送り、未完了の相対順だけを保つ。
  * 記憶は単語／文／段落ごとのブラウザ設定で、項目データには保存しない。
  */
 export const DEFAULT_ENTRY_TAG_ORDER_LOCKED = true;
@@ -65,7 +66,7 @@ export function writeEntryListDisplayMode(
 }
 
 /**
- * ONなら完了済みも現在のタグ・表示順に残す。OFFの時だけ完了グループへ集約する。
+ * ONなら未完了の相対順を保つ。完了項目はON/OFFにかかわらず完了グループへ集約する。
  * 未設定の端末はONとして扱い、既存の表示設定を壊さない。
  */
 export function readEntryTagOrderLocked(kind: EntryKind): boolean {

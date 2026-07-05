@@ -79,8 +79,6 @@ type EntryColumnProps = {
   onMoveToKind: (entryId: string, targetKind: EntryKind) => Promise<unknown>;
   /** タグでまとめる見出しから、現在の区分にある同名タグを一括変更する。 */
   onRenameTag: (currentTag: string, nextTag: string) => Promise<unknown>;
-  /** 表示モード／順番固定を切り替えた時、親の並び導出を更新する。 */
-  onDisplayPreferenceChange?: () => void;
 };
 
 type PendingUndo = {
@@ -136,7 +134,6 @@ export function EntryColumn({
   isCopying = false,
   onMoveToKind,
   onRenameTag,
-  onDisplayPreferenceChange,
 }: EntryColumnProps) {
   const [structureEntryId, setStructureEntryId] = useState<string | null>(null);
   const [mobileActionEntryId, setMobileActionEntryId] = useState<string | null>(
@@ -151,7 +148,7 @@ export function EntryColumn({
   const [displayMode, setDisplayMode] = useState<EntryListDisplayMode>(
     () => readEntryListDisplayMode(kind),
   );
-  /** ONなら、完了しても現在のタグ・表示順へ残す。未設定の区分はONから始める。 */
+  /** ONなら、未完了項目の現在の表示順をこの画面の間だけ保つ。未設定の区分はONから始める。 */
   const [isTagOrderLocked, setIsTagOrderLocked] = useState(
     () => readEntryTagOrderLocked(kind),
   );
@@ -163,6 +160,9 @@ export function EntryColumn({
   const [isRenamingTag, setIsRenamingTag] = useState(false);
   /** 未完了タグ見出しから開く、固定タグ付きの簡易入力欄。 */
   const [tagGroupComposerState, setTagGroupComposerState] = useState<TagGroupComposerState | null>(null);
+  /** 順番固定ONでは、未完了だけの相対順を画面内で保つ。完了項目は常に別グループへ送る。 */
+  const lockedOpenEntryOrderRef = useRef<Map<string, number>>(new Map());
+  const lockedTagGroupOrderRef = useRef<Map<string, number>>(new Map());
 
   const composerRef = useRef<EntryComposerHandle | null>(null);
   const tagGroupComposerRef = useRef<EntryComposerHandle | null>(null);
@@ -180,6 +180,65 @@ export function EntryColumn({
   const isTagGrouped = displayMode === "tag_grouped";
 
   /**
+   * 順番固定ONでは、未完了項目の相対順とタググループの順をこの画面の間だけ保つ。
+   * 完了済みはここへ混ぜず、常に下部の「完了」グループへ分ける。
+   */
+  const getOpenTagGroups = (sourceEntries: EntryTreeNode[]) => {
+    const grouped = groupEntriesByTag(sourceEntries);
+
+    if (!isTagOrderLocked) return grouped;
+
+    const entryOrder = lockedOpenEntryOrderRef.current;
+    const groupOrder = lockedTagGroupOrderRef.current;
+    const knownIds = new Set(entries.map((entry) => entry.id));
+
+    for (const entryId of entryOrder.keys()) {
+      if (!knownIds.has(entryId)) entryOrder.delete(entryId);
+    }
+
+    const nextEntryRank = () =>
+      Math.max(-1, ...entryOrder.values()) + 1;
+    let entryRank = nextEntryRank();
+
+    sourceEntries.forEach((entry) => {
+      if (!entryOrder.has(entry.id)) {
+        entryOrder.set(entry.id, entryRank);
+        entryRank += 1;
+      }
+    });
+
+    const sortEntries = (groupEntries: EntryTreeNode[]) =>
+      [...groupEntries].sort(
+        (a, b) =>
+          (entryOrder.get(a.id) ?? Number.MAX_SAFE_INTEGER) -
+          (entryOrder.get(b.id) ?? Number.MAX_SAFE_INTEGER),
+      );
+
+    const nextGroupRank = () =>
+      Math.max(-1, ...groupOrder.values()) + 1;
+    let groupRank = nextGroupRank();
+
+    grouped.groups.forEach((group) => {
+      const stateKey = getEntryTagGroupStateKey(kind, group.label);
+      if (!groupOrder.has(stateKey)) {
+        groupOrder.set(stateKey, groupRank);
+        groupRank += 1;
+      }
+    });
+
+    return {
+      untagged: sortEntries(grouped.untagged),
+      groups: grouped.groups
+        .map((group) => ({ ...group, entries: sortEntries(group.entries) }))
+        .sort(
+          (a, b) =>
+            (groupOrder.get(getEntryTagGroupStateKey(kind, a.label)) ?? Number.MAX_SAFE_INTEGER) -
+            (groupOrder.get(getEntryTagGroupStateKey(kind, b.label)) ?? Number.MAX_SAFE_INTEGER),
+        ),
+    };
+  };
+
+  /**
    * タグでまとめる時だけ、画面の振り番はグループごとに振り直す。
    * 保存済みの階層番号は変えず、通常表示・コピー・.txt出力は従来どおり
    * `outline_number` を使う。完了済みは一番下の「完了」グループ内で通番にする。
@@ -192,17 +251,11 @@ export function EntryColumn({
       });
     };
 
-    const groupingSource = isTagOrderLocked
-      ? entries
-      : entries.filter((entry) => !entry.is_completed);
-    const grouped = groupEntriesByTag(groupingSource);
+    const grouped = getOpenTagGroups(entries.filter((entry) => !entry.is_completed));
 
     assignNumbers(grouped.untagged);
     grouped.groups.forEach((group) => assignNumbers(group.entries));
-
-    if (!isTagOrderLocked) {
-      assignNumbers(entries.filter((entry) => entry.is_completed));
-    }
+    assignNumbers(entries.filter((entry) => entry.is_completed));
 
     return numberByEntryId;
   }, [entries, isTagOrderLocked]);
@@ -278,10 +331,15 @@ export function EntryColumn({
   }, [isTagOrderLocked, kind]);
 
   useEffect(() => {
+    if (!isTagGrouped || !isTagOrderLocked) {
+      lockedOpenEntryOrderRef.current.clear();
+      lockedTagGroupOrderRef.current.clear();
+    }
+
     if (isTagGrouped) return;
     setTagRenameState(null);
     setTagGroupComposerState(null);
-  }, [isTagGrouped]);
+  }, [isTagGrouped, isTagOrderLocked]);
 
   /**
    * タグを押した直後だけ本文入力へフォーカスする。scrollIntoViewは使わず、
@@ -636,18 +694,18 @@ export function EntryColumn({
   };
 
   const changeDisplayMode = (nextMode: EntryListDisplayMode) => {
-    // 親が同じ描画で「完了を後ろへ寄せる」比較を切り替えられるよう、
-    // localStorageへの書き込みを先に済ませてから通知する。
     setDisplayMode(nextMode);
     writeEntryListDisplayMode(kind, nextMode);
-    onDisplayPreferenceChange?.();
   };
 
   const toggleTagOrderLock = () => {
     const nextValue = !isTagOrderLocked;
+    if (!nextValue) {
+      lockedOpenEntryOrderRef.current.clear();
+      lockedTagGroupOrderRef.current.clear();
+    }
     setIsTagOrderLocked(nextValue);
     writeEntryTagOrderLocked(kind, nextValue);
-    onDisplayPreferenceChange?.();
   };
 
   const renderFoldableTagGroup = (
@@ -816,30 +874,16 @@ export function EntryColumn({
 
   /**
    * タグなし → 未完了のタグ別 → 完了 の順に並べる。
+   * 順番固定は未完了側だけに効き、完了項目は常に最下部の単一グループへ集める。
    * どのグループも初回は閉じ、開閉は区分ごとに記憶する。
    */
   const renderTagGroupedEntries = (
     sourceEntries: EntryTreeNode[],
     sectionKey: string,
   ) => {
-    // 順番固定ONでは、完了済みも同じタググループの現在位置に残す。
-    // OFFの時だけ、従来どおり最後の「完了」グループへ集める。
-    if (isTagOrderLocked) {
-      const grouped = groupEntriesByTag(sourceEntries);
-
-      return (
-        <>
-          {renderFoldableTagGroup("untagged", grouped.untagged, sectionKey)}
-          {grouped.groups.map((group) =>
-            renderFoldableTagGroup("tag", group.entries, sectionKey, group.label),
-          )}
-        </>
-      );
-    }
-
     const activeEntries = sourceEntries.filter((entry) => !entry.is_completed);
     const completed = sourceEntries.filter((entry) => entry.is_completed);
-    const grouped = groupEntriesByTag(activeEntries);
+    const grouped = getOpenTagGroups(activeEntries);
 
     return (
       <>
@@ -870,38 +914,40 @@ export function EntryColumn({
           >
             {openEntries.length}
           </span>
-          <label className="entry-column__display-mode">
-            <span>表示</span>
-            <select
-              value={displayMode}
-              onChange={(event) =>
-                changeDisplayMode(event.target.value as EntryListDisplayMode)
-              }
-              aria-label={`${ENTRY_KIND_LABEL[kind]}の表示方法`}
-            >
-              {(Object.keys(ENTRY_LIST_DISPLAY_MODE_LABEL) as EntryListDisplayMode[]).map((mode) => (
-                <option key={mode} value={mode}>
-                  {ENTRY_LIST_DISPLAY_MODE_LABEL[mode]}
-                </option>
-              ))}
-            </select>
-          </label>
-          {isTagGrouped ? (
-            <button
-              type="button"
-              className={`entry-column__order-lock ${isTagOrderLocked ? "entry-column__order-lock--active" : ""}`}
-              onClick={toggleTagOrderLock}
-              aria-pressed={isTagOrderLocked}
-              aria-label={`${ENTRY_KIND_LABEL[kind]}の順番固定を${isTagOrderLocked ? "オフ" : "オン"}にする`}
-              title={isTagOrderLocked
-                ? "順番固定：完了しても同じタグ・位置に残す"
-                : "順番固定オフ：完了を最後へ集める"}
-            >
-              <span className="entry-column__order-lock-label entry-column__order-lock-label--full">順番固定</span>
-              <span className="entry-column__order-lock-label entry-column__order-lock-label--compact">順固定</span>
-              <span className="entry-column__order-lock-value">{isTagOrderLocked ? "ON" : "OFF"}</span>
-            </button>
-          ) : null}
+          <div className="entry-column__view-controls" aria-label={`${ENTRY_KIND_LABEL[kind]}の表示設定`}>
+            <label className="entry-column__display-mode">
+              <span>表示</span>
+              <select
+                value={displayMode}
+                onChange={(event) =>
+                  changeDisplayMode(event.target.value as EntryListDisplayMode)
+                }
+                aria-label={`${ENTRY_KIND_LABEL[kind]}の表示方法`}
+              >
+                {(Object.keys(ENTRY_LIST_DISPLAY_MODE_LABEL) as EntryListDisplayMode[]).map((mode) => (
+                  <option key={mode} value={mode}>
+                    {ENTRY_LIST_DISPLAY_MODE_LABEL[mode]}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {isTagGrouped ? (
+              <button
+                type="button"
+                className={`entry-column__order-lock ${isTagOrderLocked ? "entry-column__order-lock--active" : ""}`}
+                onClick={toggleTagOrderLock}
+                aria-pressed={isTagOrderLocked}
+                aria-label={`${ENTRY_KIND_LABEL[kind]}の順番固定を${isTagOrderLocked ? "オフ" : "オン"}にする`}
+                title={isTagOrderLocked
+                  ? "順番固定：未完了の並びを保つ（完了は最後へ集約）"
+                  : "順番固定オフ：現在の並び順に従う"}
+              >
+                <span className="entry-column__order-lock-label entry-column__order-lock-label--full">順番固定</span>
+                <span className="entry-column__order-lock-label entry-column__order-lock-label--compact">固定</span>
+                <span className="entry-column__order-lock-value">{isTagOrderLocked ? "ON" : "OFF"}</span>
+              </button>
+            ) : null}
+          </div>
           {!compactView ? (
             <>
               <button
