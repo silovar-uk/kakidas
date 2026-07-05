@@ -7959,3 +7959,26 @@ a:focus-visible {
     padding-inline: 7px 5px;
   }
 }
+
+
+/* --------------------------------------------------------------------------
+   v0.5.69 — タグ候補を省略せず見せる
+   実在するタグはすべて候補に含め、横スクロールの隠れた続きではなく
+   折り返しで見渡せるようにする。候補が増えてもカード本体ではなく
+   編集中の候補領域だけが自然に広がる。
+   -------------------------------------------------------------------------- */
+.memo-tag-control__suggestions > div,
+.entry-composer__tag-suggestions,
+.entry-tag-control__suggestions {
+  flex-wrap: wrap;
+  overflow: visible;
+}
+
+.memo-tag-control__suggestions > div {
+  flex: 1 1 0;
+}
+
+.entry-composer__tag-suggestions,
+.entry-tag-control__suggestions {
+  align-content: flex-start;
+}

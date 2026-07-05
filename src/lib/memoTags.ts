@@ -61,32 +61,30 @@ export function getEntryTagSummaries(entries: EntryRow[]): EntryTagSummary[] {
   return getTagSummaries(entries);
 }
 
-/** 候補の前方一致。未入力時は使用頻度・最近使った順をそのまま出す。 */
+/**
+ * 候補の前方一致。未入力時は使用頻度・最近使った順をそのまま出す。
+ * 件数で切らず、実在するタグをすべて候補として返す。
+ */
 export function getRecommendedTags(
   summaries: TagSummary[],
   query: string,
-  limit = 6,
 ): TagSummary[] {
   const key = getEntryTagKey(query);
-  const matches = key
+  return key
     ? summaries.filter((summary) => summary.key.startsWith(key))
     : summaries;
-
-  return matches.slice(0, limit);
 }
 
 export function getRecommendedMemoTags(
   summaries: MemoTagSummary[],
   query: string,
-  limit = 6,
 ): MemoTagSummary[] {
-  return getRecommendedTags(summaries, query, limit);
+  return getRecommendedTags(summaries, query);
 }
 
 export function getRecommendedEntryTags(
   summaries: EntryTagSummary[],
   query: string,
-  limit = 6,
 ): EntryTagSummary[] {
-  return getRecommendedTags(summaries, query, limit);
+  return getRecommendedTags(summaries, query);
 }
