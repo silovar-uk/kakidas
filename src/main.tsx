@@ -4,6 +4,7 @@ import App from "./App";
 import { resetBodyScrollLock } from "./lib/bodyScrollLock";
 import { closeDatabaseConnection } from "./lib/db";
 import "./styles.css";
+import "./styles-mobile-word-compact.css";
 
 // 以前のオーバーレイが残したスクロール停止を、起動時に必ず初期化する。
 resetBodyScrollLock();
