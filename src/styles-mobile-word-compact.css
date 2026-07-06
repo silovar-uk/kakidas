@@ -1,0 +1,79 @@
+/* Mobile word rail: 3 columns, 2 rows.
+   短い単語を縦に伸ばしすぎず、文・段落の操作面は従来どおり保つ。 */
+@media (max-width: 920px) {
+  .entry-column--word .entry-item__row,
+  .entry-column--word .entry-item:not(.entry-item--hierarchical) .entry-item__row {
+    grid-template-columns: minmax(0, 1fr) 104px;
+    column-gap: 8px;
+  }
+
+  .entry-column--word .entry-item__quick-actions {
+    grid-template-columns: repeat(3, 32px);
+    grid-auto-rows: 32px;
+    width: 104px;
+    min-width: 104px;
+    gap: 4px;
+  }
+
+  .entry-column--word .entry-satisfaction,
+  .entry-column--word .entry-item__complete,
+  .entry-column--word .entry-item__note-trigger--rail,
+  .entry-column--word .entry-item__quick-action,
+  .entry-column--word .entry-item__structure-button,
+  .entry-column--word .entry-tag-control,
+  .entry-column--word .entry-tag-control--icon,
+  .entry-column--word .entry-tag-control__icon {
+    box-sizing: border-box;
+    width: 32px;
+    min-width: 32px;
+    max-width: 32px;
+    height: 32px;
+    min-height: 32px;
+  }
+
+  .entry-column--word .entry-item__complete {
+    padding-inline: 2px;
+    font-size: 8px;
+  }
+
+  .entry-column--word .entry-item__note-trigger--rail svg,
+  .entry-column--word .entry-tag-control__icon svg {
+    width: 15px;
+    height: 15px;
+  }
+
+  .entry-column--word .entry-item__structure-button {
+    font-size: 17px;
+  }
+}
+
+@media (max-width: 370px) {
+  .entry-column--word .entry-item__row,
+  .entry-column--word .entry-item:not(.entry-item--hierarchical) .entry-item__row {
+    grid-template-columns: minmax(0, 1fr) 98px;
+    column-gap: 7px;
+  }
+
+  .entry-column--word .entry-item__quick-actions {
+    grid-template-columns: repeat(3, 30px);
+    grid-auto-rows: 30px;
+    width: 98px;
+    min-width: 98px;
+    gap: 4px;
+  }
+
+  .entry-column--word .entry-satisfaction,
+  .entry-column--word .entry-item__complete,
+  .entry-column--word .entry-item__note-trigger--rail,
+  .entry-column--word .entry-item__quick-action,
+  .entry-column--word .entry-item__structure-button,
+  .entry-column--word .entry-tag-control,
+  .entry-column--word .entry-tag-control--icon,
+  .entry-column--word .entry-tag-control__icon {
+    width: 30px;
+    min-width: 30px;
+    max-width: 30px;
+    height: 30px;
+    min-height: 30px;
+  }
+}
