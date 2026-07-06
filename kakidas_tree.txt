@@ -55,6 +55,7 @@ src/pages/MemoListPage.tsx
 src/pages/TagManagerPage.tsx
 src/repositories/cloudMemoRepository.ts
 src/repositories/memoRepository.ts
+src/styles-mobile-word-compact.css
 src/styles.css
 src/types/memo.ts
 src/vite-env.d.ts
