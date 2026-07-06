@@ -1,0 +1,11 @@
+{
+  "name": "Text Review Studio | Editorial Desk",
+  "short_name": "Text Review",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#edf0f6",
+  "theme_color": "#101d34",
+  "icons": [
+    { "src": "assets/app-icon.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}
