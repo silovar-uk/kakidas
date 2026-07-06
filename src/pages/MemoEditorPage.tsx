@@ -60,6 +60,8 @@ function downloadText(filename: string, content: string) {
 type EditorNavigationState = {
   /** 新規の空メモでは、日付タイトルのかぎ括弧内から題名を書き始める。 */
   focusTitle?: boolean;
+  /** 一覧から新規作成した空メモだけを、未入力のまま離れた時に破棄する。 */
+  discardUntitledEmptyDraft?: boolean;
   focusComposer?: boolean;
   /** 新しいメモへ展開した時、元の区分で続きを書けるようにする。 */
   activeKind?: EntryKind;
@@ -131,6 +133,9 @@ export function MemoEditorPage() {
   const location = useLocation();
   const { user } = useAuth();
   const initialNavigationState = location.state as EditorNavigationState | null;
+  const shouldDiscardUntitledEmptyDraft = Boolean(
+    initialNavigationState?.discardUntitledEmptyDraft,
+  );
   const [shouldFocusNewMemoTitle, setShouldFocusNewMemoTitle] = useState(
     () => Boolean(initialNavigationState?.focusTitle),
   );
@@ -163,6 +168,10 @@ export function MemoEditorPage() {
 
   const [title, setTitle] = useState("");
   const titleInputRef = useRef<HTMLInputElement | null>(null);
+  // 画面を離れる直前にも、最新の入力値を判断できるようにする。
+  const latestTitleRef = useRef(title);
+  const latestMemoRef = useRef<MemoWithEntries | null>(memo);
+  const isLeavingEditorRef = useRef(false);
   const [tagSuggestions, setTagSuggestions] = useState<MemoTagSummary[]>([]);
   const [activeKind, setActiveKind] = useState<EntryKind>(
     () => getNavigationKind(initialNavigationState),
@@ -278,6 +287,14 @@ export function MemoEditorPage() {
   }, []);
 
   useEffect(() => {
+    latestTitleRef.current = title;
+  }, [title]);
+
+  useEffect(() => {
+    latestMemoRef.current = memo;
+  }, [memo]);
+
+  useEffect(() => {
     if (memo) {
       setTitle(memo.title);
     }
@@ -380,6 +397,79 @@ export function MemoEditorPage() {
     },
     [memo, updateTitle],
   );
+
+  /**
+   * 空の新規メモだけを、一覧へ戻る時に片付ける。
+   * 題名が変わっていれば項目がなくてもメモとして残し、未送信の題名を先に保存する。
+   */
+  const finalizeUntitledEmptyDraft = useCallback(async (): Promise<boolean> => {
+    if (!memoId || !shouldDiscardUntitledEmptyDraft) return false;
+
+    const currentMemo = latestMemoRef.current;
+
+    if (!currentMemo) {
+      // 読み込み前に戻った場合でも、リポジトリ側で既定タイトル・項目0件を再確認する。
+      if (latestTitleRef.current.trim()) return false;
+      return memoRepository.discardUntitledEmptyMemo(memoId);
+    }
+
+    const defaultTitle = formatDefaultMemoTitle(new Date(currentMemo.created_at));
+    const resolvedTitle = latestTitleRef.current.trim() || defaultTitle;
+
+    if (resolvedTitle !== defaultTitle) {
+      if (resolvedTitle !== currentMemo.title) {
+        await updateTitle({ title: resolvedTitle });
+      }
+      return false;
+    }
+
+    return memoRepository.discardUntitledEmptyMemo(memoId);
+  }, [memoId, shouldDiscardUntitledEmptyDraft, updateTitle]);
+
+  const handleReturnToMemoList = useCallback(async () => {
+    if (isLeavingEditorRef.current) return;
+
+    isLeavingEditorRef.current = true;
+
+    try {
+      await finalizeUntitledEmptyDraft();
+    } finally {
+      navigate("/", { replace: true });
+    }
+  }, [finalizeUntitledEmptyDraft, navigate]);
+
+  // ブラウザの戻る操作や別画面への遷移でも、空の新規メモを残さない。
+  // ここでは画面状態に頼らず、リポジトリ側で再確認してから破棄する。
+  useEffect(() => {
+    const draftMemoId = memoId;
+    const shouldDiscardOnLeave = shouldDiscardUntitledEmptyDraft;
+
+    return () => {
+      if (!draftMemoId || !shouldDiscardOnLeave || isLeavingEditorRef.current) {
+        return;
+      }
+
+      const currentMemo = latestMemoRef.current;
+      const defaultTitle = currentMemo
+        ? formatDefaultMemoTitle(new Date(currentMemo.created_at))
+        : null;
+      const resolvedTitle = defaultTitle
+        ? latestTitleRef.current.trim() || defaultTitle
+        : latestTitleRef.current.trim();
+
+      if (defaultTitle && resolvedTitle !== defaultTitle) {
+        // タイトルだけ書いた場合は、離脱後にも題名を残す。
+        if (currentMemo && resolvedTitle !== currentMemo.title) {
+          void memoRepository.updateMemo(draftMemoId, { title: resolvedTitle });
+        }
+        return;
+      }
+
+      if (!defaultTitle && resolvedTitle) return;
+
+      void memoRepository.discardUntitledEmptyMemo(draftMemoId);
+    };
+  }, [memoId, shouldDiscardUntitledEmptyDraft]);
 
   useEffect(() => {
     if (!memo || title === memo.title) return;
@@ -730,7 +820,14 @@ export function MemoEditorPage() {
       }`}
     >
       <header className="editor-header">
-        <Link to="/" className="back-link">
+        <Link
+          to="/"
+          className="back-link"
+          onClick={(event) => {
+            event.preventDefault();
+            void handleReturnToMemoList();
+          }}
+        >
           ← メモ一覧
         </Link>
 
@@ -747,7 +844,10 @@ export function MemoEditorPage() {
           ref={titleInputRef}
           className="memo-title-input"
           value={title}
-          onChange={(event) => setTitle(event.target.value)}
+          onChange={(event) => {
+            latestTitleRef.current = event.target.value;
+            setTitle(event.target.value);
+          }}
           onBlur={() => void saveTitle(title)}
           aria-label="メモのタイトル"
         />

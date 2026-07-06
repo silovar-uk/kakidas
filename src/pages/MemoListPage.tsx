@@ -334,7 +334,8 @@ export function MemoListPage() {
     try {
       const memo = await createMemo();
       navigate(`/memos/${memo.id}`, {
-        state: { focusTitle: true },
+        // この導線で作った空メモだけは、題名も項目も書かずに戻った時に破棄する。
+        state: { focusTitle: true, discardUntitledEmptyDraft: true },
       });
     } catch (createError) {
       setNotice(

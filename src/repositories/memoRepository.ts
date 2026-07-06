@@ -93,6 +93,8 @@ export interface MemoRepository {
   /** 同じタグのメモから、タグだけをまとめて外す。 */
   clearTag(currentTag: string): Promise<MemoTagBulkUpdateResult>;
   deleteMemo(memoId: string): Promise<void>;
+  /** 新規作成直後の既定タイトル・項目なしメモだけを、安全に破棄する。 */
+  discardUntitledEmptyMemo(memoId: string): Promise<boolean>;
 
   createEntry(
     input: Omit<EntryInsert, "id" | "created_at" | "updated_at">,
@@ -647,6 +649,55 @@ class IndexedDbMemoRepository implements MemoRepository {
     syncMetaStore.delete(memoId);
 
     await transactionToPromise(transaction);
+  }
+
+  /**
+   * 新規作成しただけで内容を書かなかったメモを片付ける。
+   * UI側の表示状態を信用せず、IndexedDB内でも「既定タイトル・有効な項目0件」を
+   * 同じトランザクションで確認してから削除するため、入力済みのメモは誤って消えない。
+   */
+  async discardUntitledEmptyMemo(memoId: string): Promise<boolean> {
+    const db = await getDatabase();
+    const transaction = db.transaction(
+      [STORE_NAMES.memos, STORE_NAMES.entries, STORE_NAMES.memoSyncMeta],
+      "readwrite",
+    );
+
+    const memoStore = transaction.objectStore(STORE_NAMES.memos);
+    const entryStore = transaction.objectStore(STORE_NAMES.entries);
+    const syncMetaStore = transaction.objectStore(STORE_NAMES.memoSyncMeta);
+
+    const current = await requestToPromise(
+      memoStore.get(memoId) as IDBRequest<MemoRow | undefined>,
+    );
+
+    if (!current || current.deleted_at !== null) {
+      // 読み取りだけのトランザクションは、ここで自然に完了する。
+      return false;
+    }
+
+    const entries = await this.getEntriesForMemo(entryStore, memoId);
+    const defaultTitle = formatDefaultMemoTitle(new Date(current.created_at));
+    const hasActiveEntry = entries.some((entry) => entry.deleted_at === null);
+
+    if (current.title !== defaultTitle || hasActiveEntry) {
+      // 入力済みのメモには一切書き込まず、そのまま残す。
+      return false;
+    }
+
+    const deletedAt = nowIso();
+
+    memoStore.put({
+      ...current,
+      updated_at: deletedAt,
+      deleted_at: deletedAt,
+    } satisfies MemoRow);
+
+    // 新規の空メモでも、過去に誤って同期情報だけ作られていた場合を残さない。
+    syncMetaStore.delete(memoId);
+
+    await transactionToPromise(transaction);
+    return true;
   }
 
   async createEntry(
