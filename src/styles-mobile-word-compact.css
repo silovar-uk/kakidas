@@ -1,4 +1,4 @@
-/* Mobile word rail: 3 columns, 2 rows.
+/* Mobile word rail and view-control polish.
    短い単語を縦に伸ばしすぎず、文・段落の操作面は従来どおり保つ。 */
 @media (max-width: 920px) {
   .entry-column--word .entry-item__row,
@@ -34,6 +34,18 @@
   .entry-column--word .entry-item__complete {
     padding-inline: 2px;
     font-size: 8px;
+  }
+
+  /* 単語は右の操作面よりも先に目に入るよう、本文だけを少し大きくする。 */
+  .entry-column--word .entry-item__content {
+    font-size: 14px;
+    font-weight: 660;
+    line-height: 1.55;
+    letter-spacing: 0.005em;
+  }
+
+  .entry-column--word .entry-item__content-text {
+    font-size: inherit;
   }
 
   .entry-column--word .entry-item__note-trigger--rail svg,
@@ -76,4 +88,42 @@
     height: 30px;
     min-height: 30px;
   }
+}
+
+/* 順番固定は「状態」の操作なので、ON/OFFの差を文字だけに頼らず見せる。 */
+.entry-column__order-lock {
+  border-color: #d8d1c8;
+  color: #70675f;
+  background: #f8f6f2;
+}
+
+.entry-column__order-lock:hover:not(:disabled),
+.entry-column__order-lock:focus-visible {
+  border-color: #bdaea1;
+  color: #51473e;
+  background: #f0ece6;
+}
+
+.entry-column__order-lock-value {
+  color: #766d65;
+  background: #ded8d0;
+}
+
+.entry-column__order-lock--active {
+  border-color: #cf794a;
+  color: #823b23;
+  background: #fff0e5;
+  box-shadow: inset 0 0 0 1px rgba(189, 86, 47, 0.08);
+}
+
+.entry-column__order-lock--active:hover:not(:disabled),
+.entry-column__order-lock--active:focus-visible {
+  border-color: #b9572f;
+  color: #71311e;
+  background: #ffe7d6;
+}
+
+.entry-column__order-lock--active .entry-column__order-lock-value {
+  color: #fffaf6;
+  background: #bd562f;
 }
