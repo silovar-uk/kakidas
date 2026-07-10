@@ -57,6 +57,32 @@
   .entry-column--word .entry-item__structure-button {
     font-size: 17px;
   }
+
+  /*
+   * 気持ち操作は本文下のリンク左にだけ置く。
+   * 右側レールとの重複をなくし、文・段落を含むカードが3行へ伸びるのを防ぐ。
+   */
+  .entry-item__quick-actions > .entry-item__note-trigger--rail {
+    display: none;
+  }
+
+  .entry-item__body > .entry-item__inline-actions {
+    display: inline-flex;
+    flex-direction: row;
+    align-items: center;
+  }
+
+  .entry-item__body
+    > .entry-item__inline-actions
+    .entry-item__note-trigger--inline {
+    order: 1;
+  }
+
+  .entry-item__body
+    > .entry-item__inline-actions
+    .entry-item__link-trigger {
+    order: 2;
+  }
 }
 
 @media (max-width: 370px) {
