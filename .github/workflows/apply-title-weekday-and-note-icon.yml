@@ -18,20 +18,26 @@ jobs:
         shell: bash
         run: |
           python <<'PY'
+          import re
           from pathlib import Path
 
           # 気持ちアイコンを、入力欄で使っているレポート風アイコンへ統一する。
-          old_icon = '''      <path d="m4 16.7-.7 4 4-.7L18.7 8.6l-3.3-3.3L4 16.7Z" />
-              <path d="m13.9 6.8 3.3 3.3" />'''
-          new_icon = '''      <path d="M5.5 4.8h13v14.4H9.3l-3.8 2.4V4.8Z" />
-              <path d="M8.3 9h7.4M8.3 12.6h5.4" />'''
+          icon_pattern = re.compile(
+              r'(?P<indent>^[ \t]*)<path d="m4 16\.7-\.7 4 4-\.7L18\.7 8\.6l-3\.3-3\.3L4 16\.7Z" />\n'
+              r'(?P=indent)<path d="m13\.9 6\.8 3\.3 3\.3" />',
+              re.MULTILINE,
+          )
 
           icon_replacements = 0
           for path in Path("src").rglob("*.tsx"):
               text = path.read_text(encoding="utf-8")
-              count = text.count(old_icon)
+              replacement = (
+                  r'\g<indent><path d="M5.5 4.8h13v14.4H9.3l-3.8 2.4V4.8Z" />\n'
+                  r'\g<indent><path d="M8.3 9h7.4M8.3 12.6h5.4" />'
+              )
+              next_text, count = icon_pattern.subn(replacement, text)
               if count:
-                  path.write_text(text.replace(old_icon, new_icon), encoding="utf-8")
+                  path.write_text(next_text, encoding="utf-8")
                   icon_replacements += count
 
           if icon_replacements < 1:
