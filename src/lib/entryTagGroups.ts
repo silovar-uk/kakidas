@@ -4,7 +4,7 @@ import { getEntryTagKey, normalizeEntryTag } from "../types/memo";
 export type EntryListDisplayMode = "plain" | "tag_grouped";
 
 export const ENTRY_LIST_DISPLAY_MODE_LABEL: Record<EntryListDisplayMode, string> = {
-  plain: "通常表示",
+  plain: "タグでまとめない",
   tag_grouped: "タグでまとめる",
 };
 
@@ -29,7 +29,7 @@ type ExpandedGroupState = Record<string, boolean>;
 
 /**
  * 新しい区分は、タグを見返す導線を主役にするため「タグでまとめる」から始める。
- * すでにこの端末で選んだ通常表示／タグ表示は、そのまま尊重する。
+ * すでにこの端末で選んだ「タグでまとめない」／タグ表示は、そのまま尊重する。
  */
 export const DEFAULT_ENTRY_LIST_DISPLAY_MODE: EntryListDisplayMode = "tag_grouped";
 
