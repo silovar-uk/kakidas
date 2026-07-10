@@ -97,6 +97,7 @@ export function MobileEntryActionSheet({
 
   const moveTargets = ENTRY_KIND_MOVE_TARGETS[kind];
   const visibleNumber = displayNumber ?? entry.outline_number;
+  const titleText = kind === "paragraph" && entry.heading ? entry.heading : entry.content;
   const close = () => onCloseRef.current();
 
   const run = async (
@@ -145,7 +146,7 @@ export function MobileEntryActionSheet({
           <div>
             <p>操作</p>
             <h2 id="mobile-action-sheet-title">
-              {showEntryNumbers ? `${visibleNumber} ${entry.content}` : entry.content}
+              {showEntryNumbers ? `${visibleNumber} ${titleText}` : titleText}
             </h2>
           </div>
 

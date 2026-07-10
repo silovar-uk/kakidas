@@ -440,7 +440,11 @@ export function EntryColumn({
 
     if (!target || disabled || isDeletingAll) return false;
 
-    const copied = await onCopyEntry(target.content);
+    const copied = await onCopyEntry(
+      target.kind === "paragraph" && target.heading
+        ? `${target.heading}\n${target.content}`
+        : target.content,
+    );
 
     if (!copied) return false;
 

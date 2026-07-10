@@ -105,6 +105,7 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
     ref,
   ) {
     const [value, setValue] = useState("");
+    const [headingValue, setHeadingValue] = useState("");
     const [tagValue, setTagValue] = useState("");
     const [noteValue, setNoteValue] = useState("");
     const [linkValue, setLinkValue] = useState("");
@@ -320,11 +321,13 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
 
       try {
         await onSubmit(content, {
+          heading: isParagraph ? headingValue.trim() : "",
           tag: selectedTag,
           note: noteValue.trim(),
           link_url: normalizedLink,
         });
         setValue("");
+        setHeadingValue("");
         // 補助情報は新しい項目へ勝手に持ち越さない。
         setTagValue("");
         setNoteValue("");
@@ -345,6 +348,15 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
     const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
       event.preventDefault();
       void submit();
+    };
+
+    const handleHeadingKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+      if (event.nativeEvent.isComposing) return;
+
+      if (event.key === "Enter") {
+        event.preventDefault();
+        inputRef.current?.focus();
+      }
     };
 
     const handleKeyDown = (
@@ -475,8 +487,19 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
           }`}
         >
           {isParagraph ? (
-            <textarea
-              {...commonProps}
+            <div className="entry-composer__paragraph-fields">
+              <input
+                className="entry-composer__paragraph-title"
+                type="text"
+                value={headingValue}
+                disabled={disabled || isSubmitting}
+                placeholder="段落タイトル（任意）"
+                onChange={(event) => setHeadingValue(event.target.value)}
+                onKeyDown={handleHeadingKeyDown}
+                aria-label="段落タイトルを入力"
+              />
+              <textarea
+                {...commonProps}
               ref={(element) => {
                 inputRef.current = element;
               }}
@@ -484,8 +507,9 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
               rows={4}
               aria-label={`${ENTRY_KIND_LABEL[kind]}を入力`}
               aria-describedby="paragraph-shortcut-hint"
-              onBlur={() => scheduleParagraphTextareaResize({ allowShrink: true })}
-            />
+                onBlur={() => scheduleParagraphTextareaResize({ allowShrink: true })}
+              />
+            </div>
           ) : (
             <input
               {...commonProps}

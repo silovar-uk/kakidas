@@ -1,0 +1,131 @@
+/* --------------------------------------------------------------------------
+   v0.5.73 — optional paragraph heading
+   段落だけが持つ任意タイトル。未入力なら余白を作らず、本文の上にだけ静かに出す。
+   -------------------------------------------------------------------------- */
+.entry-composer__paragraph-fields,
+.entry-item__paragraph-editor-stack {
+  display: grid;
+  min-width: 0;
+  flex: 1 1 auto;
+  gap: 7px;
+}
+
+.entry-composer__paragraph-title,
+.entry-item__paragraph-heading-input {
+  width: 100%;
+  min-width: 0;
+  padding: 8px 11px;
+  border: 1px solid #e0d6cc;
+  border-radius: 9px;
+  color: #40362f;
+  background: #fffefa;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 760;
+  letter-spacing: -0.01em;
+}
+
+.entry-composer__paragraph-title::placeholder,
+.entry-item__paragraph-heading-input::placeholder,
+.mobile-paragraph-editor__title-field input::placeholder {
+  color: #aaa097;
+}
+
+.entry-composer__paragraph-title:focus,
+.entry-item__paragraph-heading-input:focus {
+  border-color: #bd6a45;
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(189, 86, 47, 0.11);
+}
+
+.entry-item__heading {
+  display: block;
+  width: fit-content;
+  max-width: 100%;
+  margin: 0 0 4px;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  color: #453930;
+  background: transparent;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 850;
+  line-height: 1.42;
+  letter-spacing: -0.012em;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.entry-item__heading:hover:not(:disabled),
+.entry-item__heading:focus-visible {
+  color: #a44a28;
+}
+
+.entry-item__heading--static {
+  width: auto;
+  white-space: normal;
+}
+
+.entry-item__editing-static-content {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.entry-item__compact-content {
+  display: grid;
+  gap: 2px;
+}
+
+.entry-item__compact-heading {
+  overflow: hidden;
+  color: #4b4038;
+  font-size: 12px;
+  font-weight: 840;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mobile-paragraph-editor__title-field {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.mobile-paragraph-editor__title-field span {
+  color: #8c7565;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.mobile-paragraph-editor__title-field input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #d7c7ba;
+  border-radius: 10px;
+  color: #38302a;
+  background: #fffefa;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 760;
+  line-height: 1.45;
+}
+
+.mobile-paragraph-editor__title-field input:focus {
+  border-color: #b75d38;
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(183, 93, 56, 0.1);
+}
+
+.entry-item--completed .entry-item__heading {
+  color: #85817a;
+}
+
+@media (max-width: 920px) {
+  .entry-item__heading {
+    font-size: 14px;
+  }
+}

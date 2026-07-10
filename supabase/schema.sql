@@ -25,6 +25,8 @@ create table if not exists public.entries (
   kind text not null check (kind in ('word', 'sentence', 'paragraph')),
   parent_id uuid references public.entries(id) on delete cascade,
   content text not null,
+  -- 段落だけが持つ任意の小見出し。空文字なら表示しない。
+  heading text not null default '',
   -- 項目に付けるタグは0または1つ。タグ表示の折りたたみグループに使う。
   tag text,
   -- 任意の気持ち・備考。空文字ならアプリ画面には表示しない。
@@ -70,6 +72,10 @@ create index if not exists memos_user_tag_idx
 -- v0.5.53: 単語・文・段落ごとの項目タグ。表示上のタググループに使う。
 alter table public.entries
   add column if not exists tag text;
+
+-- v0.5.73: 段落だけが任意タイトルを持てるようにする。
+alter table public.entries
+  add column if not exists heading text not null default '';
 
 create index if not exists entries_memo_kind_tag_idx
   on public.entries (memo_id, kind, tag)

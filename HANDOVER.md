@@ -1,6 +1,6 @@
 # kakidas 引き継ぎ書
 
-- **基準バージョン**：v0.5.70
+- **基準バージョン**：v0.5.72
 - **最終確認対象**：`kakidas_tree.txt` に記録された現行構造
 - **用途**：次の実装担当者・運用担当者が、設計意図と壊してはいけない境界を理解した上で改修できるようにする。
 
@@ -30,16 +30,20 @@ kakidasは、考えを「単語」「文」「段落」の粒度で、整える�
    - タグでまとめる表示の未完了タグ見出しでは、色付きの `#タグ ＋` がそのタグへ直接書き足す入口になる。押すと既存カードを展開せず、見出し直下に固定タグの入力欄だけを開く。件数と `⌄` は開閉、`✎` は同じメモ・同じ区分の同名タグ（完了済みを含む）の一括変更に分ける。タグなし・完了は追加入口にしない。
    - 新規項目では、本文を置く前に気持ち・リンク・タグを任意で指定できる。補助情報は必要な時だけポップオーバー／下部シートで開き、保存成功後は次の項目へ持ち越さない。タグ見出しからの直接追加では、その見出しのタグを固定し、気持ち・リンクだけを任意入力する。
    - スマホの満足度選択は、標準の矢印を表示せず数値だけを34pxの操作面に収める。右側の完了などの操作ボタンと重ならないことを優先する。
-   - 段落本文の編集は、全文を読み返すための面積を優先する。PCはカード内の入力欄を最大70dvhまで自然に伸ばし、長文だけ本文欄内でスクロールする。スマホは本文・気持ち・リンクを専用編集シートへ集約し、背景一覧を動かさずに編集する。入力中は高さを伸ばす時だけ更新し、IME変換中や削除中に小刻みな高さ変更をしない。
+   - スマホの単語区分は、短い本文の縦密度を保つため、右側操作を3列×2段の32px操作面にする。満足度・気持ちペン・完了を1段目、タグ・その他を2段目へ置く。文・段落は34px・2列のままにする。
+   - スマホの単語は、右側の3列×2段の操作面を維持しつつ、本文を14px相当で少し強めに見せる。短い語が操作アイコンより先に目に入り、文・段落の読みやすさは変えない。
+   - 段落は本文とは別に任意の `heading` を持つ。未入力なら余白を作らず、入力済みなら本文の上に小さな見出しとして表示する。単語・文には出さない。
+   - 段落本文の編集は、全文を読み返すための面積を優先する。PCはカード内の入力欄を最大70dvhまで自然に伸ばし、長文だけ本文欄内でスクロールする。スマホはタイトル・本文・気持ち・リンクを専用編集シートへ集約し、背景一覧を動かさずに編集する。入力中は高さを伸ばす時だけ更新し、IME変換中や削除中に小刻みな高さ変更をしない.
    - 番号表示時は、番号を左端の基準にし、本文・気持ち・備考・作成日時をその右側の本文列へ揃える。
    - `タグでまとめる`表示では、番号は表示中のグループ内で振り直す。タグなし／各未完了タグ／完了の各グループが独立した通番で、順番固定ON/OFFにかかわらず完了済みは最下部の単一「完了」グループへ集約する。通常表示とコピー・`.txt出力`は従来の全体／階層番号を使う。
    - `タグでまとめる`表示の順番固定は、単語／文／段落ごとのブラウザ設定。初期値はONで、未完了の項目・タググループの相対順だけを保つ。完了を取り消した項目は元のタグの未完了グループへ戻る。OFFでは、現在の追加順／評価順の表示設定に従う。
    - 区分ヘッダーの「表示」と「順番固定」は、同じ静かな閲覧設定コントロールとして見せる。スマホでは `固定 ON/OFF` と短く表示し、他の操作列へ重ならないことを優先する。
+   - `固定 ON/OFF` は状態を見分けやすい配色にする。ONは淡い橙の背景・白文字のONバッジ、OFFは薄いグレーを基調にして、未完了の順を守る状態を文字だけに頼らず示す。
    - 各区分ヘッダーの件数は未完了項目だけを数える。完了済みは表示・同期・コピー設定の対象に残るが、上部の進行中件数には含めない。
    - 番号、日時、並び順、完了の非表示などは、主に端末ごとの表示設定である。
 
 3. **データ本体・派生表示・個人設定を混ぜない**
-   - 本体データ：メモタイトル、メモタグ、項目タグ、項目、親子関係、備考、リンク、満足度、完了状態。メモタグ・項目タグはいずれも0または1つの自由入力文字列。
+   - 本体データ：メモタイトル、メモタグ、項目タグ、項目、段落タイトル、親子関係、備考、リンク、満足度、完了状態。メモタグ・項目タグはいずれも0または1つの自由入力文字列。
    - 派生表示：振り番、階層深度、件数、表示上の並び。
    - 個人設定：日時表示、番号表示、本文だけ表示、完了非表示、追加位置、コピー設定、項目の並び順、メモ一覧の並び順、区分ごとのタグ表示モード、タググループの開閉状態。
    - 派生表示や個人設定を、安易にIndexedDBやSupabaseのカラムへ追加しない。
@@ -97,6 +101,7 @@ VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_YOUR_KEY
 - `service_role` keyは絶対にクライアントへ置かない。
 - Supabase AuthではGoogleプロバイダを有効化する。
 - Supabase AuthのRedirect URLsには、Vercelの本番URLと必要ならローカル開発URLを登録する。アプリは `window.location.origin` へ戻る設計。
+- v0.5.73以降のクラウド同期では `entries.heading` が必要。既存Supabaseプロジェクトでは `supabase/MIGRATE_v0.5.73.sql` をSQL Editorで一度実行する。
 - 環境変数がなくても、ローカル保存・閲覧・編集は動く。クラウド関連だけが未設定扱いになる。
 
 ### Vercel
@@ -107,94 +112,86 @@ VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_YOUR_KEY
 
 ## 3. 現行フォルダ構成と責務
 
-### 完全ツリー（v0.5.70・引き継ぎ資料同梱版）
+### 完全ツリー（v0.5.72・引き継ぎ資料同梱版）
 
-以下が、この引き継ぎ書をルートへ置いた配布版の実ファイル構成である。`HANDOVER.md` と `kakidas_tree.txt` は同じ構成を記録している。`node_modules`、`dist`、`.git` を除くファイル数は **72件** である。
+以下が、この引き継ぎ書をルートへ置いた配布版の実ファイル構成である。`HANDOVER.md` と `kakidas_tree.txt` は同じ構成を記録している。`node_modules`、`dist`、`.git` を除くファイル数は **75件** である。
 
 ```text
-.
-├── public/
-│   ├── android-chrome-192x192.png
-│   ├── android-chrome-512x512.png
-│   ├── apple-touch-icon.png
-│   ├── browserconfig.xml
-│   ├── favicon-16x16.png
-│   ├── favicon-32x32.png
-│   ├── favicon-48x48.png
-│   ├── favicon-head.html
-│   ├── favicon.ico
-│   ├── mstile-150x150.png
-│   ├── README.md
-│   └── site.webmanifest
-├── src/
-│   ├── auth/
-│   │   └── AuthProvider.tsx
-│   ├── components/
-│   │   ├── CloudAccountDialog.tsx
-│   │   ├── CloudImportDialog.tsx
-│   │   ├── CloudStatusBadge.tsx
-│   │   ├── CloudUploadDialog.tsx
-│   │   ├── EntryColumn.tsx
-│   │   ├── EntryComposer.tsx
-│   │   ├── EntryItem.tsx
-│   │   ├── EntrySatisfactionControl.tsx
-│   │   ├── EntryTagControl.tsx
-│   │   ├── MemoDeleteDialog.tsx
-│   │   ├── MemoTagControl.tsx
-│   │   ├── MobileEntryActionSheet.tsx
-│   │   ├── MobileParagraphEditorSheet.tsx
-│   │   ├── NoticeToast.tsx
-│   │   └── UndoToast.tsx
-│   ├── hooks/
-│   │   ├── useCloudMemos.ts
-│   │   └── useMemos.ts
-│   ├── lib/
-│   │   ├── bodyScrollLock.ts
-│   │   ├── clipboard.ts
-│   │   ├── copyPreferences.ts
-│   │   ├── db.ts
-│   │   ├── entryTagGroups.ts
-│   │   ├── formatDate.ts
-│   │   ├── memoListPreferences.ts
-│   │   ├── memoTags.ts
-│   │   ├── memoText.ts
-│   │   └── supabase.ts
-│   ├── pages/
-│   │   ├── MemoEditorPage.tsx
-│   │   ├── MemoListPage.tsx
-│   │   └── TagManagerPage.tsx
-│   ├── repositories/
-│   │   ├── cloudMemoRepository.ts
-│   │   └── memoRepository.ts
-│   ├── types/
-│   │   └── memo.ts
-│   ├── App.tsx
-│   ├── main.tsx
-│   ├── styles.css
-│   └── vite-env.d.ts
-├── supabase/
-│   ├── MIGRATE_v0.5.11.sql
-│   ├── MIGRATE_v0.5.13.sql
-│   ├── MIGRATE_v0.5.14.sql
-│   ├── MIGRATE_v0.5.31.sql
-│   ├── MIGRATE_v0.5.44.sql
-│   ├── MIGRATE_v0.5.53.sql
-│   └── schema.sql
-├── .env.example
-├── .gitignore
-├── .npmrc
-├── HANDOVER.md
-├── index.html
-├── kakidas_tree.txt
-├── package-lock.json
-├── package.json
-├── README.md
-├── RELEASE_NOTES.md
-├── tsconfig.app.json
-├── tsconfig.json
-├── tsconfig.node.json
-├── vercel.json
-└── vite.config.ts
+.env.example
+.gitignore
+.npmrc
+HANDOVER.md
+README.md
+RELEASE_NOTES.md
+index.html
+kakidas_tree.txt
+package-lock.json
+package.json
+public/README.md
+public/android-chrome-192x192.png
+public/android-chrome-512x512.png
+public/apple-touch-icon.png
+public/browserconfig.xml
+public/favicon-16x16.png
+public/favicon-32x32.png
+public/favicon-48x48.png
+public/favicon-head.html
+public/favicon.ico
+public/mstile-150x150.png
+public/site.webmanifest
+src/App.tsx
+src/auth/AuthProvider.tsx
+src/components/CloudAccountDialog.tsx
+src/components/CloudImportDialog.tsx
+src/components/CloudStatusBadge.tsx
+src/components/CloudUploadDialog.tsx
+src/components/EntryColumn.tsx
+src/components/EntryComposer.tsx
+src/components/EntryItem.tsx
+src/components/EntrySatisfactionControl.tsx
+src/components/EntryTagControl.tsx
+src/components/MemoDeleteDialog.tsx
+src/components/MemoTagControl.tsx
+src/components/MobileEntryActionSheet.tsx
+src/components/MobileParagraphEditorSheet.tsx
+src/components/NoticeToast.tsx
+src/components/UndoToast.tsx
+src/hooks/useCloudMemos.ts
+src/hooks/useMemos.ts
+src/lib/bodyScrollLock.ts
+src/lib/clipboard.ts
+src/lib/copyPreferences.ts
+src/lib/db.ts
+src/lib/entryTagGroups.ts
+src/lib/formatDate.ts
+src/lib/memoListPreferences.ts
+src/lib/memoTags.ts
+src/lib/memoText.ts
+src/lib/supabase.ts
+src/main.tsx
+src/pages/MemoEditorPage.tsx
+src/pages/MemoListPage.tsx
+src/pages/TagManagerPage.tsx
+src/repositories/cloudMemoRepository.ts
+src/repositories/memoRepository.ts
+src/styles-mobile-word-compact.css
+src/styles-paragraph-heading.css
+src/styles.css
+src/types/memo.ts
+src/vite-env.d.ts
+supabase/MIGRATE_v0.5.11.sql
+supabase/MIGRATE_v0.5.13.sql
+supabase/MIGRATE_v0.5.14.sql
+supabase/MIGRATE_v0.5.31.sql
+supabase/MIGRATE_v0.5.44.sql
+supabase/MIGRATE_v0.5.53.sql
+supabase/MIGRATE_v0.5.73.sql
+supabase/schema.sql
+tsconfig.app.json
+tsconfig.json
+tsconfig.node.json
+vercel.json
+vite.config.ts
 ```
 
 ```text

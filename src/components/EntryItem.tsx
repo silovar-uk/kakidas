@@ -26,7 +26,7 @@ import {
 } from "../types/memo";
 
 type EditMode = "content" | "note" | "link" | null;
-type MobileParagraphEditorFocus = "content" | "note" | "link";
+type MobileParagraphEditorFocus = "heading" | "content" | "note" | "link";
 /** タグの文脈に応じて、カード内ではチップか編集アイコンだけを見せる。 */
 type EntryTagPresentation = "meta" | "group_action" | "completed_meta";
 
@@ -106,6 +106,7 @@ export function EntryItem({
 }: EntryItemProps) {
   const [editMode, setEditMode] = useState<EditMode>(null);
   const [value, setValue] = useState(entry.content);
+  const [headingValue, setHeadingValue] = useState(entry.heading);
   const [noteValue, setNoteValue] = useState(entry.note);
   const [linkValue, setLinkValue] = useState(entry.link_url);
   const [showNoteEditor, setShowNoteEditor] = useState(Boolean(entry.note.trim()));
@@ -138,13 +139,14 @@ export function EntryItem({
   useEffect(() => {
     if (!isEditing) {
       setValue(entry.content);
+      setHeadingValue(entry.heading);
       setNoteValue(entry.note);
       setLinkValue(entry.link_url);
       setShowNoteEditor(Boolean(entry.note.trim()));
       setShowLinkEditor(Boolean(entry.link_url.trim()));
       setLinkError(null);
     }
-  }, [entry.content, entry.note, entry.link_url, isEditing]);
+  }, [entry.content, entry.heading, entry.note, entry.link_url, isEditing]);
 
   useEffect(() => {
     if (editMode === "content") {
@@ -238,6 +240,20 @@ export function EntryItem({
     if (disabled) return;
     if (openMobileParagraphEditor("content")) return;
     setValue(entry.content);
+    setHeadingValue(entry.heading);
+    setNoteValue(entry.note);
+    setLinkValue(entry.link_url);
+    setShowNoteEditor(Boolean(entry.note.trim()));
+    setShowLinkEditor(Boolean(entry.link_url.trim()));
+    setLinkError(null);
+    setEditMode("content");
+  };
+
+  const beginHeadingEdit = () => {
+    if (disabled || !isParagraph) return;
+    if (openMobileParagraphEditor("heading")) return;
+    setValue(entry.content);
+    setHeadingValue(entry.heading);
     setNoteValue(entry.note);
     setLinkValue(entry.link_url);
     setShowNoteEditor(Boolean(entry.note.trim()));
@@ -250,6 +266,7 @@ export function EntryItem({
     if (disabled) return;
     if (openMobileParagraphEditor("note")) return;
     setValue(entry.content);
+    setHeadingValue(entry.heading);
     setNoteValue(entry.note);
     setLinkValue(entry.link_url);
     setShowNoteEditor(true);
@@ -262,6 +279,7 @@ export function EntryItem({
     if (disabled) return;
     if (openMobileParagraphEditor("link")) return;
     setValue(entry.content);
+    setHeadingValue(entry.heading);
     setNoteValue(entry.note);
     setLinkValue(entry.link_url);
     setShowNoteEditor(false);
@@ -272,6 +290,7 @@ export function EntryItem({
 
   const persist = async (exitEditing = true): Promise<boolean> => {
     const nextContent = value.trim();
+    const nextHeading = isParagraph ? headingValue.trim() : "";
     const nextNote = noteValue.trim();
     let nextLinkUrl = "";
 
@@ -293,6 +312,7 @@ export function EntryItem({
     const patch: EntryUpdate = {};
 
     if (nextContent !== entry.content) patch.content = nextContent;
+    if (nextHeading !== entry.heading) patch.heading = nextHeading;
     if (nextNote !== entry.note) patch.note = nextNote;
     if (nextLinkUrl !== entry.link_url) patch.link_url = nextLinkUrl;
 
@@ -318,6 +338,7 @@ export function EntryItem({
 
   const cancel = () => {
     setValue(entry.content);
+    setHeadingValue(entry.heading);
     setNoteValue(entry.note);
     setLinkValue(entry.link_url);
     setShowNoteEditor(Boolean(entry.note.trim()));
@@ -440,9 +461,12 @@ export function EntryItem({
         } ${entry.depth > 0 ? "entry-item--nested" : ""}`}
         style={style}
       >
-        <p className="entry-item__compact-content" title={entry.content}>
-          {entry.content}
-        </p>
+        <div className="entry-item__compact-content" title={entry.heading ? `${entry.heading}：${entry.content}` : entry.content}>
+          {entry.heading && kind === "paragraph" ? (
+            <strong className="entry-item__compact-heading">{entry.heading}</strong>
+          ) : null}
+          <span>{entry.content}</span>
+        </div>
       </article>
     );
   }
@@ -476,7 +500,16 @@ export function EntryItem({
             <div className="entry-item__editor-control">
               {editMode === "content" ? (
                 isParagraph ? (
-                  <textarea
+                  <div className="entry-item__paragraph-editor-stack">
+                    <input
+                      className="entry-item__paragraph-heading-input"
+                      value={headingValue}
+                      disabled={disabled || isSaving}
+                      onChange={(event) => setHeadingValue(event.target.value)}
+                      placeholder="段落タイトル（任意）"
+                      aria-label="段落タイトルを編集"
+                    />
+                    <textarea
                     ref={(element) => {
                       contentInputRef.current = element;
                     }}
@@ -496,7 +529,8 @@ export function EntryItem({
                     }}
                     rows={6}
                     aria-label="段落を編集"
-                  />
+                    />
+                  </div>
                 ) : (
                   <input
                     ref={(element) => {
@@ -512,7 +546,12 @@ export function EntryItem({
                   />
                 )
               ) : (
-                <p className="entry-item__editing-content">{entry.content}</p>
+                <div className="entry-item__editing-static-content">
+                  {isParagraph && entry.heading ? (
+                    <strong className="entry-item__heading entry-item__heading--static">{entry.heading}</strong>
+                  ) : null}
+                  <p className="entry-item__editing-content">{entry.content}</p>
+                </div>
               )}
             </div>
 
@@ -692,6 +731,18 @@ export function EntryItem({
             </span>
           ) : null}
 
+          {isParagraph && entry.heading ? (
+            <button
+              type="button"
+              className="entry-item__heading"
+              onClick={beginHeadingEdit}
+              disabled={disabled}
+              aria-label={`段落タイトル「${entry.heading}」を編集`}
+            >
+              {entry.heading}
+            </button>
+          ) : null}
+
           <button
             type="button"
             className="entry-item__content"
@@ -699,7 +750,7 @@ export function EntryItem({
             disabled={disabled}
             aria-label={
               showEntryNumbers
-                ? `${visibleNumber} ${entry.content}を編集`
+                ? `${visibleNumber} ${entry.heading ? `${entry.heading} ` : ""}${entry.content}を編集`
                 : "編集する"
             }
           >

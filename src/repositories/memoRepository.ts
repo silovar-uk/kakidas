@@ -467,7 +467,10 @@ class IndexedDbMemoRepository implements MemoRepository {
     const memo: MemoRow = {
       id: memoId,
       user_id: sourceEntry.user_id ?? sourceMemo.user_id,
-      title: formatDerivedMemoTitle(new Date(timestamp), sourceEntry.content),
+      title: formatDerivedMemoTitle(
+        new Date(timestamp),
+        sourceEntry.heading || sourceEntry.content,
+      ),
       tag: null,
       created_at: timestamp,
       updated_at: timestamp,
@@ -480,6 +483,7 @@ class IndexedDbMemoRepository implements MemoRepository {
       kind: sourceEntry.kind,
       parent_id: null,
       content: sourceEntry.content,
+      heading: sourceEntry.kind === "paragraph" ? sourceEntry.heading : "",
       tag: sourceEntry.tag,
       note: sourceEntry.note,
       link_url: sourceEntry.link_url,
@@ -766,6 +770,7 @@ class IndexedDbMemoRepository implements MemoRepository {
       kind: input.kind,
       parent_id: parentId,
       content,
+      heading: input.kind === "paragraph" ? input.heading?.trim() ?? "" : "",
       tag: normalizeEntryTag(input.tag),
       note: input.note?.trim() ?? "",
       link_url: normalizeLinkUrlForSave(input.link_url),
@@ -809,6 +814,11 @@ class IndexedDbMemoRepository implements MemoRepository {
 
     const current = await this.requireActiveEntry(entryStore, entryId, transaction);
     const content = patch.content === undefined ? current.content : patch.content.trim();
+    const heading = patch.heading === undefined
+      ? current.heading
+      : current.kind === "paragraph"
+        ? patch.heading.trim()
+        : "";
     const tag = patch.tag === undefined ? current.tag : normalizeEntryTag(patch.tag);
     const note = patch.note === undefined ? current.note : patch.note.trim();
     const linkUrl =
@@ -835,6 +845,7 @@ class IndexedDbMemoRepository implements MemoRepository {
       ...current,
       ...patch,
       content: content || current.content,
+      heading,
       tag,
       note,
       link_url: linkUrl,
@@ -1307,6 +1318,7 @@ class IndexedDbMemoRepository implements MemoRepository {
       ...current,
       kind: targetKind,
       parent_id: null,
+      heading: targetKind === "paragraph" ? current.heading : "",
       updated_at: timestamp,
     };
     this.writeOrderedEntries(entryStore, [moved, ...targetSiblings], timestamp);
@@ -1365,7 +1377,7 @@ class IndexedDbMemoRepository implements MemoRepository {
     );
 
     return {
-      version: 7,
+      version: 8,
       exported_at: nowIso(),
       memos: memos.map(normalizeMemoRow),
       entries: entries.map(normalizeEntryRow),
@@ -1380,7 +1392,8 @@ class IndexedDbMemoRepository implements MemoRepository {
         payload.version !== 4 &&
         payload.version !== 5 &&
         payload.version !== 6 &&
-        payload.version !== 7) ||
+        payload.version !== 7 &&
+        payload.version !== 8) ||
       !Array.isArray(payload.memos) ||
       !Array.isArray(payload.entries)
     ) {

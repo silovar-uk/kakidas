@@ -60,7 +60,13 @@ export function formatMemoText(
       const linkUrl = entry.link_url.trim();
 
       if (kind === "paragraph") {
-        parts.push(`\n${prefix}${entry.content}`);
+        const heading = entry.heading.trim();
+        if (heading) {
+          parts.push(`\n${prefix}${heading}`);
+          parts.push(entry.content);
+        } else {
+          parts.push(`\n${prefix}${entry.content}`);
+        }
 
         if (noteLines.length > 0) {
           parts.push(`気持ち・備考：${noteLines[0]}`);

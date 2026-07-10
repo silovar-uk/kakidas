@@ -147,7 +147,7 @@ function openDatabase(): Promise<IDBDatabase> {
         syncMetaStore.createIndex("by_updated_at", "updated_at");
       }
 
-      // 旧レコードの parent_id / tag / note / satisfaction / is_completed / link_url は、
+      // 旧レコードの parent_id / heading / tag / note / satisfaction / is_completed / link_url は,
       // Repositoryの normalizeEntryRow / normalizeMemoSyncMeta で安全に補完する。
       // ここでcursorを使わないことで、Safariのupgrade transactionが止まりにくくなる。
     };

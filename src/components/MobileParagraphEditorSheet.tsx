@@ -14,7 +14,7 @@ import {
   normalizeLinkUrlForSave,
 } from "../types/memo";
 
-type MobileParagraphEditorFocus = "content" | "note" | "link";
+type MobileParagraphEditorFocus = "heading" | "content" | "note" | "link";
 
 type MobileParagraphEditorSheetProps = {
   entry: EntryTreeNode | null;
@@ -58,6 +58,7 @@ export function MobileParagraphEditorSheet({
   onSave,
 }: MobileParagraphEditorSheetProps) {
   const [content, setContent] = useState(() => entry?.content ?? "");
+  const [heading, setHeading] = useState(() => entry?.heading ?? "");
   const [note, setNote] = useState(() => entry?.note ?? "");
   const [linkUrl, setLinkUrl] = useState(() => entry?.link_url ?? "");
   const [showNoteEditor, setShowNoteEditor] = useState(
@@ -71,6 +72,7 @@ export function MobileParagraphEditorSheet({
   const [isComposing, setIsComposing] = useState(false);
 
   const dialogRef = useRef<HTMLElement | null>(null);
+  const headingRef = useRef<HTMLInputElement | null>(null);
   const contentRef = useRef<HTMLTextAreaElement | null>(null);
   const noteRef = useRef<HTMLTextAreaElement | null>(null);
   const linkRef = useRef<HTMLInputElement | null>(null);
@@ -86,6 +88,7 @@ export function MobileParagraphEditorSheet({
     if (!entry) return;
 
     setContent(entry.content);
+    setHeading(entry.heading);
     setNote(entry.note);
     setLinkUrl(entry.link_url);
     setShowNoteEditor(initialFocus === "note" || Boolean(entry.note.trim()));
@@ -94,7 +97,7 @@ export function MobileParagraphEditorSheet({
     setIsSaving(false);
     setIsComposing(false);
     isComposingRef.current = false;
-  }, [entry?.id, entry?.content, entry?.link_url, entry?.note, initialFocus]);
+  }, [entry?.id, entry?.content, entry?.heading, entry?.link_url, entry?.note, initialFocus]);
 
   useEffect(() => {
     if (!entry) return;
@@ -180,7 +183,9 @@ export function MobileParagraphEditorSheet({
     const frame = window.requestAnimationFrame(() => {
       scheduleTextareaResize({ allowShrink: true });
 
-      if (initialFocus === "note") {
+      if (initialFocus === "heading") {
+        headingRef.current?.focus();
+      } else if (initialFocus === "note") {
         noteRef.current?.focus();
       } else if (initialFocus === "link") {
         linkRef.current?.focus();
@@ -216,6 +221,7 @@ export function MobileParagraphEditorSheet({
 
     const patch: EntryUpdate = {};
     if (trimmedContent !== entry.content) patch.content = trimmedContent;
+    if (heading.trim() !== entry.heading) patch.heading = heading.trim();
     if (note.trim() !== entry.note) patch.note = note.trim();
     if (normalizedLink !== entry.link_url) patch.link_url = normalizedLink;
 
@@ -319,7 +325,7 @@ export function MobileParagraphEditorSheet({
           <div className="mobile-paragraph-editor__heading">
             <p>段落を編集</p>
             <h2 id="mobile-paragraph-editor-title">
-              {showEntryNumbers ? `${visibleNumber} ` : ""}全文を見ながら書く
+              {entry.heading || `${showEntryNumbers ? `${visibleNumber} ` : ""}全文を見ながら書く`}
             </h2>
           </div>
 
@@ -342,6 +348,19 @@ export function MobileParagraphEditorSheet({
               </span>
             ) : null}
           </div>
+
+          <label className="mobile-paragraph-editor__title-field">
+            <span>段落タイトル（任意）</span>
+            <input
+              ref={headingRef}
+              type="text"
+              value={heading}
+              disabled={disabled || isSaving}
+              placeholder="タイトルを入れる"
+              onChange={(event) => setHeading(event.target.value)}
+              aria-label="段落タイトルを編集"
+            />
+          </label>
 
           <textarea
             ref={contentRef}

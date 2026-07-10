@@ -93,6 +93,8 @@ export type EntryRow = {
   kind: EntryKind;
   parent_id: string | null;
   content: string;
+  /** 段落だけが持つ任意の小見出し。空文字なら表示しない。 */
+  heading: string;
   /** 項目に付ける自由入力のタグ。タグは0または1つだけ。 */
   tag: string | null;
   /** 任意の補足。空文字なら画面に余白を作らない。 */
@@ -115,9 +117,11 @@ export type EntryRow = {
  */
 export type LegacyEntryRow = Omit<
   EntryRow,
-  "parent_id" | "tag" | "note" | "link_url" | "satisfaction" | "is_completed"
+  "parent_id" | "heading" | "tag" | "note" | "link_url" | "satisfaction" | "is_completed"
 > & {
   parent_id?: string | null;
+  /** v0.5.72以前は段落タイトルがないため、読み込み時に空文字へ補完する。 */
+  heading?: string | null;
   /** v0.5.53以前は項目タグがないため、読み込み時にnullへ補完する。 */
   tag?: string | null;
   /** v0.5.10以前は備考カラムがないため、読み込み時に空文字へ補完する。 */
@@ -137,6 +141,7 @@ export type EntryInsert = {
   kind: EntryKind;
   parent_id?: string | null;
   content: string;
+  heading?: string;
   tag?: string | null;
   note?: string;
   link_url?: string;
@@ -152,12 +157,12 @@ export type EntryInsert = {
  * 新規項目の入力欄で任意指定できる補助情報。
  * 本文・親子関係・並び位置とは分け、入力UIからRepositoryへそのまま渡す。
  */
-export type EntryCreateMetadata = Pick<EntryInsert, "tag" | "note" | "link_url">;
+export type EntryCreateMetadata = Pick<EntryInsert, "heading" | "tag" | "note" | "link_url">;
 
 export type EntryUpdate = Partial<
   Pick<
     EntryRow,
-    "content" | "tag" | "note" | "link_url" | "satisfaction" | "is_completed" | "sort_order" | "updated_at" | "deleted_at" | "user_id"
+    "content" | "heading" | "tag" | "note" | "link_url" | "satisfaction" | "is_completed" | "sort_order" | "updated_at" | "deleted_at" | "user_id"
   >
 >;
 
@@ -314,9 +319,9 @@ export type Database = {
 };
 
 export type BackupPayload = {
-  version: 1 | 2 | 3 | 4 | 5 | 6 | 7;
+  version: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
   exported_at: string;
-  /** v1〜v5はメモタグを、v1〜v6は項目タグを持たないため、読み込み時に null へ補完する。 */
+  /** v1〜v5はメモタグを、v1〜v6は項目タグを、v1〜v7は段落タイトルを持たないため、読み込み時に補完する。 */
   memos: LegacyMemoRow[];
   entries: LegacyEntryRow[];
 };
@@ -492,6 +497,7 @@ export function normalizeEntryRow(entry: LegacyEntryRow): EntryRow {
   return {
     ...entry,
     parent_id: entry.parent_id ?? null,
+    heading: typeof entry.heading === "string" ? entry.heading.trim() : "",
     tag: normalizeEntryTag(entry.tag),
     note: typeof entry.note === "string" ? entry.note : "",
     link_url: typeof entry.link_url === "string" ? entry.link_url.trim() : "",
