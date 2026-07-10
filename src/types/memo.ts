@@ -550,8 +550,11 @@ export function getOpenableLinkUrl(value: unknown): string | null {
  * メモタイトルに使う日付部分。
  * 年・時刻は created_at に保持し、タイトルには含めない。
  */
+const JAPANESE_WEEKDAY_LABELS = ["日", "月", "火", "水", "木", "金", "土"] as const;
+
 function formatMemoDatePrefix(date: Date): string {
-  return `${date.getMonth() + 1}/${date.getDate()}`;
+  const weekday = JAPANESE_WEEKDAY_LABELS[date.getDay()];
+  return `${date.getMonth() + 1}/${date.getDate()} ${weekday}`;
 }
 
 /**

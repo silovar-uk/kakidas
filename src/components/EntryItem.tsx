@@ -43,8 +43,8 @@ function LinkIcon() {
 function NoteIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-      <path d="m4 16.7-.7 4 4-.7L18.7 8.6l-3.3-3.3L4 16.7Z" />
-      <path d="m13.9 6.8 3.3 3.3" />
+      <path d="M5.5 4.8h13v14.4H9.3l-3.8 2.4V4.8Z" />
+      <path d="M8.3 9h7.4M8.3 12.6h5.4" />
     </svg>
   );
 }
