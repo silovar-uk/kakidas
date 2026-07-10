@@ -6,6 +6,7 @@ import react from "@vitejs/plugin-react";
  * - 気持ちアイコンを、入力時に使っているレポート風アイコンへ統一
  * - 新規メモの日付タイトルを「m/d 曜「」」形式へ変更
  * - スマホで空のリンクボタンを押した時、クリップボード内容を確認用に仮入力
+ * - スマホで項目を別区分へ移した時、表示も移動先タブへ切り替える
  */
 function applyKakidasUiConsistency(): Plugin {
   return {
@@ -191,6 +192,39 @@ function applyKakidasUiConsistency(): Plugin {
                   }
                 }}
                 aria-expanded={activeMetaPicker === "link"}`,
+        );
+
+        return nextSource === source ? null : nextSource;
+      }
+
+      if (normalizedId.endsWith("/src/pages/MemoEditorPage.tsx")) {
+        let nextSource = source.replace(
+          `  const handleComposerAutoFocusHandled = useCallback(() => {
+    setShouldFocusNewMemoComposer(false);
+  }, []);`,
+          `  const handleComposerAutoFocusHandled = useCallback(() => {
+    setShouldFocusNewMemoComposer(false);
+  }, []);
+
+  /** スマホでは移動した項目を追えるよう、保存成功後に移動先のタブを開く。 */
+  const handleMoveEntryToKind = useCallback(
+    async (entryId: string, targetKind: EntryKind): Promise<void> => {
+      await moveEntryToKind(entryId, targetKind);
+
+      if (
+        typeof window !== "undefined" &&
+        window.matchMedia("(max-width: 920px)").matches
+      ) {
+        setActiveKind(targetKind);
+      }
+    },
+    [moveEntryToKind],
+  );`,
+        );
+
+        nextSource = nextSource.replace(
+          `            onMoveToKind={moveEntryToKind}`,
+          `            onMoveToKind={handleMoveEntryToKind}`,
         );
 
         return nextSource === source ? null : nextSource;
