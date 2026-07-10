@@ -129,3 +129,97 @@
     font-size: 14px;
   }
 }
+
+/* --------------------------------------------------------------------------
+   v0.5.74 — paragraph-first desktop action rail
+   長文を読む段落だけ、PCの補助操作を2列に畳んで本文へ横幅を返す。
+   単語・文とモバイルのレイアウトは変更しない。
+   -------------------------------------------------------------------------- */
+@media (min-width: 921px) {
+  .entry-column--paragraph .entry-item__row,
+  .entry-column--paragraph
+    .entry-item:not(.entry-item--hierarchical)
+    .entry-item__row {
+    grid-template-columns: minmax(0, 1fr) 64px;
+    column-gap: 10px;
+    align-items: start;
+  }
+
+  .entry-column--paragraph .entry-item__quick-actions {
+    display: grid;
+    grid-template-columns: repeat(2, 30px);
+    grid-auto-rows: 30px;
+    width: 64px;
+    min-width: 64px;
+    align-self: start;
+    align-items: center;
+    justify-content: end;
+    gap: 4px;
+    margin-top: 0;
+  }
+
+  /* 本文下の重複操作は隠し、同じ入口を右側レールへまとめる。 */
+  .entry-column--paragraph
+    .entry-item__body
+    > .entry-item__inline-actions {
+    display: none;
+  }
+
+  .entry-column--paragraph .entry-item__desktop-inline-actions {
+    display: contents;
+  }
+
+  .entry-column--paragraph .entry-item__quick-actions .entry-satisfaction,
+  .entry-column--paragraph .entry-item__quick-actions .entry-item__complete,
+  .entry-column--paragraph
+    .entry-item__quick-actions
+    .entry-item__note-trigger--inline,
+  .entry-column--paragraph
+    .entry-item__quick-actions
+    .entry-item__link-trigger,
+  .entry-column--paragraph .entry-item__quick-actions .entry-tag-control,
+  .entry-column--paragraph
+    .entry-item__quick-actions
+    .entry-tag-control--icon,
+  .entry-column--paragraph
+    .entry-item__quick-actions
+    .entry-tag-control__icon,
+  .entry-column--paragraph
+    .entry-item__quick-actions
+    .entry-item__structure-button {
+    box-sizing: border-box;
+    width: 30px;
+    min-width: 30px;
+    max-width: 30px;
+    height: 30px;
+    min-height: 30px;
+    margin: 0;
+  }
+
+  .entry-column--paragraph .entry-item__quick-actions .entry-satisfaction {
+    padding: 0;
+    -webkit-appearance: none;
+    appearance: none;
+    background-image: none;
+    text-align: center;
+    text-align-last: center;
+  }
+
+  .entry-column--paragraph .entry-item__quick-actions .entry-item__complete {
+    padding: 0 2px;
+    font-size: 9px;
+  }
+
+  .entry-column--paragraph
+    .entry-item__quick-actions
+    .entry-item__note-trigger--inline,
+  .entry-column--paragraph
+    .entry-item__quick-actions
+    .entry-item__link-trigger,
+  .entry-column--paragraph
+    .entry-item__quick-actions
+    .entry-item__structure-button {
+    place-items: center;
+    padding: 0;
+  }
+}
