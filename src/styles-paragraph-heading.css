@@ -21,7 +21,7 @@
   background: #fffefa;
   font: inherit;
   font-size: 13px;
-  font-weight: 760;
+  font-weight: 850;
   letter-spacing: -0.01em;
 }
 
@@ -29,6 +29,7 @@
 .entry-item__paragraph-heading-input::placeholder,
 .mobile-paragraph-editor__title-field input::placeholder {
   color: #aaa097;
+  font-weight: 500;
 }
 
 .entry-composer__paragraph-title:focus,
@@ -50,7 +51,7 @@
   background: transparent;
   font: inherit;
   font-size: 13px;
-  font-weight: 850;
+  font-weight: 900;
   line-height: 1.42;
   letter-spacing: -0.012em;
   text-align: left;
@@ -83,7 +84,7 @@
   overflow: hidden;
   color: #4b4038;
   font-size: 12px;
-  font-weight: 840;
+  font-weight: 900;
   line-height: 1.35;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -110,7 +111,7 @@
   background: #fffefa;
   font: inherit;
   font-size: 15px;
-  font-weight: 760;
+  font-weight: 850;
   line-height: 1.45;
 }
 
