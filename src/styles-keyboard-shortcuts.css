@@ -1,7 +1,8 @@
 .keyboard-shortcuts-button {
   position: fixed;
+  top: max(72px, calc(env(safe-area-inset-top) + 54px));
   right: max(18px, env(safe-area-inset-right));
-  bottom: max(18px, env(safe-area-inset-bottom));
+  bottom: auto;
   z-index: 24;
   display: inline-flex;
   min-height: 36px;
@@ -166,8 +167,9 @@
 
 @media (max-width: 560px) {
   .keyboard-shortcuts-button {
+    top: max(64px, calc(env(safe-area-inset-top) + 48px));
     right: max(12px, env(safe-area-inset-right));
-    bottom: max(12px, env(safe-area-inset-bottom));
+    bottom: auto;
     width: 38px;
     min-width: 38px;
     height: 38px;
