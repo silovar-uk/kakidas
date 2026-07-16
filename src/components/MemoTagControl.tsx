@@ -3,7 +3,6 @@ import {
   type KeyboardEvent,
   useEffect,
   useMemo,
-  useRef,
   useState,
 } from "react";
 import {
@@ -33,8 +32,6 @@ export function MemoTagControl({
   const [value, setValue] = useState(tag ?? "");
   const [isSaving, setIsSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const controlRef = useRef<HTMLDivElement | null>(null);
-  const inputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     if (!isEditing) {
@@ -80,42 +77,6 @@ export function MemoTagControl({
     }
   };
 
-  /**
-   * 一覧では同じカード内の見出し、編集画面では入力中のタイトルを使う。
-   * 親画面へ保存済みタイトルを渡さなくても、現在ユーザーが見ている文字列を
-   * そのままタグ候補へ入れられるようにする。
-   */
-  const readCurrentMemoTitle = (): string => {
-    const root = controlRef.current;
-    const editor = root?.closest(".editor-page");
-
-    if (editor) {
-      return editor.querySelector<HTMLInputElement>(".memo-title-input")?.value ?? "";
-    }
-
-    const card = root?.closest(".memo-card");
-    return card?.querySelector<HTMLElement>(
-      ".memo-card__link strong, .memo-card__details strong",
-    )?.textContent ?? "";
-  };
-
-  const useMemoTitle = () => {
-    if (disabled || isSaving) return;
-
-    const titleTag = normalizeMemoTag(readCurrentMemoTitle());
-    if (!titleTag) {
-      setErrorMessage("タイトルが空のため、タグへ入力できません。");
-      return;
-    }
-
-    setErrorMessage(null);
-    setValue(titleTag);
-    window.requestAnimationFrame(() => {
-      inputRef.current?.focus();
-      inputRef.current?.setSelectionRange(titleTag.length, titleTag.length);
-    });
-  };
-
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     void save();
@@ -129,7 +90,7 @@ export function MemoTagControl({
 
   if (!isEditing) {
     return (
-      <div ref={controlRef} className="memo-tag-control" aria-label="メモのタグ">
+      <div className="memo-tag-control" aria-label="メモのタグ">
         {tag ? (
           <>
             <button
@@ -173,16 +134,11 @@ export function MemoTagControl({
   }
 
   return (
-    <div
-      ref={controlRef}
-      className="memo-tag-control memo-tag-control--editing"
-      aria-label="タグを編集"
-    >
+    <div className="memo-tag-control memo-tag-control--editing" aria-label="タグを編集">
       <form className="memo-tag-control__form" onSubmit={handleSubmit}>
         <label>
           <span>タグ</span>
           <input
-            ref={inputRef}
             value={value}
             onChange={(event) => {
               setErrorMessage(null);
@@ -195,16 +151,6 @@ export function MemoTagControl({
             disabled={disabled || isSaving}
           />
         </label>
-        <button
-          type="button"
-          className="memo-tag-control__use-title"
-          disabled={disabled || isSaving}
-          onMouseDown={(event) => event.preventDefault()}
-          onClick={useMemoTitle}
-          title="現在のメモタイトルをタグ欄へ入力"
-        >
-          タイトルを使う
-        </button>
         <button
           type="submit"
           className="memo-tag-control__save"
