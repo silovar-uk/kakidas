@@ -1,6 +1,7 @@
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { AuthProvider } from "./auth/AuthProvider";
 import { KeyboardShortcuts } from "./components/KeyboardShortcuts";
+import { MobileNewMemoTitleFocus } from "./components/MobileNewMemoTitleFocus";
 import { ParagraphTitleTagAssist } from "./components/ParagraphTitleTagAssist";
 import { MemoEditorPage } from "./pages/MemoEditorPage";
 import { MemoListPage } from "./pages/MemoListPage";
@@ -17,6 +18,7 @@ export default function App() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
         <KeyboardShortcuts />
+        <MobileNewMemoTitleFocus />
         <ParagraphTitleTagAssist />
       </BrowserRouter>
     </AuthProvider>
