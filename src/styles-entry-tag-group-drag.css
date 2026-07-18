@@ -2,17 +2,88 @@
   position: relative;
 }
 
+/*
+ * ドラッグハンドル追加後の列数を明示する。
+ * タグなしも通常タグも、ハンドルの右側を同じ左端として揃える。
+ */
+.entry-list__tag-group--untagged
+  .entry-list__tag-group-header:has(> .entry-tag-group-drag-handle) {
+  grid-template-columns: 30px minmax(0, 1fr);
+  min-height: 44px;
+  gap: 6px;
+  padding: 3px 3px 3px 0;
+}
+
+.entry-list__tag-group--tag
+  .entry-list__tag-group-header:has(> .entry-tag-group-drag-handle) {
+  grid-template-columns: 30px minmax(0, max-content) minmax(54px, 1fr) 28px;
+  min-height: 44px;
+  gap: 6px;
+  padding: 3px 2px 3px 0;
+}
+
+.entry-list__tag-group--untagged
+  .entry-list__tag-group-header:has(> .entry-tag-group-drag-handle)
+  .entry-list__tag-group-toggle {
+  grid-column: 2 / -1;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  min-width: 0;
+  padding: 0 3px 0 0;
+}
+
+.entry-list__tag-group--untagged
+  .entry-list__tag-group-header:has(> .entry-tag-group-drag-handle)
+  .entry-list__tag-group-label {
+  justify-self: start;
+  text-align: left;
+}
+
+.entry-list__tag-group--tag
+  .entry-list__tag-group-header:has(> .entry-tag-group-drag-handle)
+  .entry-list__tag-group-add {
+  min-width: 0;
+  max-width: min(270px, 100%);
+  justify-self: start;
+}
+
+.entry-list__tag-group--tag
+  .entry-list__tag-group-header:has(> .entry-tag-group-drag-handle)
+  .entry-list__tag-group-toggle {
+  display: grid;
+  grid-template-columns: auto auto;
+  min-width: 0;
+  width: 100%;
+  min-height: 36px;
+  justify-content: end;
+  gap: 6px;
+  padding: 0;
+}
+
+.entry-list__tag-group--tag
+  .entry-list__tag-group-header:has(> .entry-tag-group-drag-handle)
+  .entry-list__tag-group-count {
+  justify-self: end;
+}
+
+.entry-list__tag-group--tag
+  .entry-list__tag-group-header:has(> .entry-tag-group-drag-handle)
+  .entry-list__tag-group-rename {
+  justify-self: end;
+}
+
 .entry-tag-group-drag-handle {
   display: inline-grid;
   width: 30px;
   height: 30px;
   flex: 0 0 30px;
   place-items: center;
+  align-self: center;
+  padding: 0;
   border: 0;
   border-radius: 8px;
-  color: #8b8f94;
+  color: #99948d;
   background: transparent;
-  font-size: 18px;
+  font-size: 0;
   line-height: 1;
   cursor: grab;
   touch-action: none;
@@ -24,15 +95,47 @@
     transform 140ms ease;
 }
 
+/* フォント依存の記号ではなく、六つの点で静かなドラッグハンドルを描く。 */
+.entry-tag-group-drag-handle::before {
+  width: 12px;
+  height: 18px;
+  background-image: radial-gradient(circle, currentColor 1.35px, transparent 1.6px);
+  background-position: 0 0;
+  background-size: 6px 6px;
+  content: "";
+}
+
 .entry-tag-group-drag-handle:hover,
 .entry-tag-group-drag-handle:focus-visible {
-  color: #4f5e6d;
-  background: rgba(95, 111, 127, 0.1);
+  color: #596979;
+  background: rgba(95, 111, 127, 0.09);
 }
 
 .entry-tag-group-drag-handle:active {
   cursor: grabbing;
   transform: scale(0.94);
+}
+
+/* タグ名は主役、追加操作は補助であることを明確にする。 */
+.entry-list__tag-group-add-plus {
+  display: inline-grid;
+  width: 18px;
+  height: 18px;
+  place-items: center;
+  margin-left: 1px;
+  border-left: 1px solid var(--entry-tag-border, #d8d0c5);
+  padding-left: 4px;
+  color: color-mix(in srgb, currentColor 72%, transparent);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.entry-list__tag-group-count {
+  font-variant-numeric: tabular-nums;
+}
+
+.entry-list__tag-group-chevron {
+  opacity: 0.74;
 }
 
 .entry-list--tag-group-dragging {
@@ -67,11 +170,77 @@ body.kakidas-tag-group-dragging {
 }
 
 @media (max-width: 920px) {
+  .entry-list__tag-group--untagged
+    .entry-list__tag-group-header:has(> .entry-tag-group-drag-handle) {
+    grid-template-columns: 38px minmax(0, 1fr);
+    min-height: 48px;
+    gap: 5px;
+    padding-right: 2px;
+  }
+
+  .entry-list__tag-group--tag
+    .entry-list__tag-group-header:has(> .entry-tag-group-drag-handle) {
+    grid-template-columns: 38px minmax(0, max-content) minmax(48px, 1fr) 34px;
+    min-height: 48px;
+    gap: 5px;
+    padding-right: 2px;
+  }
+
   .entry-tag-group-drag-handle {
     width: 38px;
     height: 38px;
     flex-basis: 38px;
     margin-left: -4px;
-    font-size: 20px;
+  }
+
+  .entry-tag-group-drag-handle::before {
+    width: 12px;
+    height: 18px;
+  }
+
+  .entry-list__tag-group--tag
+    .entry-list__tag-group-header:has(> .entry-tag-group-drag-handle)
+    .entry-list__tag-group-add {
+    max-width: min(220px, 100%);
+  }
+
+  .entry-list__tag-group--tag
+    .entry-list__tag-group-header:has(> .entry-tag-group-drag-handle)
+    .entry-list__tag-group-toggle {
+    min-height: 38px;
+    gap: 5px;
+  }
+}
+
+@media (max-width: 420px) {
+  .entry-list__tag-group--tag
+    .entry-list__tag-group-header:has(> .entry-tag-group-drag-handle) {
+    grid-template-columns: 36px minmax(0, 1fr) auto 32px;
+    gap: 3px;
+  }
+
+  .entry-tag-group-drag-handle {
+    width: 36px;
+    height: 36px;
+    flex-basis: 36px;
+  }
+
+  .entry-list__tag-group--tag
+    .entry-list__tag-group-header:has(> .entry-tag-group-drag-handle)
+    .entry-list__tag-group-add {
+    width: fit-content;
+    max-width: 100%;
+  }
+
+  .entry-list__tag-group--tag
+    .entry-list__tag-group-header:has(> .entry-tag-group-drag-handle)
+    .entry-list__tag-group-toggle {
+    width: auto;
+  }
+
+  .entry-list__tag-group--tag
+    .entry-list__tag-group-header:has(> .entry-tag-group-drag-handle)
+    .entry-list__tag-group-count {
+    display: none;
   }
 }
