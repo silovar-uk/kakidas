@@ -1,5 +1,6 @@
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { AuthProvider } from "./auth/AuthProvider";
+import { EntryTagGroupDragOrder } from "./components/EntryTagGroupDragOrder";
 import { KeyboardShortcuts } from "./components/KeyboardShortcuts";
 import { MobileNewMemoTitleFocus } from "./components/MobileNewMemoTitleFocus";
 import { ParagraphTitleTagAssist } from "./components/ParagraphTitleTagAssist";
@@ -20,6 +21,7 @@ export default function App() {
         <KeyboardShortcuts />
         <MobileNewMemoTitleFocus />
         <ParagraphTitleTagAssist />
+        <EntryTagGroupDragOrder />
       </BrowserRouter>
     </AuthProvider>
   );
