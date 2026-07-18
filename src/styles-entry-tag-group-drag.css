@@ -16,7 +16,7 @@
 
 .entry-list__tag-group--tag
   .entry-list__tag-group-header:has(> .entry-tag-group-drag-handle) {
-  grid-template-columns: 30px minmax(0, max-content) minmax(54px, 1fr) 28px;
+  grid-template-columns: 30px minmax(0, max-content) minmax(54px, 1fr);
   min-height: 44px;
   gap: 6px;
   padding: 3px 2px 3px 0;
@@ -65,10 +65,18 @@
   justify-self: end;
 }
 
-.entry-list__tag-group--tag
-  .entry-list__tag-group-header:has(> .entry-tag-group-drag-handle)
-  .entry-list__tag-group-rename {
-  justify-self: end;
+/* ペンは廃止し、タグ名部分のクリックで同じ名称変更処理を開く。 */
+.entry-list__tag-group--tag .entry-list__tag-group-rename {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 .entry-tag-group-drag-handle {
@@ -116,7 +124,24 @@
   transform: scale(0.94);
 }
 
-/* タグ名は主役、追加操作は補助であることを明確にする。 */
+/* タグ名側は名称変更、区切り線より右の＋側はそのタグへの追加。 */
+.entry-list__tag-group-add-label[data-tag-rename-shortcut="true"] {
+  display: inline-flex;
+  min-width: 0;
+  align-self: stretch;
+  align-items: center;
+  margin-left: -8px;
+  padding: 0 5px 0 8px;
+  border-radius: 999px 0 0 999px;
+  cursor: text;
+  text-decoration: none;
+  text-underline-offset: 2px;
+}
+
+.entry-list__tag-group-add-label[data-tag-rename-shortcut="true"]:hover {
+  text-decoration: underline;
+}
+
 .entry-list__tag-group-add-plus {
   display: inline-grid;
   width: 18px;
@@ -180,7 +205,7 @@ body.kakidas-tag-group-dragging {
 
   .entry-list__tag-group--tag
     .entry-list__tag-group-header:has(> .entry-tag-group-drag-handle) {
-    grid-template-columns: 38px minmax(0, max-content) minmax(48px, 1fr) 34px;
+    grid-template-columns: 38px minmax(0, max-content) minmax(48px, 1fr);
     min-height: 48px;
     gap: 5px;
     padding-right: 2px;
@@ -215,7 +240,7 @@ body.kakidas-tag-group-dragging {
 @media (max-width: 420px) {
   .entry-list__tag-group--tag
     .entry-list__tag-group-header:has(> .entry-tag-group-drag-handle) {
-    grid-template-columns: 36px minmax(0, 1fr) auto 32px;
+    grid-template-columns: 36px minmax(0, 1fr) auto;
     gap: 3px;
   }
 
