@@ -4,7 +4,7 @@ import { getEntryTagKey, normalizeEntryTag } from "../types/memo";
 export type TagSummary = {
   /** 表記ゆれをまとめるための内部キー。保存用ではない。 */
   key: string;
-  /** 一覧や候補に見せる自然な表記。現在の表示順で先に現れた表記を採用する。 */
+  /** 一覧や候補に見せる自然な表記。最後に使われた表記を採用する。 */
   label: string;
   count: number;
   last_used_at: string;
@@ -47,8 +47,8 @@ export function getTagSummaries(items: Taggable[]): TagSummary[] {
   }
 
   return [...summaryByKey.values()].sort((left, right) =>
-    right.count - left.count ||
     right.last_used_at.localeCompare(left.last_used_at) ||
+    right.count - left.count ||
     left.label.localeCompare(right.label, "ja"),
   );
 }
@@ -62,7 +62,7 @@ export function getEntryTagSummaries(entries: EntryRow[]): EntryTagSummary[] {
 }
 
 /**
- * 候補の前方一致。未入力時は使用頻度・最近使った順をそのまま出す。
+ * 候補の前方一致。未入力時も入力中も、直近使用日時が新しい順を保つ。
  * 件数で切らず、実在するタグをすべて候補として返す。
  */
 export function getRecommendedTags(
