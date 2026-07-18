@@ -176,6 +176,44 @@ function moveGroupByKeyboard(
   withoutCurrent.forEach((group) => list.insertBefore(group, completed));
 }
 
+/** タグ名部分のクリックを、既存の一括名称変更ボタンへ橋渡しする。 */
+function openRenameFromTagLabel(target: EventTarget | null): boolean {
+  if (!(target instanceof Element)) return false;
+
+  const label = target.closest<HTMLElement>(".entry-list__tag-group-add-label");
+  if (!label) return false;
+
+  const section = label.closest<HTMLElement>(".entry-list__tag-group--tag");
+  const renameButton = section?.querySelector<HTMLButtonElement>(
+    ".entry-list__tag-group-rename",
+  );
+
+  if (!renameButton || renameButton.disabled) return false;
+  renameButton.click();
+  return true;
+}
+
+/** タグ名側が編集、区切り線より右の＋側が追加であることを補助情報にも反映する。 */
+function prepareTagNameShortcut(section: HTMLElement) {
+  if (!section.classList.contains("entry-list__tag-group--tag")) return;
+
+  const label = section.querySelector<HTMLElement>(".entry-list__tag-group-add-label");
+  const addButton = label?.closest<HTMLButtonElement>(".entry-list__tag-group-add");
+  const renameButton = section.querySelector<HTMLButtonElement>(
+    ".entry-list__tag-group-rename",
+  );
+  if (!label || !addButton || !renameButton) return;
+
+  const tagName = label.textContent?.replace(/^#/, "").trim() || "このタグ";
+  label.title = `タグ「${tagName}」の名前を変更`;
+  label.setAttribute("data-tag-rename-shortcut", "true");
+  addButton.title = `＋を押してタグ「${tagName}」に追加`;
+
+  // 見た目のペンは撤去するが、既存のReact処理を呼ぶ橋としてDOMには残す。
+  renameButton.tabIndex = -1;
+  renameButton.setAttribute("aria-hidden", "true");
+}
+
 /**
  * タグ表示の各グループにドラッグハンドルを差し込み、表示順だけを端末へ保存する。
  * 項目データやタグ名は書き換えず、「完了」は従来どおり最後に固定する。
@@ -245,10 +283,19 @@ export function EntryTagGroupDragOrder() {
 
     const handlePointerUp = (event: PointerEvent) => finishDrag(event.pointerId);
     const handlePointerCancel = (event: PointerEvent) => finishDrag(event.pointerId);
+    const handleTagNameClick = (event: MouseEvent) => {
+      if (!openRenameFromTagLabel(event.target)) return;
+
+      // 親の「タグへ追加」ボタンへクリックを渡さず、名称変更だけを開く。
+      event.preventDefault();
+      event.stopPropagation();
+    };
 
     const addHandle = (section: HTMLElement, column: HTMLElement) => {
       const header = section.querySelector<HTMLElement>(".entry-list__tag-group-header");
       if (!header) return;
+
+      prepareTagNameShortcut(section);
 
       const label = getGroupLabel(section);
       const existing = header.querySelector<HTMLButtonElement>(`.${HANDLE_CLASS}`);
@@ -338,6 +385,7 @@ export function EntryTagGroupDragOrder() {
     window.addEventListener("pointermove", handlePointerMove, { passive: false });
     window.addEventListener("pointerup", handlePointerUp);
     window.addEventListener("pointercancel", handlePointerCancel);
+    document.addEventListener("click", handleTagNameClick, true);
     scheduleSync();
 
     return () => {
@@ -347,6 +395,7 @@ export function EntryTagGroupDragOrder() {
       window.removeEventListener("pointermove", handlePointerMove);
       window.removeEventListener("pointerup", handlePointerUp);
       window.removeEventListener("pointercancel", handlePointerCancel);
+      document.removeEventListener("click", handleTagNameClick, true);
       document.querySelectorAll(`.${HANDLE_CLASS}`).forEach((handle) => handle.remove());
       document.body.classList.remove(BODY_DRAGGING_CLASS);
     };
