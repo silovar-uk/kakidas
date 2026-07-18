@@ -1,0 +1,77 @@
+.entry-list__tag-group-header {
+  position: relative;
+}
+
+.entry-tag-group-drag-handle {
+  display: inline-grid;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
+  place-items: center;
+  border: 0;
+  border-radius: 8px;
+  color: #8b8f94;
+  background: transparent;
+  font-size: 18px;
+  line-height: 1;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  transition:
+    color 140ms ease,
+    background-color 140ms ease,
+    transform 140ms ease;
+}
+
+.entry-tag-group-drag-handle:hover,
+.entry-tag-group-drag-handle:focus-visible {
+  color: #4f5e6d;
+  background: rgba(95, 111, 127, 0.1);
+}
+
+.entry-tag-group-drag-handle:active {
+  cursor: grabbing;
+  transform: scale(0.94);
+}
+
+.entry-list--tag-group-dragging {
+  position: relative;
+}
+
+.entry-list--tag-group-dragging .entry-list__tag-group {
+  transition:
+    opacity 120ms ease,
+    transform 120ms ease,
+    box-shadow 120ms ease;
+}
+
+.entry-list__tag-group--dragging {
+  z-index: 8;
+  opacity: 0.72;
+  transform: scale(0.992);
+  box-shadow: 0 10px 24px rgba(46, 56, 66, 0.14);
+}
+
+.entry-list__tag-group--dragging .entry-tag-group-drag-handle {
+  color: #314a64;
+  background: rgba(95, 111, 127, 0.14);
+  cursor: grabbing;
+}
+
+body.kakidas-tag-group-dragging {
+  cursor: grabbing;
+  user-select: none;
+  -webkit-user-select: none;
+  overscroll-behavior-y: contain;
+}
+
+@media (max-width: 920px) {
+  .entry-tag-group-drag-handle {
+    width: 38px;
+    height: 38px;
+    flex-basis: 38px;
+    margin-left: -4px;
+    font-size: 20px;
+  }
+}
