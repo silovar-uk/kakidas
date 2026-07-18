@@ -22,8 +22,6 @@ function setControlledInputValue(input: HTMLInputElement, value: string) {
 
   input.dispatchEvent(new Event("input", { bubbles: true }));
   input.dispatchEvent(new Event("change", { bubbles: true }));
-  input.focus({ preventScroll: true });
-  input.setSelectionRange(value.length, value.length);
 }
 
 function readParagraphTitle(popover: Element): string | null {
@@ -42,6 +40,38 @@ function readParagraphTitle(popover: Element): string | null {
   )?.textContent;
 
   return normalizeEntryTag(savedTitle);
+}
+
+/**
+ * 新規段落ではタグを選択状態へ確定し、保存済み段落ではその場でDB保存する。
+ * Reactの入力stateが更新された次の描画後に既存の決定ボタンを押すことで、
+ * タグ入力欄へ留まる中間状態を作らない。
+ */
+function applyParagraphTitleDirectly(
+  popover: Element,
+  input: HTMLInputElement,
+  title: string,
+  assistButton: HTMLButtonElement,
+) {
+  const actionSelector = popover.matches(".entry-composer__tag-popover")
+    ? ".entry-composer__tag-apply"
+    : ".entry-tag-control__save";
+
+  assistButton.disabled = true;
+  setControlledInputValue(input, title);
+
+  window.requestAnimationFrame(() => {
+    window.requestAnimationFrame(() => {
+      const actionButton = popover.querySelector<HTMLButtonElement>(actionSelector);
+
+      if (!actionButton || actionButton.disabled) {
+        assistButton.disabled = false;
+        return;
+      }
+
+      actionButton.click();
+    });
+  });
 }
 
 function syncAssistButton(popover: Element) {
@@ -63,11 +93,11 @@ function syncAssistButton(popover: Element) {
   if (!existing) {
     button.type = "button";
     button.className = ASSIST_BUTTON_CLASS;
-    button.textContent = "段落タイトルを使う";
-    button.setAttribute("aria-label", "段落タイトルをタグ欄へ入力");
-    button.title = "段落タイトルをタグ欄へ入力";
+    button.textContent = "段落名をタグにする";
+    button.setAttribute("aria-label", "段落名をこの項目のタグとして直接設定");
+    button.title = "段落名をタグとして直接設定";
     button.addEventListener("pointerdown", (event) => {
-      // ポップオーバーを閉じず、タグ入力欄の編集状態を保つ。
+      // 入力欄のblurでポップオーバーが先に閉じることを防ぐ。
       event.preventDefault();
     });
     button.addEventListener("click", () => {
@@ -79,8 +109,8 @@ function syncAssistButton(popover: Element) {
         ? readParagraphTitle(currentPopover)
         : null;
 
-      if (!currentInput || !currentTitle) return;
-      setControlledInputValue(currentInput, currentTitle);
+      if (!currentPopover || !currentInput || !currentTitle) return;
+      applyParagraphTitleDirectly(currentPopover, currentInput, currentTitle, button);
     });
 
     input.insertAdjacentElement("afterend", button);
@@ -97,7 +127,7 @@ function syncAllAssistButtons() {
 
 /**
  * 新規段落と保存済み段落は別々のタグUIを使っている。
- * どちらのポップオーバーにも同じ補助操作を付け、段落以外には表示しない。
+ * どちらのポップオーバーにも同じ直接設定操作を付け、段落以外には表示しない。
  */
 export function ParagraphTitleTagAssist() {
   useEffect(() => {
