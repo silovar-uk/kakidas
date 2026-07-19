@@ -2,6 +2,11 @@ import { useEffect } from "react";
 import { normalizeEntryTag } from "../types/memo";
 
 const ASSIST_BUTTON_CLASS = "paragraph-title-tag-assist";
+const PARAGRAPH_NUMBER_ATTRIBUTE = "data-paragraph-heading-number";
+const PARAGRAPH_HEADING_SELECTOR = [
+  ".entry-item__heading",
+  ".entry-item__compact-heading",
+].join(", ");
 const TAG_POPOVER_SELECTOR = [
   ".entry-composer__tag-popover",
   ".entry-tag-control__popover",
@@ -36,7 +41,7 @@ function readParagraphTitle(popover: Element): string | null {
 
   const entry = popover.closest(".entry-item");
   const savedTitle = entry?.querySelector<HTMLElement>(
-    ".entry-item__heading, .entry-item__compact-heading",
+    PARAGRAPH_HEADING_SELECTOR,
   )?.textContent;
 
   return normalizeEntryTag(savedTitle);
@@ -125,9 +130,67 @@ function syncAllAssistButtons() {
   document.querySelectorAll(TAG_POPOVER_SELECTOR).forEach(syncAssistButton);
 }
 
+function getDirectEntryItems(scope: Element): HTMLElement[] {
+  return Array.from(scope.children).filter(
+    (child): child is HTMLElement =>
+      child instanceof HTMLElement && child.classList.contains("entry-item"),
+  );
+}
+
+/**
+ * 段落名がある項目だけを、現在の表示順で01から振る。
+ * 既存の「振り番を表示」がONの時は二重表示を避け、装飾番号を出さない。
+ */
+function syncParagraphHeadingNumbersInScope(scope: Element) {
+  let headingIndex = 0;
+
+  getDirectEntryItems(scope).forEach((entry) => {
+    const heading = entry.querySelector<HTMLElement>(PARAGRAPH_HEADING_SELECTOR);
+    if (!heading) return;
+
+    if (entry.classList.contains("entry-item--numbered")) {
+      heading.removeAttribute(PARAGRAPH_NUMBER_ATTRIBUTE);
+      return;
+    }
+
+    headingIndex += 1;
+    const nextNumber = String(headingIndex).padStart(2, "0");
+
+    if (heading.getAttribute(PARAGRAPH_NUMBER_ATTRIBUTE) !== nextNumber) {
+      heading.setAttribute(PARAGRAPH_NUMBER_ATTRIBUTE, nextNumber);
+    }
+  });
+}
+
+function syncAllParagraphHeadingNumbers() {
+  document
+    .querySelectorAll<HTMLElement>(".entry-column--paragraph .entry-list")
+    .forEach((list) => {
+      list
+        .querySelectorAll<HTMLElement>(PARAGRAPH_HEADING_SELECTOR)
+        .forEach((heading) => heading.removeAttribute(PARAGRAPH_NUMBER_ATTRIBUTE));
+
+      // 通常表示の未完了項目。
+      syncParagraphHeadingNumbersInScope(list);
+
+      // タグ表示と、通常表示の完了グループはそれぞれのまとまりで01から始める。
+      list
+        .querySelectorAll<HTMLElement>(
+          ".entry-list__tag-group-items, .entry-list__completed-items",
+        )
+        .forEach(syncParagraphHeadingNumbersInScope);
+    });
+}
+
+function syncParagraphEnhancements() {
+  syncAllAssistButtons();
+  syncAllParagraphHeadingNumbers();
+}
+
 /**
  * 新規段落と保存済み段落は別々のタグUIを使っている。
  * どちらのポップオーバーにも同じ直接設定操作を付け、段落以外には表示しない。
+ * 同時に、段落名には既存の振り番設定と競合しない装飾番号を付ける。
  */
 export function ParagraphTitleTagAssist() {
   useEffect(() => {
@@ -137,7 +200,7 @@ export function ParagraphTitleTagAssist() {
       if (frame !== null) window.cancelAnimationFrame(frame);
       frame = window.requestAnimationFrame(() => {
         frame = null;
-        syncAllAssistButtons();
+        syncParagraphEnhancements();
       });
     };
 
@@ -155,6 +218,9 @@ export function ParagraphTitleTagAssist() {
       document
         .querySelectorAll(`.${ASSIST_BUTTON_CLASS}`)
         .forEach((button) => button.remove());
+      document
+        .querySelectorAll(`[${PARAGRAPH_NUMBER_ATTRIBUTE}]`)
+        .forEach((heading) => heading.removeAttribute(PARAGRAPH_NUMBER_ATTRIBUTE));
     };
   }, []);
 
