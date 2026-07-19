@@ -46,6 +46,7 @@
 .entry-item__heading {
   position: relative;
   display: block;
+  box-sizing: border-box;
   width: fit-content;
   max-width: 100%;
   margin: 0 0 7px;
@@ -85,6 +86,59 @@
   background: #984b2c;
 }
 
+/*
+ * D（上質なノート×編集ツール）を基調に、Bの番号による構造把握を加える。
+ * 番号は見出し本文より一段弱い「編集記号」として扱い、短い左線はそのまま残す。
+ */
+.entry-item__heading[data-paragraph-heading-number] {
+  padding-left: 47px;
+}
+
+.entry-item__heading[data-paragraph-heading-number]::before {
+  top: 50%;
+  bottom: auto;
+  left: 0;
+  display: grid;
+  box-sizing: border-box;
+  width: 27px;
+  height: 21px;
+  place-items: center;
+  border: 1px solid #d7b9a9;
+  border-radius: 6px;
+  color: #81503b;
+  background: #f6ece5;
+  font-size: 10px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  letter-spacing: 0.04em;
+  content: attr(data-paragraph-heading-number);
+  transform: translateY(-50%);
+}
+
+.entry-item__heading[data-paragraph-heading-number]::after {
+  position: absolute;
+  top: 0.18em;
+  bottom: 0.18em;
+  left: 35px;
+  width: 3px;
+  border-radius: 999px;
+  background: #b66b47;
+  content: "";
+}
+
+.entry-item__heading[data-paragraph-heading-number]:hover:not(:disabled)::before,
+.entry-item__heading[data-paragraph-heading-number]:focus-visible::before {
+  border-color: #c98f72;
+  color: #693a29;
+  background: #f2e1d6;
+}
+
+.entry-item__heading[data-paragraph-heading-number]:hover:not(:disabled)::after,
+.entry-item__heading[data-paragraph-heading-number]:focus-visible::after {
+  background: #984b2c;
+}
+
 .entry-item__heading--static {
   width: auto;
   white-space: normal;
@@ -103,6 +157,7 @@
 
 .entry-item__compact-heading {
   position: relative;
+  box-sizing: border-box;
   overflow: hidden;
   padding-left: 9px;
   color: #754937;
@@ -119,6 +174,43 @@
   top: 0.2em;
   bottom: 0.2em;
   left: 0;
+  width: 2px;
+  border-radius: 999px;
+  background: #c18a6e;
+  content: "";
+}
+
+.entry-item__compact-heading[data-paragraph-heading-number] {
+  padding-left: 41px;
+}
+
+.entry-item__compact-heading[data-paragraph-heading-number]::before {
+  top: 50%;
+  bottom: auto;
+  left: 0;
+  display: grid;
+  box-sizing: border-box;
+  width: 24px;
+  height: 18px;
+  place-items: center;
+  border: 1px solid #ddc7bb;
+  border-radius: 5px;
+  color: #835541;
+  background: #f7efea;
+  font-size: 9px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  letter-spacing: 0.035em;
+  content: attr(data-paragraph-heading-number);
+  transform: translateY(-50%);
+}
+
+.entry-item__compact-heading[data-paragraph-heading-number]::after {
+  position: absolute;
+  top: 0.2em;
+  bottom: 0.2em;
+  left: 31px;
   width: 2px;
   border-radius: 999px;
   background: #c18a6e;
@@ -164,6 +256,16 @@
   background: #b9a39a;
 }
 
+.entry-item--completed .entry-item__heading[data-paragraph-heading-number]::before {
+  border-color: #d8cbc5;
+  color: #8a756b;
+  background: #f3eeeb;
+}
+
+.entry-item--completed .entry-item__heading[data-paragraph-heading-number]::after {
+  background: #b9a39a;
+}
+
 @media (max-width: 920px) {
   .entry-composer__paragraph-title,
   .entry-item__paragraph-heading-input {
@@ -181,9 +283,39 @@
     width: 3px;
   }
 
+  .entry-item__heading[data-paragraph-heading-number] {
+    padding-left: 52px;
+  }
+
+  .entry-item__heading[data-paragraph-heading-number]::before {
+    width: 30px;
+    height: 23px;
+    border-radius: 7px;
+    font-size: 10px;
+  }
+
+  .entry-item__heading[data-paragraph-heading-number]::after {
+    left: 39px;
+    width: 3px;
+  }
+
   .entry-item__compact-heading {
     padding-left: 10px;
     font-size: 14px;
+  }
+
+  .entry-item__compact-heading[data-paragraph-heading-number] {
+    padding-left: 44px;
+  }
+
+  .entry-item__compact-heading[data-paragraph-heading-number]::before {
+    width: 26px;
+    height: 20px;
+    font-size: 9px;
+  }
+
+  .entry-item__compact-heading[data-paragraph-heading-number]::after {
+    left: 34px;
   }
 }
 
