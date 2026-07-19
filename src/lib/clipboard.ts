@@ -1,3 +1,105 @@
+const INDIVIDUAL_COPY_BUTTON_SELECTOR = [
+  ".structure-action--copy",
+  ".mobile-action-sheet__copy",
+].join(", ");
+const ENTRY_ITEM_SELECTOR = ".entry-item";
+const MOBILE_OPEN_ENTRY_SELECTOR = ".entry-item--mobile-action-open";
+const PENDING_INDIVIDUAL_COPY_WINDOW_MS = 1_500;
+
+let pendingIndividualCopyText: string | null = null;
+let pendingIndividualCopyTimer: number | null = null;
+
+function readTrimmedText(element: Element | null): string {
+  return element?.textContent?.trim() ?? "";
+}
+
+function readEntryTag(entryItem: Element): string {
+  const chip = entryItem.querySelector<HTMLElement>(".entry-item__tag-chip");
+  const chipLabel = chip?.getAttribute("aria-label")?.replace(/^タグ\s*/, "").trim();
+
+  if (chipLabel) return chipLabel;
+
+  // タグ別表示ではカード内の重複タグを隠しているため、親グループの見出しから読む。
+  const groupLabel = entryItem
+    .closest(".entry-list__tag-group--tag")
+    ?.querySelector<HTMLElement>(".entry-list__tag-group-add-label");
+
+  return readTrimmedText(groupLabel).replace(/^#/, "").trim();
+}
+
+function readEntryLink(entryItem: Element): string {
+  const link = entryItem.querySelector<HTMLAnchorElement>(
+    ".entry-item__link-trigger--active[href]",
+  );
+
+  return link?.href.trim() ?? "";
+}
+
+/**
+ * 個別コピーは、再利用しやすい順で段落名・本文・タグ・リンクを並べる。
+ * 未設定の項目は除外し、本文内の改行はそのまま保つ。
+ */
+function formatEntryCopyText(entryItem: Element): string {
+  const heading = readTrimmedText(
+    entryItem.querySelector(".entry-item__heading, .entry-item__compact-heading"),
+  );
+  const content = readTrimmedText(
+    entryItem.querySelector(".entry-item__content-text, .entry-item__compact-content > span"),
+  );
+  const tag = readEntryTag(entryItem);
+  const link = readEntryLink(entryItem);
+
+  return [heading, content, tag ? `#${tag}` : "", link]
+    .filter(Boolean)
+    .join("\n");
+}
+
+function clearPendingIndividualCopyText() {
+  pendingIndividualCopyText = null;
+
+  if (pendingIndividualCopyTimer !== null) {
+    window.clearTimeout(pendingIndividualCopyTimer);
+    pendingIndividualCopyTimer = null;
+  }
+}
+
+/**
+ * Reactのコピー処理より先に対象カードを記録する。
+ * モバイルの操作シートはPortal内にあるため、背景側のopen項目を対象にする。
+ */
+function rememberIndividualCopyTarget(event: MouseEvent) {
+  if (!(event.target instanceof Element)) return;
+
+  const copyButton = event.target.closest(INDIVIDUAL_COPY_BUTTON_SELECTOR);
+  if (!copyButton) return;
+
+  const entryItem = copyButton.closest(ENTRY_ITEM_SELECTOR) ??
+    document.querySelector(MOBILE_OPEN_ENTRY_SELECTOR);
+  if (!entryItem) return;
+
+  const nextText = formatEntryCopyText(entryItem);
+  if (!nextText) return;
+
+  clearPendingIndividualCopyText();
+  pendingIndividualCopyText = nextText;
+  pendingIndividualCopyTimer = window.setTimeout(
+    clearPendingIndividualCopyText,
+    PENDING_INDIVIDUAL_COPY_WINDOW_MS,
+  );
+}
+
+if (typeof document !== "undefined") {
+  document.addEventListener("click", rememberIndividualCopyTarget, true);
+}
+
+function consumeClipboardText(fallbackText: string): string {
+  if (!pendingIndividualCopyText) return fallbackText;
+
+  const nextText = pendingIndividualCopyText;
+  clearPendingIndividualCopyText();
+  return nextText;
+}
+
 /**
  * Clipboard API が使える環境ではそちらを優先する。
  *
@@ -71,23 +173,24 @@ export async function copyToClipboard(
   text: string,
   { preferSelectionFallback = false }: CopyToClipboardOptions = {},
 ): Promise<void> {
+  const clipboardText = consumeClipboardText(text);
   const shouldTrySelectionFirst =
     preferSelectionFallback || isAppleTouchBrowser();
 
-  if (shouldTrySelectionFirst && copyWithTemporaryTextarea(text)) {
+  if (shouldTrySelectionFirst && copyWithTemporaryTextarea(clipboardText)) {
     return;
   }
 
   if (navigator.clipboard?.writeText && window.isSecureContext) {
     try {
-      await navigator.clipboard.writeText(text);
+      await navigator.clipboard.writeText(clipboardText);
       return;
     } catch {
       // Safari 等で Clipboard API が拒否された場合は、下のフォールバックを使う。
     }
   }
 
-  if (!shouldTrySelectionFirst && copyWithTemporaryTextarea(text)) {
+  if (!shouldTrySelectionFirst && copyWithTemporaryTextarea(clipboardText)) {
     return;
   }
 
