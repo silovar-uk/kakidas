@@ -1,5 +1,6 @@
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { AuthProvider } from "./auth/AuthProvider";
+import { CloudUploadHeaderButton } from "./components/CloudUploadHeaderButton";
 import { EntryTagGroupDragOrder } from "./components/EntryTagGroupDragOrder";
 import { KeyboardShortcuts } from "./components/KeyboardShortcuts";
 import { MobileNewMemoTitleFocus } from "./components/MobileNewMemoTitleFocus";
@@ -22,6 +23,7 @@ export default function App() {
         <MobileNewMemoTitleFocus />
         <ParagraphTitleTagAssist />
         <EntryTagGroupDragOrder />
+        <CloudUploadHeaderButton />
       </BrowserRouter>
     </AuthProvider>
   );
