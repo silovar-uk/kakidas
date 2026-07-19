@@ -9,7 +9,7 @@ const PENDING_INDIVIDUAL_COPY_WINDOW_MS = 1_500;
 let pendingIndividualCopyText: string | null = null;
 let pendingIndividualCopyTimer: number | null = null;
 
-function readTrimmedText(element: Element | null): string {
+function readTrimmedText(element: Element | null | undefined): string {
   return element?.textContent?.trim() ?? "";
 }
 
