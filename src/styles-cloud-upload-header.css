@@ -1,0 +1,61 @@
+/* クラウド保存は表示設定ではなく、上部の保存操作として見せる。 */
+.editor-display-options .cloud-upload-button {
+  display: none;
+}
+
+.editor-header__right {
+  flex-wrap: wrap;
+}
+
+.editor-header__cloud-save {
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 11px;
+  border: 1px solid #d8c2b3;
+  border-radius: 9px;
+  color: #7b432d;
+  background: rgba(255, 254, 250, 0.55);
+  font-size: 12px;
+  font-weight: 760;
+  white-space: nowrap;
+  transition: border-color 150ms ease, background-color 150ms ease, color 150ms ease;
+}
+
+.editor-header__cloud-save:hover:not(:disabled),
+.editor-header__cloud-save:focus-visible {
+  border-color: #bd8f74;
+  color: #6b3521;
+  background: #fff7f1;
+}
+
+.editor-header__cloud-save:active:not(:disabled) {
+  background: #f7e9df;
+}
+
+@media (max-width: 560px) {
+  .editor-header__right {
+    display: grid;
+    grid-template-columns: auto auto;
+    align-items: center;
+    gap: 5px 8px;
+  }
+
+  .editor-header__right .cloud-status-badge {
+    grid-column: 1 / -1;
+    justify-self: end;
+  }
+
+  .editor-header__right .save-status {
+    grid-column: 1;
+  }
+
+  .editor-header__cloud-save {
+    grid-column: 2;
+    min-height: 32px;
+    padding: 0 9px;
+    font-size: 11px;
+  }
+}
