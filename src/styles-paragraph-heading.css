@@ -14,14 +14,14 @@
 .entry-item__paragraph-heading-input {
   width: 100%;
   min-width: 0;
-  padding: 8px 11px;
-  border: 1px solid #d7d9dd;
+  padding: 9px 12px;
+  border: 1px solid #cbd4dc;
   border-radius: 9px;
-  color: #40536a;
+  color: #294b68;
   background: #fffefa;
   font: inherit;
-  font-size: 13px;
-  font-weight: 700;
+  font-size: 14px;
+  font-weight: 780;
   letter-spacing: -0.005em;
 }
 
@@ -34,38 +34,55 @@
 
 .entry-composer__paragraph-title:focus,
 .entry-item__paragraph-heading-input:focus {
-  border-color: #788aa0;
+  border-color: #66839d;
   outline: none;
-  box-shadow: 0 0 0 3px rgba(83, 105, 132, 0.12);
+  box-shadow: 0 0 0 3px rgba(71, 105, 136, 0.14);
 }
 
 /*
- * 日本語のシステムフォントでは900が700と同じ見た目になる場合があるため、
- * 実在しやすい太字と低彩度の紺色を組み合わせて本文との差を作る。
+ * 本文より一段上の情報であることがひと目で分かるよう、
+ * サイズ・太さ・色に加えて短い縦線を置く。装飾ではなく見出しの基準線として使う。
  */
 .entry-item__heading {
+  position: relative;
   display: block;
   width: fit-content;
   max-width: 100%;
-  margin: 0 0 4px;
-  padding: 0;
+  margin: 0 0 7px;
+  padding: 1px 0 1px 11px;
   overflow: hidden;
   border: 0;
-  color: #42576f;
+  color: #294b68;
   background: transparent;
   font: inherit;
-  font-size: 13px;
-  font-weight: 700;
-  line-height: 1.42;
-  letter-spacing: 0.005em;
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1.38;
+  letter-spacing: 0.002em;
   text-align: left;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+.entry-item__heading::before {
+  position: absolute;
+  top: 0.18em;
+  bottom: 0.18em;
+  left: 0;
+  width: 3px;
+  border-radius: 999px;
+  background: #7994aa;
+  content: "";
+}
+
 .entry-item__heading:hover:not(:disabled),
 .entry-item__heading:focus-visible {
-  color: #2f465f;
+  color: #183e5d;
+}
+
+.entry-item__heading:hover:not(:disabled)::before,
+.entry-item__heading:focus-visible::before {
+  background: #557892;
 }
 
 .entry-item__heading--static {
@@ -75,63 +92,97 @@
 
 .entry-item__editing-static-content {
   display: grid;
-  gap: 4px;
+  gap: 5px;
   min-width: 0;
 }
 
 .entry-item__compact-content {
   display: grid;
-  gap: 2px;
+  gap: 3px;
 }
 
 .entry-item__compact-heading {
+  position: relative;
   overflow: hidden;
-  color: #4b6077;
-  font-size: 12px;
-  font-weight: 700;
-  line-height: 1.35;
-  letter-spacing: 0.005em;
+  padding-left: 9px;
+  color: #31536f;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.38;
+  letter-spacing: 0.002em;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.entry-item__compact-heading::before {
+  position: absolute;
+  top: 0.2em;
+  bottom: 0.2em;
+  left: 0;
+  width: 2px;
+  border-radius: 999px;
+  background: #8ba0b2;
+  content: "";
 }
 
 .mobile-paragraph-editor__title-field {
   display: grid;
   gap: 6px;
-  margin-bottom: 10px;
+  margin-bottom: 12px;
 }
 
 .mobile-paragraph-editor__title-field span {
-  color: #718196;
-  font-size: 10px;
-  font-weight: 700;
+  color: #5b748c;
+  font-size: 11px;
+  font-weight: 780;
 }
 
 .mobile-paragraph-editor__title-field input {
   width: 100%;
-  padding: 10px 12px;
-  border: 1px solid #d4d9df;
+  padding: 11px 13px;
+  border: 1px solid #c9d3dc;
   border-radius: 10px;
-  color: #40536a;
+  color: #294b68;
   background: #fffefa;
   font: inherit;
-  font-size: 15px;
-  font-weight: 700;
+  font-size: 16px;
+  font-weight: 780;
   line-height: 1.45;
 }
 
 .mobile-paragraph-editor__title-field input:focus {
-  border-color: #788aa0;
+  border-color: #66839d;
   outline: none;
-  box-shadow: 0 0 0 3px rgba(83, 105, 132, 0.12);
+  box-shadow: 0 0 0 3px rgba(71, 105, 136, 0.14);
 }
 
 .entry-item--completed .entry-item__heading {
-  color: #7d8792;
+  color: #748391;
+}
+
+.entry-item--completed .entry-item__heading::before {
+  background: #a2adb6;
 }
 
 @media (max-width: 920px) {
+  .entry-composer__paragraph-title,
+  .entry-item__paragraph-heading-input {
+    font-size: 16px;
+  }
+
   .entry-item__heading {
+    margin-bottom: 8px;
+    padding-left: 12px;
+    font-size: 16px;
+    line-height: 1.4;
+  }
+
+  .entry-item__heading::before {
+    width: 3px;
+  }
+
+  .entry-item__compact-heading {
+    padding-left: 10px;
     font-size: 14px;
   }
 }
