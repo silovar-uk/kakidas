@@ -1,4 +1,4 @@
-/* クラウド保存は表示設定ではなく、上部の保存操作として見せる。 */
+/* クラウド操作は表示設定ではなく、上部の保存操作として見せる。 */
 .editor-display-options .cloud-upload-button {
   display: none;
 }
@@ -7,7 +7,15 @@
   flex-wrap: wrap;
 }
 
-.editor-header__cloud-save {
+.editor-header__cloud-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.editor-header__cloud-save,
+.editor-header__cloud-sync {
   display: inline-flex;
   min-height: 34px;
   align-items: center;
@@ -16,12 +24,18 @@
   padding: 0 11px;
   border: 1px solid #d8c2b3;
   border-radius: 9px;
-  color: #7b432d;
-  background: rgba(255, 254, 250, 0.55);
   font-size: 12px;
   font-weight: 760;
   white-space: nowrap;
-  transition: border-color 150ms ease, background-color 150ms ease, color 150ms ease;
+  transition:
+    border-color 150ms ease,
+    background-color 150ms ease,
+    color 150ms ease;
+}
+
+.editor-header__cloud-save {
+  color: #7b432d;
+  background: rgba(255, 254, 250, 0.55);
 }
 
 .editor-header__cloud-save:hover:not(:disabled),
@@ -35,27 +49,63 @@
   background: #f7e9df;
 }
 
+/* 端末側を上書きする操作なので、保存より一段静かだが意味の違う寒色へ分ける。 */
+.editor-header__cloud-sync {
+  border-color: #c7d2d4;
+  color: #466268;
+  background: rgba(247, 251, 251, 0.72);
+}
+
+.editor-header__cloud-sync:hover:not(:disabled),
+.editor-header__cloud-sync:focus-visible {
+  border-color: #93aaae;
+  color: #304f55;
+  background: #f1f8f8;
+}
+
+.editor-header__cloud-sync:active:not(:disabled) {
+  background: #e5f0f0;
+}
+
+.editor-header__cloud-label--compact {
+  display: none;
+}
+
 @media (max-width: 560px) {
+  .editor-header {
+    align-items: flex-start;
+  }
+
   .editor-header__right {
     display: grid;
-    grid-template-columns: auto auto;
+    grid-template-columns: 1fr;
     align-items: center;
-    gap: 5px 8px;
+    justify-items: end;
+    gap: 5px;
   }
 
-  .editor-header__right .cloud-status-badge {
-    grid-column: 1 / -1;
-    justify-self: end;
-  }
-
-  .editor-header__right .save-status {
+  .editor-header__right .cloud-status-badge,
+  .editor-header__right .save-status,
+  .editor-header__cloud-actions {
     grid-column: 1;
   }
 
-  .editor-header__cloud-save {
-    grid-column: 2;
+  .editor-header__cloud-actions {
+    gap: 5px;
+  }
+
+  .editor-header__cloud-save,
+  .editor-header__cloud-sync {
     min-height: 32px;
-    padding: 0 9px;
+    padding: 0 8px;
     font-size: 11px;
+  }
+
+  .editor-header__cloud-label--full {
+    display: none;
+  }
+
+  .editor-header__cloud-label--compact {
+    display: inline;
   }
 }
