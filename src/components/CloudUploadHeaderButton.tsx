@@ -1,5 +1,10 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
+import { useParams } from "react-router-dom";
+import { useAuth } from "../auth/AuthProvider";
+import { useCloudMemos } from "../hooks/useCloudMemos";
+import { memoRepository } from "../repositories/memoRepository";
+import type { MemoSyncMetaRow } from "../types/memo";
 
 const HEADER_TARGET_SELECTOR = ".editor-header__right";
 const DISPLAY_TRIGGER_SELECTOR = ".editor-utility-menu__trigger";
@@ -13,14 +18,27 @@ function nextPaint(): Promise<void> {
   });
 }
 
+function formatCloudUpdatedAt(value: string): string {
+  return new Intl.DateTimeFormat("ja-JP", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(value));
+}
+
 /**
- * クラウド保存を「表示・整理」から切り離し、上部の保存状態の隣へ置く。
- * 既存のログイン判定・確認ダイアログ・アップロード処理は複製せず、
- * 元のクラウドボタンを経由して同じ処理を呼び出す。
+ * クラウド操作を「表示・整理」から切り離し、上部の保存状態の隣へ置く。
+ * 送信は既存ボタンを経由し、クラウド版への上書き同期だけをここで明示的に扱う。
  */
 export function CloudUploadHeaderButton() {
+  const { memoId } = useParams<{ memoId: string }>();
+  const { user } = useAuth();
+  const { prepareImport, importSnapshot } = useCloudMemos(user?.id ?? null);
   const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null);
   const [isOpening, setIsOpening] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
 
   useEffect(() => {
     let frame: number | null = null;
@@ -53,7 +71,7 @@ export function CloudUploadHeaderButton() {
   }, []);
 
   const openCloudUpload = async () => {
-    if (isOpening) return;
+    if (isOpening || isSyncing) return;
     setIsOpening(true);
 
     try {
@@ -95,20 +113,118 @@ export function CloudUploadHeaderButton() {
     }
   };
 
+  const overwriteWithCloud = async () => {
+    if (!memoId || isOpening || isSyncing) return;
+
+    if (!user) {
+      await openCloudUpload();
+      return;
+    }
+
+    setIsSyncing(true);
+    let originalMeta: MemoSyncMetaRow | null = null;
+    let safetyTemporarilyReleased = false;
+
+    try {
+      // タイトル編集中なら先にblurさせ、通常保存を完了させてから最新クラウド版を確認する。
+      if (document.activeElement instanceof HTMLElement) {
+        document.activeElement.blur();
+      }
+      await nextPaint();
+
+      const candidate = await prepareImport(memoId);
+      if (!candidate.hasLocalMemo) {
+        throw new Error("上書きする端末側のメモが見つかりません。");
+      }
+
+      const updatedAt = formatCloudUpdatedAt(candidate.snapshot.memo.updated_at);
+      const confirmed = window.confirm(
+        `クラウド版「${candidate.snapshot.memo.title}」に合わせますか？\n` +
+          `クラウド最終更新：${updatedAt}\n\n` +
+          "この端末のタイトル・項目・完了状態などはクラウド版で上書きされます。\n" +
+          "端末側だけの変更は元に戻せません。",
+      );
+
+      if (!confirmed) return;
+
+      originalMeta = await memoRepository.getSyncMeta(memoId);
+
+      /**
+       * 通常のreplaceは端末変更がある場合に拒否する。
+       * このボタンでは警告に同意した直後だけ安全装置を一時解除し、
+       * 失敗時には必ず元の同期状態へ戻す。
+       */
+      if (
+        originalMeta.cloud_state === "changed_after_upload" ||
+        originalMeta.cloud_state === "conflict"
+      ) {
+        await memoRepository.saveSyncMeta({
+          ...originalMeta,
+          cloud_state: "uploaded",
+          last_error: null,
+        });
+        safetyTemporarilyReleased = true;
+      }
+
+      await importSnapshot(candidate.snapshot, "replace");
+      window.alert("この端末のメモをクラウド版に合わせました。");
+      window.location.reload();
+    } catch (caught) {
+      if (safetyTemporarilyReleased && originalMeta) {
+        try {
+          await memoRepository.saveSyncMeta(originalMeta);
+        } catch {
+          // 元の同期状態を戻せない場合も、最初に起きたエラーを利用者へ伝える。
+        }
+      }
+
+      window.alert(
+        caught instanceof Error
+          ? caught.message
+          : "クラウド版に合わせられませんでした。",
+      );
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   if (!portalTarget) return null;
 
   return createPortal(
-    <button
-      type="button"
-      className="editor-header__cloud-save"
-      onClick={() => void openCloudUpload()}
-      disabled={isOpening}
-      aria-label="このメモをクラウドへ保存"
-      title="このメモをクラウドへ保存"
-    >
-      <span aria-hidden="true">☁</span>
-      <span>{isOpening ? "準備中…" : "クラウド保存"}</span>
-    </button>,
+    <div className="editor-header__cloud-actions" aria-label="クラウド操作">
+      <button
+        type="button"
+        className="editor-header__cloud-save"
+        onClick={() => void openCloudUpload()}
+        disabled={isOpening || isSyncing}
+        aria-label="このメモをクラウドへ保存"
+        title="このメモをクラウドへ保存"
+      >
+        <span aria-hidden="true">☁</span>
+        <span className="editor-header__cloud-label--full">
+          {isOpening ? "準備中…" : "クラウド保存"}
+        </span>
+        <span className="editor-header__cloud-label--compact">
+          {isOpening ? "準備中…" : "保存"}
+        </span>
+      </button>
+      <button
+        type="button"
+        className="editor-header__cloud-sync"
+        onClick={() => void overwriteWithCloud()}
+        disabled={isOpening || isSyncing}
+        aria-label="クラウドの最新内容でこの端末のメモを上書き"
+        title="クラウドの最新内容でこの端末のメモを上書き"
+      >
+        <span aria-hidden="true">↧</span>
+        <span className="editor-header__cloud-label--full">
+          {isSyncing ? "確認中…" : "クラウドに合わせる"}
+        </span>
+        <span className="editor-header__cloud-label--compact">
+          {isSyncing ? "確認中…" : "クラウド反映"}
+        </span>
+      </button>
+    </div>,
     portalTarget,
   );
 }
