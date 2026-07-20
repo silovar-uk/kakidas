@@ -7,7 +7,7 @@
 }
 
 @media (max-width: 920px) {
-  /* 選択面だけを滑らせ、タブの文字と件数は常にその場で読めるようにする。 */
+  /* 選択状態は押し込まれた面ではなく、横へ動く下線として示す。 */
   .editor-tabs[data-mobile-motion-ready="true"] {
     position: relative;
     isolation: isolate;
@@ -17,13 +17,12 @@
   .editor-tabs[data-mobile-motion-ready="true"]::before {
     position: absolute;
     z-index: 0;
-    top: 5px;
-    bottom: 5px;
+    bottom: 3px;
     left: 5px;
     width: calc((100% - 22px) / 3);
-    border-radius: 8px;
-    background: #fffefa;
-    box-shadow: 0 1px 4px rgba(80, 68, 49, 0.12);
+    height: 3px;
+    border-radius: 999px;
+    background: #b55a35;
     content: "";
     transform: translateX(0);
     transition: transform var(--mobile-motion-fast) var(--mobile-motion-ease-out);
@@ -40,10 +39,17 @@
   .editor-tabs[data-mobile-motion-ready="true"] .editor-tab {
     position: relative;
     z-index: 1;
+    background: transparent;
+    box-shadow: none;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
     transition: color var(--mobile-motion-fast) ease;
   }
 
-  .editor-tabs[data-mobile-motion-ready="true"] .editor-tab--active {
+  .editor-tabs[data-mobile-motion-ready="true"] .editor-tab--active,
+  .editor-tabs[data-mobile-motion-ready="true"]
+    .editor-tab[aria-selected="true"] {
+    color: #7d3d25;
     background: transparent;
     box-shadow: none;
   }
@@ -61,10 +67,6 @@
   /* 新規項目は位置を知らせるだけ。スクロールやフォーカスは変えない。 */
   .entry-item.mobile-motion-entry-added {
     animation: mobile-motion-entry-added 460ms var(--mobile-motion-ease-soft) both;
-  }
-
-  .entry-item.mobile-motion-entry-added::before {
-    opacity: 1;
   }
 
   .entry-item.mobile-motion-entry-completing {
@@ -95,8 +97,7 @@
     animation: mobile-motion-submit 200ms var(--mobile-motion-ease-out) both;
   }
 
-  /* タッチ操作にだけ、1pxの沈み込みを共通化する。 */
-  .editor-tab:active:not(:disabled),
+  /* タブは動く下線が反応を担うため、ボタン自体は沈ませない。 */
   .entry-composer__submit:active:not(:disabled),
   .entry-item__complete:active:not(:disabled),
   .entry-item__structure-button:active:not(:disabled),
@@ -214,7 +215,11 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .editor-tabs[data-mobile-motion-ready="true"]::before,
+  /* 選択位置は保ち、移動のアニメーションだけを止める。 */
+  .editor-tabs[data-mobile-motion-ready="true"]::before {
+    transition: none !important;
+  }
+
   .mobile-motion-column-enter-forward,
   .mobile-motion-column-enter-back,
   .entry-item.mobile-motion-entry-added,
