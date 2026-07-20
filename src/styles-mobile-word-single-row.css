@@ -1,0 +1,232 @@
+/* タグでまとめた行を、通常項目より一段濃い見出し面として区別する。 */
+.entry-list__tag-group--tag > .entry-list__tag-group-header {
+  margin: 3px 0 4px;
+  border: 1px solid #d1c1b4;
+  border-radius: 10px;
+  background: #eee7df;
+  box-shadow: inset 3px 0 0 #a98b76;
+  transition:
+    border-color 140ms ease,
+    background-color 140ms ease,
+    box-shadow 140ms ease;
+}
+
+.entry-list__tag-group--tag > .entry-list__tag-group-header:hover,
+.entry-list__tag-group--tag > .entry-list__tag-group-header:focus-within {
+  border-color: #c2ad9d;
+  background: #e9dfd5;
+  box-shadow: inset 3px 0 0 #94725c;
+}
+
+.entry-list__tag-group--tag
+  > .entry-list__tag-group-header
+  .entry-list__tag-group-toggle {
+  color: #574a42;
+}
+
+.entry-list__tag-group--tag
+  > .entry-list__tag-group-header
+  .entry-list__tag-group-count {
+  color: #695d55;
+  font-weight: 740;
+}
+
+.entry-list__tag-group--tag
+  > .entry-list__tag-group-header
+  .entry-list__tag-group-chevron {
+  color: #6f5b4e;
+  opacity: 0.92;
+}
+
+.entry-list__tag-group--tag
+  > .entry-list__tag-group-header
+  .entry-tag-group-drag-handle {
+  color: #78695f;
+}
+
+/*
+ * スマホの単語だけは、短い本文を前提に右側操作を一段へ集約する。
+ * 評価 / 気持ち / 完了 / リンク / タグ / その他の6操作を省略しない。
+ */
+@media (max-width: 920px) {
+  .entry-column--word .entry-item__body > .entry-item__inline-actions {
+    display: none !important;
+  }
+
+  .entry-column--word
+    .entry-item__quick-actions
+    > .entry-item__desktop-inline-actions {
+    display: contents !important;
+  }
+
+  .entry-column--word .entry-item__row,
+  .entry-column--word
+    .entry-item:not(.entry-item--hierarchical)
+    .entry-item__row {
+    grid-template-columns: minmax(0, 1fr) 188px;
+    column-gap: 7px;
+  }
+
+  .entry-column--word .entry-item__quick-actions {
+    display: grid;
+    grid-template-columns: 38px repeat(5, 27px);
+    grid-template-rows: 32px;
+    grid-auto-flow: row;
+    width: 188px;
+    min-width: 188px;
+    align-self: start;
+    align-items: center;
+    gap: 3px;
+    margin-top: 0;
+  }
+
+  .entry-column--word .entry-satisfaction {
+    order: 1;
+    box-sizing: border-box;
+    width: 38px;
+    min-width: 38px;
+    max-width: 38px;
+    height: 32px;
+    min-height: 32px;
+    margin: 0;
+    padding: 0 2px;
+    font-size: 11px;
+  }
+
+  .entry-column--word
+    .entry-item__desktop-inline-actions
+    .entry-item__note-trigger--inline {
+    order: 2;
+  }
+
+  .entry-column--word .entry-item__complete {
+    order: 3;
+  }
+
+  .entry-column--word
+    .entry-item__desktop-inline-actions
+    .entry-item__link-trigger {
+    order: 4;
+  }
+
+  .entry-column--word .entry-tag-control {
+    order: 5;
+  }
+
+  .entry-column--word .entry-item__structure-button {
+    order: 6;
+  }
+
+  .entry-column--word .entry-item__complete,
+  .entry-column--word
+    .entry-item__desktop-inline-actions
+    .entry-item__note-trigger--inline,
+  .entry-column--word
+    .entry-item__desktop-inline-actions
+    .entry-item__link-trigger,
+  .entry-column--word .entry-tag-control,
+  .entry-column--word .entry-tag-control--icon,
+  .entry-column--word .entry-tag-control__icon,
+  .entry-column--word .entry-item__structure-button {
+    box-sizing: border-box;
+    width: 27px;
+    min-width: 27px;
+    max-width: 27px;
+    height: 32px;
+    min-height: 32px;
+    margin: 0;
+    padding: 0;
+    border-radius: 9px;
+  }
+
+  .entry-column--word
+    .entry-item__desktop-inline-actions
+    .entry-item__note-trigger--inline,
+  .entry-column--word
+    .entry-item__desktop-inline-actions
+    .entry-item__link-trigger {
+    display: inline-grid !important;
+    place-items: center;
+    border: 1px solid #e2d7cd;
+    background: #fffefa;
+  }
+
+  .entry-column--word
+    .entry-item__desktop-inline-actions
+    .entry-item__note-trigger--inline {
+    color: #806c5d;
+  }
+
+  .entry-column--word .entry-item__complete {
+    padding-inline: 0;
+    font-size: 7.5px;
+    letter-spacing: -0.03em;
+  }
+
+  .entry-column--word
+    .entry-item__desktop-inline-actions
+    .entry-item__note-trigger--inline
+    svg,
+  .entry-column--word
+    .entry-item__desktop-inline-actions
+    .entry-item__link-trigger
+    svg,
+  .entry-column--word .entry-tag-control__icon svg {
+    width: 14px;
+    height: 14px;
+  }
+
+  .entry-column--word .entry-item__structure-button {
+    font-size: 16px;
+  }
+}
+
+@media (max-width: 370px) {
+  .entry-column--word .entry-item__row,
+  .entry-column--word
+    .entry-item:not(.entry-item--hierarchical)
+    .entry-item__row {
+    grid-template-columns: minmax(0, 1fr) 171px;
+    column-gap: 6px;
+  }
+
+  .entry-column--word .entry-item__quick-actions {
+    grid-template-columns: 36px repeat(5, 25px);
+    grid-template-rows: 30px;
+    width: 171px;
+    min-width: 171px;
+    gap: 2px;
+  }
+
+  .entry-column--word .entry-satisfaction {
+    width: 36px;
+    min-width: 36px;
+    max-width: 36px;
+    height: 30px;
+    min-height: 30px;
+    font-size: 10px;
+  }
+
+  .entry-column--word .entry-item__complete,
+  .entry-column--word
+    .entry-item__desktop-inline-actions
+    .entry-item__note-trigger--inline,
+  .entry-column--word
+    .entry-item__desktop-inline-actions
+    .entry-item__link-trigger,
+  .entry-column--word .entry-tag-control,
+  .entry-column--word .entry-tag-control--icon,
+  .entry-column--word .entry-tag-control__icon,
+  .entry-column--word .entry-item__structure-button {
+    width: 25px;
+    min-width: 25px;
+    max-width: 25px;
+    height: 30px;
+    min-height: 30px;
+    border-radius: 8px;
+  }
+
+  .entry-column--word .entry-item__complete {
+    font-size: 7px;
+  }
+}
