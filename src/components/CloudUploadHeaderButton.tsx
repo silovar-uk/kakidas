@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { useParams } from "react-router-dom";
+import { useLocation } from "react-router-dom";
 import { useAuth } from "../auth/AuthProvider";
 import { useCloudMemos } from "../hooks/useCloudMemos";
 import { memoRepository } from "../repositories/memoRepository";
@@ -28,12 +28,24 @@ function formatCloudUpdatedAt(value: string): string {
   }).format(new Date(value));
 }
 
+function getMemoIdFromPathname(pathname: string): string | null {
+  const match = pathname.match(/^\/memos\/([^/?#]+)/);
+  if (!match?.[1]) return null;
+
+  try {
+    return decodeURIComponent(match[1]);
+  } catch {
+    return match[1];
+  }
+}
+
 /**
  * クラウド操作を「表示・整理」から切り離し、上部の保存状態の隣へ置く。
  * 送信は既存ボタンを経由し、クラウド版への上書き同期だけをここで明示的に扱う。
  */
 export function CloudUploadHeaderButton() {
-  const { memoId } = useParams<{ memoId: string }>();
+  const { pathname } = useLocation();
+  const memoId = getMemoIdFromPathname(pathname);
   const { user } = useAuth();
   const { prepareImport, importSnapshot } = useCloudMemos(user?.id ?? null);
   const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null);
@@ -114,7 +126,12 @@ export function CloudUploadHeaderButton() {
   };
 
   const overwriteWithCloud = async () => {
-    if (!memoId || isOpening || isSyncing) return;
+    if (isOpening || isSyncing) return;
+
+    if (!memoId) {
+      window.alert("このメモを特定できませんでした。画面を開き直してからお試しください。");
+      return;
+    }
 
     if (!user) {
       await openCloudUpload();
@@ -188,7 +205,7 @@ export function CloudUploadHeaderButton() {
     }
   };
 
-  if (!portalTarget) return null;
+  if (!portalTarget || !memoId) return null;
 
   return createPortal(
     <div className="editor-header__cloud-actions" aria-label="クラウド操作">
