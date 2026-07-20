@@ -11,6 +11,7 @@ import "./styles-paragraph-title-tag.css";
 import "./styles-entry-tag-group-drag.css";
 import "./styles-cloud-upload-header.css";
 import "./styles-mobile-interaction-motion.css";
+import "./styles-mobile-word-single-row.css";
 
 // 以前のオーバーレイが残したスクロール停止を、起動時に必ず初期化する。
 resetBodyScrollLock();
