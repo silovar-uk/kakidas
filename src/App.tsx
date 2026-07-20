@@ -3,6 +3,7 @@ import { AuthProvider } from "./auth/AuthProvider";
 import { CloudUploadHeaderButton } from "./components/CloudUploadHeaderButton";
 import { EntryTagGroupDragOrder } from "./components/EntryTagGroupDragOrder";
 import { KeyboardShortcuts } from "./components/KeyboardShortcuts";
+import { MobileInteractionMotion } from "./components/MobileInteractionMotion";
 import { MobileNewMemoTitleFocus } from "./components/MobileNewMemoTitleFocus";
 import { ParagraphTitleTagAssist } from "./components/ParagraphTitleTagAssist";
 import { MemoEditorPage } from "./pages/MemoEditorPage";
@@ -24,6 +25,7 @@ export default function App() {
         <ParagraphTitleTagAssist />
         <EntryTagGroupDragOrder />
         <CloudUploadHeaderButton />
+        <MobileInteractionMotion />
       </BrowserRouter>
     </AuthProvider>
   );
