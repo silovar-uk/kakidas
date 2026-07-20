@@ -10,6 +10,8 @@ type ShortcutItem = {
   note?: string;
 };
 
+const MOBILE_MEDIA_QUERY = "(max-width: 920px)";
+
 const LIST_SHORTCUTS: ShortcutItem[] = [
   {
     keys: ["Ctrl", "N"],
@@ -119,6 +121,9 @@ export function KeyboardShortcuts() {
   const location = useLocation();
   const scope = getScope(location.pathname);
   const [open, setOpen] = useState(false);
+  const [isMobile, setIsMobile] = useState(() =>
+    window.matchMedia(MOBILE_MEDIA_QUERY).matches,
+  );
   const panelRef = useRef<HTMLElement | null>(null);
   const shortcuts = useMemo(
     () => (scope === "editor" ? EDITOR_SHORTCUTS : LIST_SHORTCUTS),
@@ -126,11 +131,23 @@ export function KeyboardShortcuts() {
   );
 
   useEffect(() => {
+    const media = window.matchMedia(MOBILE_MEDIA_QUERY);
+    const syncMobile = () => {
+      setIsMobile(media.matches);
+      if (media.matches) setOpen(false);
+    };
+
+    syncMobile();
+    media.addEventListener("change", syncMobile);
+    return () => media.removeEventListener("change", syncMobile);
+  }, []);
+
+  useEffect(() => {
     setOpen(false);
   }, [location.pathname]);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open || isMobile) return;
 
     const releaseScrollLock = lockBodyScroll();
     const frame = window.requestAnimationFrame(() => panelRef.current?.focus());
@@ -139,10 +156,10 @@ export function KeyboardShortcuts() {
       window.cancelAnimationFrame(frame);
       releaseScrollLock();
     };
-  }, [open]);
+  }, [isMobile, open]);
 
   useEffect(() => {
-    if (!scope) return;
+    if (!scope || isMobile) return;
 
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.isComposing || event.repeat) return;
@@ -197,9 +214,9 @@ export function KeyboardShortcuts() {
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [open, scope]);
+  }, [isMobile, open, scope]);
 
-  if (!scope) return null;
+  if (!scope || isMobile) return null;
 
   return (
     <>
