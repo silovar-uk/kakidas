@@ -1,6 +1,5 @@
 import { useEffect } from "react";
 import { useLocation } from "react-router-dom";
-import "../styles-mobile-interaction-motion.css";
 
 const MOBILE_MEDIA_QUERY = "(max-width: 920px)";
 const ENTRY_ITEM_SELECTOR = ".entry-item";
@@ -9,6 +8,8 @@ const COMPLETE_CONTROL_SELECTOR =
   ".entry-item__complete, .mobile-action-sheet__complete";
 const COMPOSER_SELECTOR = ".entry-composer";
 const COMPOSER_SUBMIT_SELECTOR = ".entry-composer__submit";
+const COMPOSER_CONTENT_INPUT_SELECTOR =
+  ".entry-composer__input, .entry-composer__textarea";
 const TAB_SELECTOR = ".editor-tab";
 const TAB_CONTAINER_SELECTOR = ".editor-tabs";
 
@@ -19,7 +20,7 @@ function restartMotionClass(
   timers: Set<number>,
 ) {
   element.classList.remove(className);
-  // 同じ操作を続けても、毎回「押した結果」が返るようにアニメーションを再始動する。
+  // 続けて同じ操作をしても、毎回ひとつの短い反応として再始動する。
   void element.offsetWidth;
   element.classList.add(className);
 
@@ -43,11 +44,19 @@ function collectEntryItems(node: Node): HTMLElement[] {
 
 function isComposerSubmitKey(event: KeyboardEvent): boolean {
   if (event.key !== "Enter" || event.isComposing) return false;
-  if (!(event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement)) {
+  if (
+    !(
+      event.target instanceof HTMLInputElement ||
+      event.target instanceof HTMLTextAreaElement
+    )
+  ) {
     return false;
   }
 
+  // 段落タイトル・タグ・リンク・気持ちの入力では追加演出を起動しない。
+  if (!event.target.matches(COMPOSER_CONTENT_INPUT_SELECTOR)) return false;
   if (!event.target.closest(COMPOSER_SELECTOR)) return false;
+
   if (event.target instanceof HTMLTextAreaElement) {
     return event.shiftKey || event.ctrlKey;
   }
@@ -57,7 +66,7 @@ function isComposerSubmitKey(event: KeyboardEvent): boolean {
 
 /**
  * スマホで頻繁に使う「置く・切り替える・完了する」にだけ、短い手応えを加える。
- * 保存処理や一覧構造は変更せず、実用性を落とさない補助レイヤーとして動かす。
+ * 保存処理や一覧構造は変えず、初回表示や補助入力では反応させない。
  */
 export function MobileInteractionMotion() {
   const { pathname } = useLocation();
@@ -84,10 +93,14 @@ export function MobileInteractionMotion() {
     };
 
     const syncTabIndicator = (animateColumn = false) => {
-      const container = document.querySelector<HTMLElement>(TAB_CONTAINER_SELECTOR);
+      const container = document.querySelector<HTMLElement>(
+        TAB_CONTAINER_SELECTOR,
+      );
       if (!container) return;
 
-      const tabs = [...container.querySelectorAll<HTMLButtonElement>(TAB_SELECTOR)];
+      const tabs = [
+        ...container.querySelectorAll<HTMLButtonElement>(TAB_SELECTOR),
+      ];
       const nextIndex = tabs.findIndex(
         (tab) => tab.getAttribute("aria-selected") === "true",
       );
@@ -98,6 +111,7 @@ export function MobileInteractionMotion() {
 
       const previousIndex = activeTabIndex;
       activeTabIndex = nextIndex;
+
       if (
         !animateColumn ||
         isPriming ||
@@ -114,6 +128,7 @@ export function MobileInteractionMotion() {
           ".entry-column--active",
         );
         if (!activeColumn) return;
+
         restartMotionClass(
           activeColumn,
           direction === "forward"
@@ -126,9 +141,11 @@ export function MobileInteractionMotion() {
     };
 
     const seedCurrentScreen = () => {
-      document.querySelectorAll<HTMLElement>(ENTRY_COUNT_SELECTOR).forEach((count) => {
-        countValues.set(count, count.textContent?.trim() ?? "");
-      });
+      document
+        .querySelectorAll<HTMLElement>(ENTRY_COUNT_SELECTOR)
+        .forEach((count) => {
+          countValues.set(count, count.textContent?.trim() ?? "");
+        });
       syncTabIndicator(false);
       isPriming = false;
       primingScheduled = false;
@@ -141,31 +158,34 @@ export function MobileInteractionMotion() {
     };
 
     const animateChangedCounts = () => {
-      document.querySelectorAll<HTMLElement>(ENTRY_COUNT_SELECTOR).forEach((count) => {
-        const nextValue = count.textContent?.trim() ?? "";
-        const previousValue = countValues.get(count);
-        countValues.set(count, nextValue);
+      document
+        .querySelectorAll<HTMLElement>(ENTRY_COUNT_SELECTOR)
+        .forEach((count) => {
+          const nextValue = count.textContent?.trim() ?? "";
+          const previousValue = countValues.get(count);
+          countValues.set(count, nextValue);
 
-        if (
-          previousValue === undefined ||
-          previousValue === nextValue ||
-          isPriming ||
-          !mobileMedia.matches
-        ) {
-          return;
-        }
+          if (
+            previousValue === undefined ||
+            previousValue === nextValue ||
+            isPriming ||
+            !mobileMedia.matches
+          ) {
+            return;
+          }
 
-        restartMotionClass(
-          count,
-          "mobile-motion-count-changed",
-          260,
-          timers,
-        );
-      });
+          restartMotionClass(
+            count,
+            "mobile-motion-count-changed",
+            260,
+            timers,
+          );
+        });
     };
 
     const armAdditionFeedback = (composer: HTMLElement) => {
       if (!mobileMedia.matches) return;
+
       pendingAdditionColumn = composer.closest<HTMLElement>(".entry-column");
       pendingAdditionUntil = Date.now() + 2_000;
       restartMotionClass(
@@ -237,7 +257,7 @@ export function MobileInteractionMotion() {
       subtree: true,
       characterData: true,
       attributes: true,
-      attributeFilter: ["aria-selected", "class"],
+      attributeFilter: ["aria-selected"],
     });
 
     const handleClickCapture = (event: MouseEvent) => {
@@ -296,9 +316,11 @@ export function MobileInteractionMotion() {
 
     const handleMediaChange = () => {
       if (!mobileMedia.matches) return;
-      document.querySelectorAll<HTMLElement>(ENTRY_COUNT_SELECTOR).forEach((count) => {
-        countValues.set(count, count.textContent?.trim() ?? "");
-      });
+      document
+        .querySelectorAll<HTMLElement>(ENTRY_COUNT_SELECTOR)
+        .forEach((count) => {
+          countValues.set(count, count.textContent?.trim() ?? "");
+        });
       syncTabIndicator(false);
     };
 
