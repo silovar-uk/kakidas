@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { useLocation } from "react-router-dom";
+import "../styles-mobile-interaction-motion.css";
 
 const MOBILE_MEDIA_QUERY = "(max-width: 920px)";
 const ENTRY_ITEM_SELECTOR = ".entry-item";
