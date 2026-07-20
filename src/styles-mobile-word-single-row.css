@@ -45,6 +45,66 @@
 }
 
 /*
+ * タグなしも見出しとして同じ強さを持たせる。
+ * タグありの暖色に対し、彩度を落としたグレージュで区別する。
+ */
+.entry-list__tag-group--untagged > .entry-list__tag-group-header {
+  margin: 3px 0 4px;
+  border: 1px solid #cbc6bf;
+  border-radius: 10px;
+  background: #e9e7e3;
+  box-shadow: inset 3px 0 0 #8f8a83;
+  transition:
+    border-color 140ms ease,
+    background-color 140ms ease,
+    box-shadow 140ms ease;
+}
+
+.entry-list__tag-group--untagged > .entry-list__tag-group-header:hover,
+.entry-list__tag-group--untagged > .entry-list__tag-group-header:focus-within {
+  border-color: #b9b2aa;
+  background: #e2dfda;
+  box-shadow: inset 3px 0 0 #77716a;
+}
+
+.entry-list__tag-group--untagged
+  > .entry-list__tag-group-header
+  .entry-list__tag-group-toggle,
+.entry-list__tag-group--untagged
+  > .entry-list__tag-group-header
+  .entry-list__tag-group-label--untagged {
+  color: #57534e;
+}
+
+.entry-list__tag-group--untagged
+  > .entry-list__tag-group-header
+  .entry-list__tag-group-label--untagged,
+.entry-list__tag-group--untagged
+  > .entry-list__tag-group-header
+  .entry-list__tag-group-count {
+  font-weight: 740;
+}
+
+.entry-list__tag-group--untagged
+  > .entry-list__tag-group-header
+  .entry-list__tag-group-count {
+  color: #6d6861;
+}
+
+.entry-list__tag-group--untagged
+  > .entry-list__tag-group-header
+  .entry-list__tag-group-chevron {
+  color: #716c65;
+  opacity: 0.92;
+}
+
+.entry-list__tag-group--untagged
+  > .entry-list__tag-group-header
+  .entry-tag-group-drag-handle {
+  color: #77726b;
+}
+
+/*
  * スマホの単語だけは、短い本文を前提に右側操作を一段へ集約する。
  * 評価 / 気持ち / 完了 / リンク / タグ / その他の6操作を省略しない。
  */
