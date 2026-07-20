@@ -1,0 +1,231 @@
+:root {
+  --mobile-motion-instant: 100ms;
+  --mobile-motion-fast: 160ms;
+  --mobile-motion-base: 220ms;
+  --mobile-motion-ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --mobile-motion-ease-soft: cubic-bezier(0.22, 0.65, 0.28, 1);
+}
+
+@media (max-width: 920px) {
+  /* 選択面だけを滑らせ、タブの文字と件数は常にその場で読めるようにする。 */
+  .editor-tabs[data-mobile-motion-ready="true"] {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+  }
+
+  .editor-tabs[data-mobile-motion-ready="true"]::before {
+    position: absolute;
+    z-index: 0;
+    top: 5px;
+    bottom: 5px;
+    left: 5px;
+    width: calc((100% - 22px) / 3);
+    border-radius: 8px;
+    background: #fffefa;
+    box-shadow: 0 1px 4px rgba(80, 68, 49, 0.12);
+    content: "";
+    transform: translateX(0);
+    transition: transform var(--mobile-motion-fast) var(--mobile-motion-ease-out);
+  }
+
+  .editor-tabs[data-mobile-motion-tab="1"]::before {
+    transform: translateX(calc(100% + 6px));
+  }
+
+  .editor-tabs[data-mobile-motion-tab="2"]::before {
+    transform: translateX(calc(200% + 12px));
+  }
+
+  .editor-tabs[data-mobile-motion-ready="true"] .editor-tab {
+    position: relative;
+    z-index: 1;
+    transition: color var(--mobile-motion-fast) ease;
+  }
+
+  .editor-tabs[data-mobile-motion-ready="true"] .editor-tab--active {
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .mobile-motion-column-enter-forward {
+    animation: mobile-motion-column-forward var(--mobile-motion-base)
+      var(--mobile-motion-ease-out) both;
+  }
+
+  .mobile-motion-column-enter-back {
+    animation: mobile-motion-column-back var(--mobile-motion-base)
+      var(--mobile-motion-ease-out) both;
+  }
+
+  /* 新規項目は位置を知らせるだけ。スクロールやフォーカスは変えない。 */
+  .entry-item.mobile-motion-entry-added {
+    animation: mobile-motion-entry-added 460ms var(--mobile-motion-ease-soft) both;
+  }
+
+  .entry-item.mobile-motion-entry-added::before {
+    opacity: 1;
+  }
+
+  .entry-item.mobile-motion-entry-completing {
+    animation: mobile-motion-entry-complete 300ms var(--mobile-motion-ease-out)
+      both;
+  }
+
+  .entry-item.mobile-motion-entry-restoring {
+    animation: mobile-motion-entry-restore 240ms var(--mobile-motion-ease-out)
+      both;
+  }
+
+  .mobile-motion-complete-control {
+    animation: mobile-motion-control-confirm 240ms var(--mobile-motion-ease-out)
+      both;
+  }
+
+  .mobile-motion-complete-control-restoring {
+    animation: mobile-motion-control-restore 200ms var(--mobile-motion-ease-out)
+      both;
+  }
+
+  .mobile-motion-count-changed {
+    animation: mobile-motion-count 220ms var(--mobile-motion-ease-out) both;
+  }
+
+  .entry-composer.mobile-motion-composer-submit .entry-composer__submit {
+    animation: mobile-motion-submit 200ms var(--mobile-motion-ease-out) both;
+  }
+
+  /* タッチ操作にだけ、1pxの沈み込みを共通化する。 */
+  .editor-tab:active:not(:disabled),
+  .entry-composer__submit:active:not(:disabled),
+  .entry-item__complete:active:not(:disabled),
+  .entry-item__structure-button:active:not(:disabled),
+  .entry-composer__meta-trigger:active:not(:disabled),
+  .entry-composer__tag-trigger:active:not(:disabled),
+  .editor-header__cloud-save:active:not(:disabled),
+  .mobile-action-sheet button:active:not(:disabled) {
+    transform: translateY(1px);
+  }
+}
+
+@keyframes mobile-motion-column-forward {
+  from {
+    opacity: 0.78;
+    transform: translateX(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes mobile-motion-column-back {
+  from {
+    opacity: 0.78;
+    transform: translateX(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes mobile-motion-entry-added {
+  0% {
+    opacity: 0.68;
+    transform: translateY(8px);
+    box-shadow: inset 3px 0 0 rgba(189, 86, 47, 0.72);
+  }
+  48% {
+    opacity: 1;
+    transform: translateY(0);
+    box-shadow: inset 3px 0 0 rgba(189, 86, 47, 0.42);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+    box-shadow: inset 0 0 0 rgba(189, 86, 47, 0);
+  }
+}
+
+@keyframes mobile-motion-entry-complete {
+  0% {
+    transform: translateX(0);
+  }
+  45% {
+    transform: translateX(4px);
+    box-shadow: inset 3px 0 0 rgba(105, 126, 88, 0.5);
+  }
+  100% {
+    transform: translateX(0);
+    box-shadow: inset 0 0 0 rgba(105, 126, 88, 0);
+  }
+}
+
+@keyframes mobile-motion-entry-restore {
+  from {
+    opacity: 0.78;
+    transform: translateX(-3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes mobile-motion-control-confirm {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.07);
+  }
+}
+
+@keyframes mobile-motion-control-restore {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(0.96);
+  }
+}
+
+@keyframes mobile-motion-count {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.08);
+  }
+}
+
+@keyframes mobile-motion-submit {
+  0%,
+  100% {
+    transform: translateY(0) scale(1);
+  }
+  45% {
+    transform: translateY(1px) scale(0.98);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .editor-tabs[data-mobile-motion-ready="true"]::before,
+  .mobile-motion-column-enter-forward,
+  .mobile-motion-column-enter-back,
+  .entry-item.mobile-motion-entry-added,
+  .entry-item.mobile-motion-entry-completing,
+  .entry-item.mobile-motion-entry-restoring,
+  .mobile-motion-complete-control,
+  .mobile-motion-complete-control-restoring,
+  .mobile-motion-count-changed,
+  .entry-composer.mobile-motion-composer-submit .entry-composer__submit {
+    animation: none !important;
+    transition: none !important;
+    transform: none !important;
+  }
+}
