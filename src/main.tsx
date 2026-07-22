@@ -12,15 +12,16 @@ import "./styles-entry-tag-group-drag.css";
 import "./styles-cloud-upload-header.css";
 import "./styles-mobile-interaction-motion.css";
 import "./styles-mobile-word-single-row.css";
+import "./styles-temporary-memo.css";
 
 // 以前のオーバーレイが残したスクロール停止を、起動時に必ず初期化する。
 resetBodyScrollLock();
 
 // iPhone Safariでは、タブを切り替えただけでは pagehide が発火しない。
-// 背景に回ったタブはDB接続だけを手放し、戻った時は次の読み書きで自動再接続する。
-// これにより、別タブで起きるIndexedDBのアップグレードをブロックしにくくする。
+// 一時メモなどのvisibilitychange保存処理が同じイベント内でトランザクションを
+// 開けるよう、DB接続の解放は次のタスクへ譲る。
 const releaseDatabaseConnection = () => {
-  closeDatabaseConnection();
+  window.setTimeout(() => closeDatabaseConnection(), 0);
 };
 
 document.addEventListener("visibilitychange", () => {
