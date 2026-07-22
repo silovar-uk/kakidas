@@ -6,6 +6,7 @@ import { KeyboardShortcuts } from "./components/KeyboardShortcuts";
 import { MobileInteractionMotion } from "./components/MobileInteractionMotion";
 import { MobileNewMemoTitleFocus } from "./components/MobileNewMemoTitleFocus";
 import { ParagraphTitleTagAssist } from "./components/ParagraphTitleTagAssist";
+import { TemporaryMemoDock } from "./components/TemporaryMemoDock";
 import { MemoEditorPage } from "./pages/MemoEditorPage";
 import { MemoListPage } from "./pages/MemoListPage";
 import { TagManagerPage } from "./pages/TagManagerPage";
@@ -25,6 +26,7 @@ export default function App() {
         <ParagraphTitleTagAssist />
         <EntryTagGroupDragOrder />
         <CloudUploadHeaderButton />
+        <TemporaryMemoDock />
         <MobileInteractionMotion />
       </BrowserRouter>
     </AuthProvider>
