@@ -1,8 +1,109 @@
 /* --------------------------------------------------------------------------
-   一時メモ（スマホ調整）
+   一時メモ（スマホ・PC調整）
    背景は暗幕だけにし、入力欄へ面積を集中させる。
    閉じた入口はピル型ボタンではなく、小さく折れた付箋として見せる。
    -------------------------------------------------------------------------- */
+@media (min-width: 921px) {
+  .temporary-memo-backdrop {
+    background: rgba(43, 39, 31, 0.12);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+
+  .temporary-memo-trigger {
+    top: 76px;
+    right: max(20px, env(safe-area-inset-right));
+    bottom: auto;
+    display: grid;
+    width: 64px;
+    min-width: 64px;
+    height: 54px;
+    min-height: 54px;
+    place-items: center;
+    gap: 0;
+    padding: 6px 7px 5px;
+    overflow: visible;
+    border: 1px solid rgba(184, 153, 54, 0.54);
+    border-radius: 6px 6px 13px 6px;
+    color: #5f4d1f;
+    background: linear-gradient(145deg, #fff9c8 0%, #f7e88f 100%);
+    box-shadow:
+      0 8px 20px rgba(57, 48, 24, 0.17),
+      inset 0 1px 0 rgba(255, 255, 255, 0.72);
+    transform: rotate(-1deg);
+  }
+
+  .temporary-memo-trigger::before {
+    position: absolute;
+    top: -1px;
+    right: -1px;
+    width: 16px;
+    height: 16px;
+    clip-path: polygon(0 0, 100% 0, 100% 100%);
+    background: linear-gradient(225deg, #d9bd55 0 48%, #fff2a6 50% 100%);
+    content: "";
+    pointer-events: none;
+  }
+
+  .temporary-memo-trigger:hover:not(:disabled),
+  .temporary-memo-trigger:focus-visible {
+    border-color: rgba(164, 131, 35, 0.72);
+    background: linear-gradient(145deg, #fffbd3 0%, #f5e47d 100%);
+    box-shadow:
+      0 10px 24px rgba(57, 48, 24, 0.2),
+      inset 0 1px 0 rgba(255, 255, 255, 0.76);
+    transform: translateY(-2px) rotate(-1deg);
+  }
+
+  .temporary-memo-trigger:active:not(:disabled) {
+    transform: translateY(0) rotate(-1deg);
+  }
+
+  .temporary-memo-trigger__icon {
+    align-self: end;
+    color: #806820;
+    font-size: 15px;
+    line-height: 1;
+  }
+
+  .temporary-memo-trigger > span:nth-child(2) {
+    align-self: start;
+    font-size: 0;
+    line-height: 1;
+  }
+
+  .temporary-memo-trigger > span:nth-child(2)::after {
+    color: #65511d;
+    content: "メモ";
+    font-size: 10px;
+    font-weight: 820;
+    letter-spacing: 0.04em;
+  }
+
+  .temporary-memo-trigger__dot {
+    position: absolute;
+    top: 7px;
+    left: 7px;
+    width: 6px;
+    height: 6px;
+    box-shadow: 0 0 0 2px rgba(189, 86, 47, 0.1);
+  }
+
+  .temporary-memo-panel {
+    top: 72px;
+    right: max(20px, env(safe-area-inset-right));
+    bottom: auto;
+    width: min(410px, calc(100vw - 40px));
+    height: min(58vh, 560px);
+    border-radius: 18px;
+    animation-name: temporary-memo-panel-top-in;
+  }
+
+  .temporary-memo-layer--closing .temporary-memo-panel {
+    animation-name: temporary-memo-panel-top-out;
+  }
+}
+
 @media (max-width: 920px) {
   .temporary-memo-backdrop {
     background: rgba(43, 39, 31, 0.2);
@@ -219,5 +320,27 @@
 
   .temporary-memo-panel__memo-title {
     max-width: 42vw;
+  }
+}
+
+@keyframes temporary-memo-panel-top-in {
+  from {
+    opacity: 0.9;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes temporary-memo-panel-top-out {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-18px);
   }
 }
