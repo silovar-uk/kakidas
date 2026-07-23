@@ -4,12 +4,13 @@ import { useLocation } from "react-router-dom";
 const TEMPORARY_MEMO_TRIGGER_SELECTOR =
   ".temporary-memo-trigger:not(:disabled)";
 const TEMPORARY_MEMO_CLOSE_SELECTOR = ".temporary-memo-panel__close";
+const TEMPORARY_MEMO_TEXTAREA_SELECTOR = ".temporary-memo-panel__textarea";
 const OTHER_MODAL_SELECTOR =
   '[role="dialog"][aria-modal="true"]:not(.temporary-memo-panel)';
 
 /**
  * Alt＋Qで、一時メモをクリック操作と同じ経路で開閉する。
- * 保存や閉じるアニメーションはTemporaryMemoDock側へ任せ、処理を重複させない。
+ * 保存処理はTemporaryMemoDock側へ任せ、開いた直後だけ入力欄へ素早く移る。
  */
 export function TemporaryMemoShortcut() {
   const { pathname } = useLocation();
@@ -51,6 +52,17 @@ export function TemporaryMemoShortcut() {
       event.preventDefault();
       event.stopPropagation();
       trigger.click();
+
+      window.requestAnimationFrame(() => {
+        const textarea = document.querySelector<HTMLTextAreaElement>(
+          TEMPORARY_MEMO_TEXTAREA_SELECTOR,
+        );
+        if (!textarea) return;
+
+        textarea.focus({ preventScroll: true });
+        const length = textarea.value.length;
+        textarea.setSelectionRange(length, length);
+      });
     };
 
     window.addEventListener("keydown", handleKeyDown, true);
