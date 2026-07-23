@@ -1,19 +1,24 @@
-.keyboard-shortcuts-slot {
+.keyboard-shortcuts-slot,
+.editor-header__local-actions {
   display: inline-flex;
   flex: 0 0 auto;
   align-items: center;
 }
 
+.editor-header__local-actions {
+  gap: 6px;
+}
+
 .keyboard-shortcuts-button {
   position: static;
   display: inline-flex;
-  min-height: 36px;
+  min-height: 34px;
   align-items: center;
   justify-content: center;
-  gap: 7px;
+  gap: 6px;
   padding: 0 10px;
   border: 1px solid rgba(121, 116, 107, 0.24);
-  border-radius: 10px;
+  border-radius: 9px;
   color: #66635d;
   background: #fffefa;
   box-shadow: 0 2px 8px rgba(67, 61, 53, 0.07);
@@ -50,12 +55,61 @@
   line-height: 1;
 }
 
-.editor-title-row__actions .keyboard-shortcuts-slot {
-  margin-right: 1px;
-}
-
 .memo-list-toolbar__organize .keyboard-shortcuts-slot {
   margin-right: 2px;
+}
+
+.editor-header__sort-control {
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px;
+  border: 1px solid rgba(121, 116, 107, 0.22);
+  border-radius: 9px;
+  background: rgba(255, 254, 250, 0.8);
+  white-space: nowrap;
+}
+
+.editor-header__sort-control > span {
+  color: #77736b;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.editor-header__sort-control select {
+  min-height: 26px;
+  padding: 0 25px 0 7px;
+  border: 0;
+  color: #45433e;
+  background-color: transparent;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.editor-header__delete-button {
+  min-height: 34px;
+  padding: 0 10px;
+  border-radius: 9px;
+  font-size: 11px;
+}
+
+@media (min-width: 921px) {
+  .editor-page--header-actions-bridged .editor-title-row__actions {
+    display: none;
+  }
+
+  .editor-page--header-actions-bridged .editor-title-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: end;
+    gap: 18px;
+    margin-top: 28px;
+  }
+
+  .editor-page--header-actions-bridged .memo-title-input {
+    width: 100%;
+  }
 }
 
 .keyboard-shortcuts-dialog__panel {
@@ -185,14 +239,18 @@
   border-radius: 10px;
 }
 
-@media (max-width: 1100px) and (min-width: 921px) {
-  .editor-title-row__actions .keyboard-shortcuts-button {
-    width: 36px;
-    min-width: 36px;
+@media (max-width: 1180px) and (min-width: 921px) {
+  .editor-header__local-actions .keyboard-shortcuts-button {
+    width: 34px;
+    min-width: 34px;
     padding: 0;
   }
 
-  .editor-title-row__actions .keyboard-shortcuts-button__label {
+  .editor-header__local-actions .keyboard-shortcuts-button__label {
+    display: none;
+  }
+
+  .editor-header__sort-control > span {
     display: none;
   }
 }
