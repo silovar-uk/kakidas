@@ -1,0 +1,42 @@
+/* 一時メモは思考を止めずに使えるよう、開閉を即時にする。 */
+.temporary-memo-backdrop,
+.temporary-memo-panel,
+.temporary-memo-layer--closing .temporary-memo-backdrop,
+.temporary-memo-layer--closing .temporary-memo-panel {
+  animation: none !important;
+  transition: none !important;
+}
+
+/* React側の保存処理が終わるまで要素が残っていても、見た目は即座に閉じる。 */
+.temporary-memo-layer--closing {
+  visibility: hidden;
+}
+
+/* 操作を覚えやすいよう、入力欄の直下に小さくショートカットを置く。 */
+.temporary-memo-panel__footer {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 3px 10px;
+}
+
+.temporary-memo-panel__footer::after {
+  grid-column: 1 / -1;
+  justify-self: start;
+  color: rgba(102, 88, 48, 0.64);
+  content: "Alt＋Q で開閉";
+  font-size: 9px;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  line-height: 1.2;
+}
+
+@media (max-width: 920px) {
+  .temporary-memo-panel__footer {
+    gap: 2px 7px;
+  }
+
+  .temporary-memo-panel__footer::after {
+    font-size: 8px;
+  }
+}
