@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useLocation } from "react-router-dom";
 import { lockBodyScroll } from "../lib/bodyScrollLock";
 
@@ -11,6 +12,10 @@ type ShortcutItem = {
 };
 
 const MOBILE_MEDIA_QUERY = "(max-width: 920px)";
+const EDITOR_BUTTON_ANCHOR_SELECTOR =
+  ".editor-title-row__actions .entry-sort-control--editor";
+const LIST_BUTTON_ANCHOR_SELECTOR =
+  ".memo-list-toolbar__organize .memo-list-select";
 
 const LIST_SHORTCUTS: ShortcutItem[] = [
   {
@@ -117,6 +122,12 @@ function switchEntryKind(index: number) {
   window.requestAnimationFrame(() => focusEntryComposer(kind));
 }
 
+function getButtonAnchorSelector(scope: ShortcutScope): string {
+  return scope === "editor"
+    ? EDITOR_BUTTON_ANCHOR_SELECTOR
+    : LIST_BUTTON_ANCHOR_SELECTOR;
+}
+
 export function KeyboardShortcuts() {
   const location = useLocation();
   const scope = getScope(location.pathname);
@@ -124,6 +135,7 @@ export function KeyboardShortcuts() {
   const [isMobile, setIsMobile] = useState(() =>
     window.matchMedia(MOBILE_MEDIA_QUERY).matches,
   );
+  const [buttonTarget, setButtonTarget] = useState<HTMLElement | null>(null);
   const panelRef = useRef<HTMLElement | null>(null);
   const shortcuts = useMemo(
     () => (scope === "editor" ? EDITOR_SHORTCUTS : LIST_SHORTCUTS),
@@ -145,6 +157,58 @@ export function KeyboardShortcuts() {
   useEffect(() => {
     setOpen(false);
   }, [location.pathname]);
+
+  useEffect(() => {
+    if (!scope || isMobile) {
+      setButtonTarget(null);
+      return;
+    }
+
+    let frame: number | null = null;
+    let slot: HTMLSpanElement | null = null;
+
+    const syncTarget = () => {
+      frame = null;
+      const anchor = document.querySelector<HTMLElement>(
+        getButtonAnchorSelector(scope),
+      );
+      const parent = anchor?.parentElement;
+
+      if (!anchor || !parent) {
+        if (slot?.isConnected) slot.remove();
+        slot = null;
+        setButtonTarget(null);
+        return;
+      }
+
+      if (slot?.isConnected && slot.parentElement === parent && slot.nextElementSibling === anchor) {
+        return;
+      }
+
+      if (slot?.isConnected) slot.remove();
+
+      slot = document.createElement("span");
+      slot.className = "keyboard-shortcuts-slot";
+      slot.dataset.shortcutScope = scope;
+      parent.insertBefore(slot, anchor);
+      setButtonTarget(slot);
+    };
+
+    const scheduleSync = () => {
+      if (frame !== null) window.cancelAnimationFrame(frame);
+      frame = window.requestAnimationFrame(syncTarget);
+    };
+
+    const observer = new MutationObserver(scheduleSync);
+    observer.observe(document.body, { childList: true, subtree: true });
+    scheduleSync();
+
+    return () => {
+      if (frame !== null) window.cancelAnimationFrame(frame);
+      observer.disconnect();
+      slot?.remove();
+    };
+  }, [isMobile, location.pathname, scope]);
 
   useEffect(() => {
     if (!open || isMobile) return;
@@ -218,18 +282,22 @@ export function KeyboardShortcuts() {
 
   if (!scope || isMobile) return null;
 
+  const trigger = (
+    <button
+      type="button"
+      className="keyboard-shortcuts-button"
+      onClick={() => setOpen(true)}
+      aria-label="キーボードショートカットを見る"
+      title="キーボードショートカット（Ctrl＋/）"
+    >
+      <span className="keyboard-shortcuts-button__icon" aria-hidden="true">⌨</span>
+      <span className="keyboard-shortcuts-button__label">ショートカット</span>
+    </button>
+  );
+
   return (
     <>
-      <button
-        type="button"
-        className="keyboard-shortcuts-button"
-        onClick={() => setOpen(true)}
-        aria-label="キーボードショートカットを見る"
-        title="キーボードショートカット（Ctrl＋/）"
-      >
-        <span className="keyboard-shortcuts-button__icon" aria-hidden="true">⌨</span>
-        <span className="keyboard-shortcuts-button__label">ショートカット</span>
-      </button>
+      {buttonTarget ? createPortal(trigger, buttonTarget) : null}
 
       {open ? (
         <div className="cloud-dialog keyboard-shortcuts-dialog" role="presentation">
