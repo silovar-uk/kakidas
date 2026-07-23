@@ -11,9 +11,10 @@
   }
 
   .temporary-memo-trigger {
-    top: 76px;
-    right: max(20px, env(safe-area-inset-right));
-    bottom: auto;
+    top: auto;
+    right: auto;
+    bottom: max(20px, env(safe-area-inset-bottom));
+    left: max(20px, env(safe-area-inset-left));
     display: grid;
     width: 64px;
     min-width: 64px;
@@ -90,17 +91,18 @@
   }
 
   .temporary-memo-panel {
-    top: 72px;
-    right: max(20px, env(safe-area-inset-right));
-    bottom: auto;
+    top: auto;
+    right: auto;
+    bottom: max(20px, env(safe-area-inset-bottom));
+    left: max(20px, env(safe-area-inset-left));
     width: min(410px, calc(100vw - 40px));
     height: min(58vh, 560px);
     border-radius: 18px;
-    animation-name: temporary-memo-panel-top-in;
+    animation-name: temporary-memo-panel-left-bottom-in;
   }
 
   .temporary-memo-layer--closing .temporary-memo-panel {
-    animation-name: temporary-memo-panel-top-out;
+    animation-name: temporary-memo-panel-left-bottom-out;
   }
 }
 
@@ -323,24 +325,24 @@
   }
 }
 
-@keyframes temporary-memo-panel-top-in {
+@keyframes temporary-memo-panel-left-bottom-in {
   from {
     opacity: 0.9;
-    transform: translateY(-20px);
+    transform: translate(-10px, 20px);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
+    transform: translate(0, 0);
   }
 }
 
-@keyframes temporary-memo-panel-top-out {
+@keyframes temporary-memo-panel-left-bottom-out {
   from {
     opacity: 1;
-    transform: translateY(0);
+    transform: translate(0, 0);
   }
   to {
     opacity: 0;
-    transform: translateY(-18px);
+    transform: translate(-8px, 18px);
   }
 }
