@@ -1,18 +1,26 @@
 /* 一時メモは思考を止めずに使えるよう、開閉を即時にする。 */
 .temporary-memo-backdrop,
-.temporary-memo-panel,
-.temporary-memo-layer--closing .temporary-memo-backdrop,
-.temporary-memo-layer--closing .temporary-memo-panel {
+.temporary-memo-panel {
   animation: none !important;
   transition: none !important;
 }
 
-/* React側の保存処理が終わるまで要素が残っていても、見た目は即座に閉じる。 */
-.temporary-memo-layer--closing {
-  visibility: hidden;
+/* 閉じた状態でも、付箋のすぐ下にショートカットだけを静かに残す。 */
+.temporary-memo-trigger__shortcut {
+  position: absolute;
+  left: 50%;
+  bottom: -14px;
+  color: rgba(89, 78, 47, 0.66);
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  line-height: 1;
+  pointer-events: none;
+  transform: translateX(-50%);
+  white-space: nowrap;
 }
 
-/* 操作を覚えやすいよう、入力欄の直下に小さくショートカットを置く。 */
+/* 操作を覚えやすいよう、入力欄の直下にも小さくショートカットを置く。 */
 .temporary-memo-panel__footer {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -32,6 +40,11 @@
 }
 
 @media (max-width: 920px) {
+  .temporary-memo-trigger__shortcut {
+    bottom: -12px;
+    font-size: 7px;
+  }
+
   .temporary-memo-panel__footer {
     gap: 2px 7px;
   }
