@@ -1,26 +1,32 @@
+.keyboard-shortcuts-slot {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+}
+
 .keyboard-shortcuts-button {
-  position: fixed;
-  top: max(72px, calc(env(safe-area-inset-top) + 54px));
-  right: max(18px, env(safe-area-inset-right));
-  bottom: auto;
-  z-index: 24;
+  position: static;
   display: inline-flex;
   min-height: 36px;
   align-items: center;
+  justify-content: center;
   gap: 7px;
-  padding: 0 11px;
+  padding: 0 10px;
   border: 1px solid rgba(121, 116, 107, 0.24);
-  border-radius: 999px;
+  border-radius: 10px;
   color: #66635d;
-  background: rgba(255, 254, 250, 0.9);
-  box-shadow: 0 7px 22px rgba(67, 61, 53, 0.09);
+  background: #fffefa;
+  box-shadow: 0 2px 8px rgba(67, 61, 53, 0.07);
+  font: inherit;
   font-size: 11px;
   font-weight: 700;
-  backdrop-filter: blur(10px);
+  white-space: nowrap;
+  cursor: pointer;
   transition:
     color 150ms ease,
     border-color 150ms ease,
     background-color 150ms ease,
+    box-shadow 150ms ease,
     transform 150ms ease;
 }
 
@@ -28,14 +34,28 @@
 .keyboard-shortcuts-button:focus-visible {
   border-color: rgba(76, 91, 111, 0.38);
   color: #42576f;
-  background: #fffefa;
+  background: #ffffff;
+  box-shadow: 0 4px 12px rgba(67, 61, 53, 0.1);
+  outline: none;
   transform: translateY(-1px);
+}
+
+.keyboard-shortcuts-button:active {
+  transform: translateY(0);
 }
 
 .keyboard-shortcuts-button__icon {
   color: #687b91;
   font-size: 15px;
   line-height: 1;
+}
+
+.editor-title-row__actions .keyboard-shortcuts-slot {
+  margin-right: 1px;
+}
+
+.memo-list-toolbar__organize .keyboard-shortcuts-slot {
+  margin-right: 2px;
 }
 
 .keyboard-shortcuts-dialog__panel {
@@ -165,22 +185,19 @@
   border-radius: 10px;
 }
 
-@media (max-width: 560px) {
-  .keyboard-shortcuts-button {
-    top: max(64px, calc(env(safe-area-inset-top) + 48px));
-    right: max(12px, env(safe-area-inset-right));
-    bottom: auto;
-    width: 38px;
-    min-width: 38px;
-    height: 38px;
+@media (max-width: 1100px) and (min-width: 921px) {
+  .editor-title-row__actions .keyboard-shortcuts-button {
+    width: 36px;
+    min-width: 36px;
     padding: 0;
-    justify-content: center;
   }
 
-  .keyboard-shortcuts-button__label {
+  .editor-title-row__actions .keyboard-shortcuts-button__label {
     display: none;
   }
+}
 
+@media (max-width: 560px) {
   .keyboard-shortcuts-dialog__panel {
     width: min(100% - 20px, 590px);
     max-height: calc(100dvh - 20px);
