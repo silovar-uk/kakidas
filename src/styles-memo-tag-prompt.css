@@ -1,0 +1,42 @@
+/* タグ未設定時だけ、次に設定する場所が自然に目へ入る主色へ切り替える。 */
+.memo-tag-control__add {
+  border: 1px solid #bd562f;
+  color: #fff;
+  background: #bd562f;
+  box-shadow: 0 4px 10px rgba(149, 69, 33, 0.18);
+  font-weight: 800;
+  transition:
+    border-color 140ms ease,
+    background-color 140ms ease,
+    box-shadow 140ms ease,
+    transform 140ms ease;
+}
+
+.memo-tag-control__add:hover:not(:disabled),
+.memo-tag-control__add:focus-visible:not(:disabled) {
+  border-color: #a94927;
+  color: #fff;
+  background: #a94927;
+  box-shadow: 0 6px 14px rgba(149, 69, 33, 0.24);
+  outline: none;
+  transform: translateY(-1px);
+}
+
+.memo-tag-control__add:active:not(:disabled) {
+  background: #963f21;
+  transform: translateY(0);
+}
+
+.memo-tag-control__add:disabled {
+  border-color: #dbc5b9;
+  color: #9b7f72;
+  background: #eee3dc;
+  box-shadow: none;
+}
+
+@media (max-width: 560px) {
+  .memo-tag-control__add {
+    min-height: 34px;
+    padding-inline: 10px;
+  }
+}
