@@ -11,11 +11,27 @@ type ShortcutItem = {
   note?: string;
 };
 
+type EditorSortOption = {
+  value: string;
+  label: string;
+};
+
+type EditorControlsState = {
+  sortValue: string;
+  sortOptions: EditorSortOption[];
+  deleteDisabled: boolean;
+};
+
 const MOBILE_MEDIA_QUERY = "(max-width: 920px)";
-const EDITOR_BUTTON_ANCHOR_SELECTOR =
-  ".editor-title-row__actions .entry-sort-control--editor";
 const LIST_BUTTON_ANCHOR_SELECTOR =
   ".memo-list-toolbar__organize .memo-list-select";
+const EDITOR_HEADER_RIGHT_SELECTOR = ".editor-header__right";
+const EDITOR_PAGE_SELECTOR = ".editor-page";
+const EDITOR_ORIGINAL_ACTIONS_SELECTOR = ".editor-title-row__actions";
+const EDITOR_ORIGINAL_SORT_SELECTOR =
+  `${EDITOR_ORIGINAL_ACTIONS_SELECTOR} .entry-sort-control--editor select`;
+const EDITOR_ORIGINAL_DELETE_SELECTOR =
+  `${EDITOR_ORIGINAL_ACTIONS_SELECTOR} .danger-button`;
 
 const LIST_SHORTCUTS: ShortcutItem[] = [
   {
@@ -122,10 +138,40 @@ function switchEntryKind(index: number) {
   window.requestAnimationFrame(() => focusEntryComposer(kind));
 }
 
-function getButtonAnchorSelector(scope: ShortcutScope): string {
-  return scope === "editor"
-    ? EDITOR_BUTTON_ANCHOR_SELECTOR
-    : LIST_BUTTON_ANCHOR_SELECTOR;
+function readEditorControls(): EditorControlsState | null {
+  const select = document.querySelector<HTMLSelectElement>(
+    EDITOR_ORIGINAL_SORT_SELECTOR,
+  );
+  const deleteButton = document.querySelector<HTMLButtonElement>(
+    EDITOR_ORIGINAL_DELETE_SELECTOR,
+  );
+
+  if (!select || !deleteButton) return null;
+
+  return {
+    sortValue: select.value,
+    sortOptions: Array.from(select.options).map((option) => ({
+      value: option.value,
+      label: option.textContent?.trim() || option.value,
+    })),
+    deleteDisabled: deleteButton.disabled,
+  };
+}
+
+function applyEditorSortValue(value: string) {
+  const select = document.querySelector<HTMLSelectElement>(
+    EDITOR_ORIGINAL_SORT_SELECTOR,
+  );
+  if (!select) return;
+
+  select.value = value;
+  select.dispatchEvent(new Event("change", { bubbles: true }));
+}
+
+function clickOriginalDeleteButton() {
+  document
+    .querySelector<HTMLButtonElement>(EDITOR_ORIGINAL_DELETE_SELECTOR)
+    ?.click();
 }
 
 export function KeyboardShortcuts() {
@@ -136,6 +182,9 @@ export function KeyboardShortcuts() {
     window.matchMedia(MOBILE_MEDIA_QUERY).matches,
   );
   const [buttonTarget, setButtonTarget] = useState<HTMLElement | null>(null);
+  const [editorControls, setEditorControls] = useState<EditorControlsState | null>(
+    null,
+  );
   const panelRef = useRef<HTMLElement | null>(null);
   const shortcuts = useMemo(
     () => (scope === "editor" ? EDITOR_SHORTCUTS : LIST_SHORTCUTS),
@@ -161,37 +210,137 @@ export function KeyboardShortcuts() {
   useEffect(() => {
     if (!scope || isMobile) {
       setButtonTarget(null);
+      setEditorControls(null);
       return;
     }
 
     let frame: number | null = null;
-    let slot: HTMLSpanElement | null = null;
+    let listSlot: HTMLSpanElement | null = null;
+    let actionRow: HTMLDivElement | null = null;
+    let cloudSlot: HTMLSpanElement | null = null;
+    let localSlot: HTMLSpanElement | null = null;
+    let bridgedPage: HTMLElement | null = null;
+    let originalActions: HTMLElement | null = null;
 
-    const syncTarget = () => {
-      frame = null;
+    const clearEditorBridge = () => {
+      actionRow?.remove();
+      actionRow = null;
+      cloudSlot = null;
+      localSlot = null;
+      bridgedPage?.classList.remove("editor-page--header-actions-bridged");
+      originalActions?.removeAttribute("aria-hidden");
+      bridgedPage = null;
+      originalActions = null;
+      setEditorControls(null);
+    };
+
+    const syncListTarget = () => {
       const anchor = document.querySelector<HTMLElement>(
-        getButtonAnchorSelector(scope),
+        LIST_BUTTON_ANCHOR_SELECTOR,
       );
       const parent = anchor?.parentElement;
 
       if (!anchor || !parent) {
-        if (slot?.isConnected) slot.remove();
-        slot = null;
+        listSlot?.remove();
+        listSlot = null;
         setButtonTarget(null);
         return;
       }
 
-      if (slot?.isConnected && slot.parentElement === parent && slot.nextElementSibling === anchor) {
+      if (
+        listSlot?.isConnected &&
+        listSlot.parentElement === parent &&
+        listSlot.nextElementSibling === anchor
+      ) {
         return;
       }
 
-      if (slot?.isConnected) slot.remove();
+      listSlot?.remove();
+      listSlot = document.createElement("span");
+      listSlot.className = "keyboard-shortcuts-slot";
+      listSlot.dataset.shortcutScope = "list";
+      parent.insertBefore(listSlot, anchor);
+      setButtonTarget(listSlot);
+    };
 
-      slot = document.createElement("span");
-      slot.className = "keyboard-shortcuts-slot";
-      slot.dataset.shortcutScope = scope;
-      parent.insertBefore(slot, anchor);
-      setButtonTarget(slot);
+    const syncEditorTarget = () => {
+      const headerRight = document.querySelector<HTMLElement>(
+        EDITOR_HEADER_RIGHT_SELECTOR,
+      );
+      const page = document.querySelector<HTMLElement>(EDITOR_PAGE_SELECTOR);
+      const nextOriginalActions = document.querySelector<HTMLElement>(
+        EDITOR_ORIGINAL_ACTIONS_SELECTOR,
+      );
+      const controls = readEditorControls();
+
+      if (!headerRight || !page || !nextOriginalActions || !controls) {
+        clearEditorBridge();
+        setButtonTarget(null);
+        return;
+      }
+
+      if (!actionRow?.isConnected || actionRow.parentElement !== headerRight) {
+        actionRow?.remove();
+
+        actionRow = document.createElement("div");
+        actionRow.className = "editor-header__action-row";
+        actionRow.setAttribute("aria-label", "メモ操作");
+
+        cloudSlot = document.createElement("span");
+        cloudSlot.className = "editor-header__cloud-slot";
+
+        localSlot = document.createElement("span");
+        localSlot.className = "editor-header__local-actions";
+
+        actionRow.append(cloudSlot, localSlot);
+        headerRight.append(actionRow);
+      }
+
+      if (bridgedPage !== page) {
+        bridgedPage?.classList.remove("editor-page--header-actions-bridged");
+        bridgedPage = page;
+      }
+      bridgedPage.classList.add("editor-page--header-actions-bridged");
+
+      if (originalActions !== nextOriginalActions) {
+        originalActions?.removeAttribute("aria-hidden");
+        originalActions = nextOriginalActions;
+      }
+      originalActions.setAttribute("aria-hidden", "true");
+
+      setEditorControls((current) => {
+        const sameOptions =
+          current?.sortOptions.length === controls.sortOptions.length &&
+          current.sortOptions.every(
+            (option, index) =>
+              option.value === controls.sortOptions[index]?.value &&
+              option.label === controls.sortOptions[index]?.label,
+          );
+
+        if (
+          current &&
+          current.sortValue === controls.sortValue &&
+          current.deleteDisabled === controls.deleteDisabled &&
+          sameOptions
+        ) {
+          return current;
+        }
+
+        return controls;
+      });
+      setButtonTarget(localSlot);
+    };
+
+    const syncTarget = () => {
+      frame = null;
+      if (scope === "editor") {
+        listSlot?.remove();
+        listSlot = null;
+        syncEditorTarget();
+      } else {
+        clearEditorBridge();
+        syncListTarget();
+      }
     };
 
     const scheduleSync = () => {
@@ -200,13 +349,19 @@ export function KeyboardShortcuts() {
     };
 
     const observer = new MutationObserver(scheduleSync);
-    observer.observe(document.body, { childList: true, subtree: true });
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ["class", "disabled"],
+    });
     scheduleSync();
 
     return () => {
       if (frame !== null) window.cancelAnimationFrame(frame);
       observer.disconnect();
-      slot?.remove();
+      listSlot?.remove();
+      clearEditorBridge();
     };
   }, [isMobile, location.pathname, scope]);
 
@@ -295,9 +450,43 @@ export function KeyboardShortcuts() {
     </button>
   );
 
+  const editorActions = scope === "editor" && editorControls ? (
+    <>
+      {trigger}
+      <label className="entry-sort-control entry-sort-control--editor editor-header__sort-control">
+        <span>並び順</span>
+        <select
+          value={editorControls.sortValue}
+          onChange={(event) => {
+            const nextValue = event.target.value;
+            setEditorControls((current) =>
+              current ? { ...current, sortValue: nextValue } : current,
+            );
+            applyEditorSortValue(nextValue);
+          }}
+          aria-label="項目の並び順"
+        >
+          {editorControls.sortOptions.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+      </label>
+      <button
+        type="button"
+        className="danger-button editor-header__delete-button"
+        disabled={editorControls.deleteDisabled}
+        onClick={clickOriginalDeleteButton}
+      >
+        削除
+      </button>
+    </>
+  ) : trigger;
+
   return (
     <>
-      {buttonTarget ? createPortal(trigger, buttonTarget) : null}
+      {buttonTarget ? createPortal(editorActions, buttonTarget) : null}
 
       {open ? (
         <div className="cloud-dialog keyboard-shortcuts-dialog" role="presentation">
