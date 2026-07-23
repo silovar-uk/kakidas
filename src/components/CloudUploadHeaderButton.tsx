@@ -6,7 +6,8 @@ import { useCloudMemos } from "../hooks/useCloudMemos";
 import { memoRepository } from "../repositories/memoRepository";
 import type { MemoSyncMetaRow } from "../types/memo";
 
-const HEADER_TARGET_SELECTOR = ".editor-header__right";
+const ACTION_TARGET_SELECTOR = ".editor-header__cloud-slot";
+const FALLBACK_TARGET_SELECTOR = ".editor-header__right";
 const DISPLAY_TRIGGER_SELECTOR = ".editor-utility-menu__trigger";
 const ORIGINAL_UPLOAD_BUTTON_SELECTOR =
   ".editor-display-options .cloud-upload-button";
@@ -40,7 +41,7 @@ function getMemoIdFromPathname(pathname: string): string | null {
 }
 
 /**
- * クラウド操作を「表示・整理」から切り離し、上部の保存状態の隣へ置く。
+ * PCでは状態表示の下にある共通操作列へ、スマホでは従来のヘッダー右側へ置く。
  * 送信は既存ボタンを経由し、クラウド版への上書き同期だけをここで明示的に扱う。
  */
 export function CloudUploadHeaderButton() {
@@ -59,9 +60,9 @@ export function CloudUploadHeaderButton() {
       if (frame !== null) window.cancelAnimationFrame(frame);
       frame = window.requestAnimationFrame(() => {
         frame = null;
-        const nextTarget = document.querySelector<HTMLElement>(
-          HEADER_TARGET_SELECTOR,
-        );
+        const nextTarget =
+          document.querySelector<HTMLElement>(ACTION_TARGET_SELECTOR) ??
+          document.querySelector<HTMLElement>(FALLBACK_TARGET_SELECTOR);
         setPortalTarget((current) =>
           current === nextTarget ? current : nextTarget,
         );
