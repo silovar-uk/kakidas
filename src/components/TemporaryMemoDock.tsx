@@ -14,7 +14,6 @@ import {
 
 const MOBILE_QUERY = "(max-width: 920px)";
 const SAVE_DELAY_MS = 650;
-const CLOSE_MOTION_MS = 280;
 
 function getMemoId(pathname: string): string | null {
   const match = pathname.match(/^\/memos\/([^/?#]+)/);
@@ -49,7 +48,6 @@ export function TemporaryMemoDock() {
   const [savedAt, setSavedAt] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
-  const [isClosing, setIsClosing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [isMobile, setIsMobile] = useState(() =>
@@ -62,7 +60,6 @@ export function TemporaryMemoDock() {
   const latestContentRef = useRef("");
   const currentMemoIdRef = useRef<string | null>(memoId);
   const saveTimerRef = useRef<number | null>(null);
-  const closeTimerRef = useRef<number | null>(null);
   const savePromiseRef = useRef<Promise<TemporaryMemoRecord | null> | null>(null);
 
   useEffect(() => {
@@ -86,7 +83,11 @@ export function TemporaryMemoDock() {
     if (nextContent === savedContent && !saveError) {
       return nextContent.length === 0
         ? null
-        : { memo_id: targetMemoId, content: nextContent, updated_at: savedAt ?? new Date().toISOString() };
+        : {
+            memo_id: targetMemoId,
+            content: nextContent,
+            updated_at: savedAt ?? new Date().toISOString(),
+          };
     }
 
     if (savePromiseRef.current) {
@@ -107,7 +108,9 @@ export function TemporaryMemoDock() {
       return record;
     } catch (error) {
       setSaveError(
-        error instanceof Error ? error.message : "一時メモを保存できませんでした。",
+        error instanceof Error
+          ? error.message
+          : "一時メモを保存できませんでした。",
       );
       throw error;
     } finally {
@@ -120,7 +123,6 @@ export function TemporaryMemoDock() {
     currentMemoIdRef.current = memoId;
     clearSaveTimer();
     setIsOpen(false);
-    setIsClosing(false);
     setContent("");
     setSavedContent("");
     setSavedAt(null);
@@ -144,7 +146,9 @@ export function TemporaryMemoDock() {
       .catch((error) => {
         if (cancelled) return;
         setSaveError(
-          error instanceof Error ? error.message : "一時メモを読み込めませんでした。",
+          error instanceof Error
+            ? error.message
+            : "一時メモを読み込めませんでした。",
         );
       })
       .finally(() => {
@@ -203,24 +207,19 @@ export function TemporaryMemoDock() {
 
   const closePanel = useCallback(
     (restoreFocus = true) => {
-      if (!isOpen || isClosing) return;
+      if (!isOpen) return;
 
-      setIsClosing(true);
       textareaRef.current?.blur();
+      setIsOpen(false);
       void saveNow().catch(() => undefined);
 
-      if (closeTimerRef.current !== null) {
-        window.clearTimeout(closeTimerRef.current);
+      if (restoreFocus) {
+        window.requestAnimationFrame(() => {
+          triggerRef.current?.focus({ preventScroll: true });
+        });
       }
-
-      closeTimerRef.current = window.setTimeout(() => {
-        setIsOpen(false);
-        setIsClosing(false);
-        closeTimerRef.current = null;
-        if (restoreFocus) triggerRef.current?.focus({ preventScroll: true });
-      }, CLOSE_MOTION_MS);
     },
-    [isClosing, isOpen, saveNow],
+    [isOpen, saveNow],
   );
 
   useEffect(() => {
@@ -256,27 +255,27 @@ export function TemporaryMemoDock() {
   }, [saveNow]);
 
   useEffect(() => {
-    return () => {
-      clearSaveTimer();
-      if (closeTimerRef.current !== null) window.clearTimeout(closeTimerRef.current);
-    };
+    return clearSaveTimer;
   }, [clearSaveTimer]);
 
   const openPanel = () => {
     if (!memoId || isLoading) return;
     setIsOpen(true);
-    setIsClosing(false);
 
-    window.setTimeout(() => {
+    window.requestAnimationFrame(() => {
       textareaRef.current?.focus({ preventScroll: true });
       const length = textareaRef.current?.value.length ?? 0;
       textareaRef.current?.setSelectionRange(length, length);
-    }, isMobile ? 250 : 80);
+    });
   };
 
   const clearTemporaryMemo = async () => {
     if (!memoId || isSaving) return;
-    if (!window.confirm("このメモの一時メモをすべて消しますか？\nこの操作は元に戻せません。")) {
+    if (
+      !window.confirm(
+        "このメモの一時メモをすべて消しますか？\nこの操作は元に戻せません。",
+      )
+    ) {
       return;
     }
 
@@ -293,7 +292,9 @@ export function TemporaryMemoDock() {
       textareaRef.current?.focus({ preventScroll: true });
     } catch (error) {
       setSaveError(
-        error instanceof Error ? error.message : "一時メモをクリアできませんでした。",
+        error instanceof Error
+          ? error.message
+          : "一時メモをクリアできませんでした。",
       );
     } finally {
       setIsSaving(false);
@@ -312,7 +313,9 @@ export function TemporaryMemoDock() {
         ? `保存済み ${formatSavedAt(savedAt)}`
         : "空です";
   const panelStyle = availableHeight
-    ? ({ "--temporary-memo-available-height": `${availableHeight}px` } as React.CSSProperties)
+    ? ({
+        "--temporary-memo-available-height": `${availableHeight}px`,
+      } as React.CSSProperties)
     : undefined;
 
   return createPortal(
@@ -325,17 +328,23 @@ export function TemporaryMemoDock() {
           onClick={openPanel}
           disabled={isLoading}
           aria-expanded="false"
-          aria-label={hasContent ? "内容のある一時メモを開く" : "一時メモを開く"}
+          aria-label={
+            hasContent ? "内容のある一時メモを開く" : "一時メモを開く"
+          }
         >
-          <span className="temporary-memo-trigger__icon" aria-hidden="true">✎</span>
+          <span className="temporary-memo-trigger__icon" aria-hidden="true">
+            ✎
+          </span>
           <span>{isLoading ? "読込中…" : "一時メモ"}</span>
-          {hasContent ? <span className="temporary-memo-trigger__dot" aria-hidden="true" /> : null}
+          <span className="temporary-memo-trigger__shortcut" aria-hidden="true">
+            Alt＋Q
+          </span>
+          {hasContent ? (
+            <span className="temporary-memo-trigger__dot" aria-hidden="true" />
+          ) : null}
         </button>
       ) : (
-        <div
-          className={`temporary-memo-layer ${isClosing ? "temporary-memo-layer--closing" : ""}`}
-          style={panelStyle}
-        >
+        <div className="temporary-memo-layer" style={panelStyle}>
           <button
             type="button"
             className="temporary-memo-backdrop"
@@ -353,7 +362,9 @@ export function TemporaryMemoDock() {
               <div>
                 <p className="temporary-memo-panel__eyebrow">QUICK NOTE</p>
                 <h2 id="temporary-memo-title">一時メモ</h2>
-                <p className="temporary-memo-panel__memo-title">{getCurrentMemoTitle()}</p>
+                <p className="temporary-memo-panel__memo-title">
+                  {getCurrentMemoTitle()}
+                </p>
               </div>
               <button
                 type="button"
@@ -381,7 +392,10 @@ export function TemporaryMemoDock() {
 
             <footer className="temporary-memo-panel__footer">
               <div className="temporary-memo-panel__status" aria-live="polite">
-                <span className={`temporary-memo-panel__status-dot ${saveError ? "is-error" : isDirty ? "is-dirty" : ""}`} aria-hidden="true" />
+                <span
+                  className={`temporary-memo-panel__status-dot ${saveError ? "is-error" : isDirty ? "is-dirty" : ""}`}
+                  aria-hidden="true"
+                />
                 <span>{statusLabel}</span>
                 <small>クラウド保存に含まれます</small>
               </div>
@@ -394,7 +408,11 @@ export function TemporaryMemoDock() {
                 一時メモをクリア
               </button>
             </footer>
-            {saveError ? <p className="temporary-memo-panel__error" role="alert">{saveError}</p> : null}
+            {saveError ? (
+              <p className="temporary-memo-panel__error" role="alert">
+                {saveError}
+              </p>
+            ) : null}
           </section>
         </div>
       )}
