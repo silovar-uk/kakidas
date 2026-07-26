@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { useLocation } from "react-router-dom";
 
 const TAG_SORT_VALUE = "tag_asc";
+const UPDATED_SORT_VALUE = "updated_desc";
 const TAG_SORT_STORAGE_KEY = "kakidas.memo-list-tag-sort";
 const SORT_SELECT_SELECTOR = 'select[aria-label="メモの並び順"]';
 const MEMO_LIST_SELECTOR = ".memo-list";
@@ -82,6 +83,7 @@ function applyTagSort(): void {
     list.querySelectorAll<HTMLElement>(MEMO_CARD_SELECTOR),
   );
 
+  // 元のDOM順は更新が新しい順。タグが同じ場合とタグなし同士ではその順を保つ。
   const sorted = cards
     .map((card, index) => ({ card, index, tag: getCardTag(card) }))
     .sort((left, right) => {
@@ -113,6 +115,7 @@ export function MemoListTagSort() {
     }
 
     let frame: number | null = null;
+    let applyingBaseSort = false;
 
     const sync = () => {
       frame = null;
@@ -145,10 +148,16 @@ export function MemoListTagSort() {
         return;
       }
 
+      if (applyingBaseSort) return;
+
       if (target.value === TAG_SORT_VALUE) {
-        // MemoListPageの既存stateへ未知の値を渡さず、この表示設定だけで処理する。
+        // タグ内・タグなし同士は更新順にするため、既存stateを更新順へ揃えてから装飾する。
         event.stopPropagation();
         writeTagSortEnabled(true);
+        applyingBaseSort = true;
+        target.value = UPDATED_SORT_VALUE;
+        target.dispatchEvent(new Event("change", { bubbles: true }));
+        applyingBaseSort = false;
         scheduleSync();
         return;
       }
