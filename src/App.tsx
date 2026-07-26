@@ -3,6 +3,7 @@ import { AuthProvider } from "./auth/AuthProvider";
 import { CloudUploadHeaderButton } from "./components/CloudUploadHeaderButton";
 import { EntryTagGroupDragOrder } from "./components/EntryTagGroupDragOrder";
 import { KeyboardShortcuts } from "./components/KeyboardShortcuts";
+import { MemoListTagSort } from "./components/MemoListTagSort";
 import { MobileInteractionMotion } from "./components/MobileInteractionMotion";
 import { MobileNewMemoTitleFocus } from "./components/MobileNewMemoTitleFocus";
 import { ParagraphTitleTagAssist } from "./components/ParagraphTitleTagAssist";
@@ -23,6 +24,7 @@ export default function App() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
         <KeyboardShortcuts />
+        <MemoListTagSort />
         <MobileNewMemoTitleFocus />
         <ParagraphTitleTagAssist />
         <EntryTagGroupDragOrder />
