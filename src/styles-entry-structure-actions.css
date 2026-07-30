@@ -1,0 +1,58 @@
+/* 項目の「…」メニューは、操作の重要度を色で示しつつ寸法はそろえる。 */
+.entry-item__structure-actions {
+  align-items: stretch;
+}
+
+/* 移動先のラッパーをグリッド上では消し、各移動ボタンを他の操作と同列に置く。 */
+.entry-item__kind-actions {
+  display: contents;
+}
+
+.entry-item__structure-actions .structure-action {
+  width: 100%;
+  min-height: 36px;
+  height: 100%;
+  padding: 6px 8px;
+  border-radius: 8px;
+}
+
+/* 新規メモ化だけが2列分へ広がらないよう、通常の1セルへ戻す。 */
+.structure-action--derive {
+  grid-column: auto;
+}
+
+/* コピーと粒度移動は補助操作。形は残し、色の主張だけを一段弱める。 */
+.structure-action--copy,
+.structure-action--kind {
+  border-color: #d8d4cd;
+  color: #66625c;
+  background: #f7f6f2;
+}
+
+.structure-action--copy:hover:not(:disabled),
+.structure-action--kind:hover:not(:disabled) {
+  border-color: #bbb6ad;
+  color: #494640;
+  background: #efede7;
+}
+
+/* 新しいメモにする操作は、寸法をそろえた上で主操作の色を維持する。 */
+.structure-action--derive:hover:not(:disabled) {
+  border-color: #b99148;
+  color: #654713;
+  background: #fff1cc;
+}
+
+/* 削除は危険操作として既存の赤系を維持する。 */
+.structure-action--danger {
+  border-color: #efc9c3;
+  color: #a54b44;
+  background: #fff0ee;
+}
+
+@media (max-width: 920px) {
+  /* スマホは専用の操作シートを使うため、PC用メニューの補正は適用しない。 */
+  .entry-item__kind-actions {
+    display: block;
+  }
+}
