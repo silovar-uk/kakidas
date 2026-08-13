@@ -1,0 +1,17 @@
+/* 完了済みの一括削除は、通常操作と区別できる危険操作の色にする。 */
+.completed-entries-delete:not(:disabled) {
+  border-color: #b64034;
+  color: #ffffff;
+  background: #b64034;
+  box-shadow: 0 4px 10px rgba(130, 41, 32, 0.16);
+}
+
+.completed-entries-delete:hover:not(:disabled) {
+  border-color: #983329;
+  color: #ffffff;
+  background: #983329;
+}
+
+.completed-entries-delete:active:not(:disabled) {
+  background: #842b23;
+}
