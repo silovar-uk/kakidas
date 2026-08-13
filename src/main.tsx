@@ -17,6 +17,7 @@ import "./styles-temporary-memo-mobile-refine.css";
 import "./styles-temporary-memo-instant.css";
 import "./styles-memo-tag-prompt.css";
 import "./styles-entry-structure-actions.css";
+import "./styles-completed-entry-danger.css";
 
 // 以前のオーバーレイが残したスクロール停止を、起動時に必ず初期化する。
 resetBodyScrollLock();
