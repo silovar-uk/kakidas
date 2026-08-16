@@ -1,5 +1,6 @@
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { AuthProvider } from "./auth/AuthProvider";
+import { ChatGptMemoButton } from "./components/ChatGptMemoButton";
 import { CloudUploadHeaderButton } from "./components/CloudUploadHeaderButton";
 import { EntryTagGroupDragOrder } from "./components/EntryTagGroupDragOrder";
 import { KeyboardShortcuts } from "./components/KeyboardShortcuts";
@@ -28,6 +29,7 @@ export default function App() {
         <MobileNewMemoTitleFocus />
         <ParagraphTitleTagAssist />
         <EntryTagGroupDragOrder />
+        <ChatGptMemoButton />
         <CloudUploadHeaderButton />
         <TemporaryMemoDock />
         <TemporaryMemoShortcut />
