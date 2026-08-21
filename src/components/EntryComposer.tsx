@@ -22,12 +22,19 @@ import {
   type EntryTagSummary,
 } from "../lib/memoTags";
 import { getEntryTagToneClassName } from "../lib/entryTagGroups";
+import { useDraftPersistence } from "../hooks/useDraftPersistence";
+import {
+  buildEntryDraftId,
+  type EntryDraftSnapshot,
+} from "../repositories/draftRepository";
 
 export type EntryComposerHandle = {
   focus: (options?: { scroll?: boolean; delay?: number }) => void;
 };
 
 type EntryComposerProps = {
+  memoId: string;
+  memoUpdatedAt: string;
   kind: EntryKind;
   disabled?: boolean;
   /** 現在のメモで使われている項目タグ。新規入力時の候補だけに使う。 */
@@ -41,6 +48,7 @@ type EntryComposerProps = {
   onSubmit: (
     content: string,
     metadata: EntryCreateMetadata,
+    draftId: string,
   ) => Promise<unknown> | unknown;
 };
 
@@ -94,6 +102,8 @@ function readCssPixel(value: string): number | null {
 export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>(
   function EntryComposer(
     {
+      memoId,
+      memoUpdatedAt,
       kind,
       disabled = false,
       tagSuggestions,
@@ -134,8 +144,64 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
       () => getRecommendedEntryTags(tagSuggestions, tagDraft),
       [tagDraft, tagSuggestions],
     );
+    const draftScope = lockedTag ? "tag-group" : "main";
+    const draftId = useMemo(
+      () => buildEntryDraftId(memoId, kind, draftScope, lockedTag),
+      [draftScope, kind, lockedTag, memoId],
+    );
+    const draftSnapshot = useMemo<EntryDraftSnapshot>(() => ({
+      content: value,
+      heading: headingValue,
+      tag_value: tagValue,
+      note_value: noteValue,
+      link_value: linkValue,
+      tag_draft: tagDraft,
+      note_draft: noteDraft,
+      link_draft: linkDraft,
+      active_meta_picker: activeMetaPicker,
+    }), [
+      activeMetaPicker,
+      headingValue,
+      linkDraft,
+      linkValue,
+      noteDraft,
+      noteValue,
+      tagDraft,
+      tagValue,
+      value,
+    ]);
+    const {
+      status: draftStatus,
+      flush: flushDraft,
+      markEdited: markDraftEdited,
+      markCommitted: markDraftCommitted,
+    } = useDraftPersistence({
+      id: draftId,
+      memo_id: memoId,
+      kind,
+      scope: draftScope,
+      fixed_tag: lockedTag,
+      base_memo_updated_at: memoUpdatedAt,
+      snapshot: draftSnapshot,
+      onRestore: (draft) => {
+        setValue(draft.content);
+        setHeadingValue(draft.heading);
+        setTagValue(draft.tag_value);
+        setNoteValue(draft.note_value);
+        setLinkValue(draft.link_value);
+        setTagDraft(draft.tag_draft);
+        setNoteDraft(draft.note_draft);
+        setLinkDraft(draft.link_draft);
+        setActiveMetaPicker(draft.active_meta_picker);
+        setLinkError(null);
+        window.requestAnimationFrame(() =>
+          scheduleParagraphTextareaResize({ allowShrink: true })
+        );
+      },
+    });
 
     function resetMetaDrafts() {
+      markDraftEdited();
       setTagDraft(selectedTag ?? "");
       setNoteDraft(noteValue);
       setLinkDraft(linkValue);
@@ -148,6 +214,7 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
     }
 
     function openMetaPicker(picker: Exclude<MetaPicker, null>) {
+      markDraftEdited();
       if (activeMetaPicker === picker) {
         closeMetaPicker();
         return;
@@ -258,29 +325,34 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
     };
 
     const applyTag = (rawValue = tagDraft) => {
+      markDraftEdited();
       setTagValue(normalizeEntryTag(rawValue) ?? "");
       setActiveMetaPicker(null);
       setLinkError(null);
     };
 
     const clearTag = () => {
+      markDraftEdited();
       setTagValue("");
       setTagDraft("");
       setActiveMetaPicker(null);
     };
 
     const applyNote = () => {
+      markDraftEdited();
       setNoteValue(noteDraft.trim());
       setActiveMetaPicker(null);
     };
 
     const clearNote = () => {
+      markDraftEdited();
       setNoteValue("");
       setNoteDraft("");
       setActiveMetaPicker(null);
     };
 
     const applyLink = () => {
+      markDraftEdited();
       try {
         setLinkValue(normalizeLinkUrlForSave(linkDraft));
         setLinkError(null);
@@ -293,6 +365,7 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
     };
 
     const clearLink = () => {
+      markDraftEdited();
       setLinkValue("");
       setLinkDraft("");
       setLinkError(null);
@@ -320,12 +393,14 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
       setIsSubmitting(true);
 
       try {
+        await flushDraft();
         await onSubmit(content, {
           heading: isParagraph ? headingValue.trim() : "",
           tag: selectedTag,
           note: noteValue.trim(),
           link_url: normalizedLink,
-        });
+        }, draftId);
+        markDraftCommitted();
         setValue("");
         setHeadingValue("");
         // 補助情報は新しい項目へ勝手に持ち越さない。
@@ -419,6 +494,7 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
     const handleChange = (
       event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
     ) => {
+      markDraftEdited();
       setValue(event.target.value);
 
       /**
@@ -494,7 +570,10 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
                 value={headingValue}
                 disabled={disabled || isSubmitting}
                 placeholder="段落タイトル（任意）"
-                onChange={(event) => setHeadingValue(event.target.value)}
+                onChange={(event) => {
+                  markDraftEdited();
+                  setHeadingValue(event.target.value);
+                }}
                 onKeyDown={handleHeadingKeyDown}
                 aria-label="段落タイトルを入力"
               />
@@ -533,6 +612,12 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
         </div>
 
         <div className="entry-composer__meta-row">
+          {draftStatus === "error" ? (
+            <p className="entry-composer__draft-error" role="alert">
+              下書きを端末に保護できません。
+            </p>
+          ) : null}
+
           {isParagraph ? (
             <p id="paragraph-shortcut-hint" className="entry-composer__hint">
               Enterで改行。Shift＋Enter／Ctrl＋Enterで置く。
@@ -583,7 +668,10 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
                     <textarea
                       ref={noteInputRef}
                       value={noteDraft}
-                      onChange={(event) => setNoteDraft(event.target.value)}
+                      onChange={(event) => {
+                        markDraftEdited();
+                        setNoteDraft(event.target.value);
+                      }}
                       onKeyDown={handleNoteInputKeyDown}
                       placeholder="例：あとで確認したい"
                       rows={3}
@@ -654,6 +742,7 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
                       ref={linkInputRef}
                       value={linkDraft}
                       onChange={(event) => {
+                        markDraftEdited();
                         setLinkDraft(event.target.value);
                         setLinkError(null);
                       }}
@@ -735,7 +824,10 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
                     <input
                       ref={tagInputRef}
                       value={tagDraft}
-                      onChange={(event) => setTagDraft(event.target.value)}
+                      onChange={(event) => {
+                        markDraftEdited();
+                        setTagDraft(event.target.value);
+                      }}
                       onKeyDown={(event) => handlePickerInputKeyDown(event, applyTag)}
                       placeholder="例：後日対応"
                       maxLength={30}
