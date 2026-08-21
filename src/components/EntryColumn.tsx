@@ -22,6 +22,7 @@ import {
   writeEntryTagOrderLocked,
 } from "../lib/entryTagGroups";
 import { UndoToast } from "./UndoToast";
+import { draftRepository } from "../repositories/draftRepository";
 import {
   type EntryCreateMetadata,
   type EntryDeletionResult,
@@ -30,11 +31,14 @@ import {
   type EntryUpdate,
   type EntryTreeNode,
   ENTRY_KIND_LABEL,
+  getEntryTagKey,
   normalizeEntryTag,
   supportsHierarchy,
 } from "../types/memo";
 
 type EntryColumnProps = {
+  memoId: string;
+  memoUpdatedAt: string;
   kind: EntryKind;
   entries: EntryTreeNode[];
   isActiveOnMobile: boolean;
@@ -60,6 +64,7 @@ type EntryColumnProps = {
     metadata?: EntryCreateMetadata,
     parentId?: string | null,
     position?: EntryInsertPosition,
+    draftId?: string,
   ) => Promise<unknown>;
   onUpdate: (entryId: string, patch: EntryUpdate) => Promise<unknown>;
   onDelete: (entryId: string) => Promise<EntryDeletionResult>;
@@ -109,6 +114,8 @@ function isMobileViewport() {
 }
 
 export function EntryColumn({
+  memoId,
+  memoUpdatedAt,
   kind,
   entries,
   isActiveOnMobile,
@@ -160,6 +167,9 @@ export function EntryColumn({
   const [isRenamingTag, setIsRenamingTag] = useState(false);
   /** 未完了タグ見出しから開く、固定タグ付きの簡易入力欄。 */
   const [tagGroupComposerState, setTagGroupComposerState] = useState<TagGroupComposerState | null>(null);
+  const [tagGroupDraftKeys, setTagGroupDraftKeys] = useState<Set<string>>(
+    () => new Set(),
+  );
   /** 順番固定ONでは、未完了だけの相対順を画面内で保つ。完了項目は常に別グループへ送る。 */
   const lockedOpenEntryOrderRef = useRef<Map<string, number>>(new Map());
   const lockedTagGroupOrderRef = useRef<Map<string, number>>(new Map());
@@ -178,6 +188,52 @@ export function EntryColumn({
   const openEntries = entries.filter((entry) => !entry.is_completed);
   const completedEntries = entries.filter((entry) => entry.is_completed);
   const isTagGrouped = displayMode === "tag_grouped";
+
+  // タグ見出し内のComposerは通常は閉じているため、再訪時は最新Draftだけを開く。
+  // ほかのDraftも見出しの印で見つけられるよう、タグキー一覧は保持する。
+  useEffect(() => {
+    let cancelled = false;
+
+    if (compactView || !isTagGrouped) return undefined;
+
+    void draftRepository
+      .listForMemo(memoId)
+      .then((drafts) => {
+        if (cancelled) return;
+
+        const availableTagKeys = new Set(
+          entries
+            .map((entry) => getEntryTagKey(entry.tag))
+            .filter((tagKey): tagKey is string => Boolean(tagKey)),
+        );
+        const tagDrafts = drafts.filter(
+          (draft) =>
+            draft.kind === kind &&
+            draft.scope === "tag-group" &&
+            Boolean(draft.tag_key) &&
+            availableTagKeys.has(draft.tag_key!),
+        );
+
+        setTagGroupDraftKeys(
+          new Set(tagDrafts.map((draft) => draft.tag_key!)),
+        );
+
+        const latestDraft = tagDrafts[0];
+        if (!latestDraft?.fixed_tag) return;
+
+        setTagGroupComposerState((current) => current ?? {
+          tag: latestDraft.fixed_tag!,
+          stateKey: getEntryTagGroupStateKey(kind, latestDraft.fixed_tag),
+        });
+      })
+      .catch(() => {
+        // Draft一覧だけ読めなくても、通常の入力とタグ表示は続けられる。
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [compactView, isTagGrouped, kind, memoId]);
 
   /**
    * 順番固定ONでは、未完了項目の相対順とタググループの順をこの画面の間だけ保つ。
@@ -394,6 +450,7 @@ export function EntryColumn({
   const handleCreate = async (
     content: string,
     metadata: EntryCreateMetadata,
+    draftId: string,
   ) => {
     await onCreate(
       kind,
@@ -401,6 +458,7 @@ export function EntryColumn({
       metadata,
       null,
       addAtBottom ? "bottom" : "top",
+      draftId,
     );
   };
 
@@ -409,6 +467,7 @@ export function EntryColumn({
     tag: string,
     content: string,
     metadata: EntryCreateMetadata,
+    draftId: string,
   ) => {
     await onCreate(
       kind,
@@ -416,7 +475,14 @@ export function EntryColumn({
       { ...metadata, tag },
       null,
       addAtBottom ? "bottom" : "top",
+      draftId,
     );
+    const committedTagKey = getEntryTagKey(tag);
+    setTagGroupDraftKeys((current) => {
+      const next = new Set(current);
+      next.delete(committedTagKey);
+      return next;
+    });
   };
 
   const openUndo = (deletion: EntryDeletionResult) => {
@@ -730,6 +796,9 @@ export function EntryColumn({
     const isTagComposerOpen = groupType === "tag" && label
       ? tagGroupComposerState?.stateKey === stateKey
       : false;
+    const hasTagGroupDraft = groupType === "tag" && label
+      ? tagGroupDraftKeys.has(getEntryTagKey(label))
+      : false;
     const composerId = `entry-tag-group-composer-${kind}-${stateKey}`;
     const groupAriaLabel = groupType === "completed"
       ? "完了済みの項目"
@@ -759,6 +828,13 @@ export function EntryColumn({
               title={`#${label} に追加`}
             >
               <span className="entry-list__tag-group-add-label">#{label}</span>
+              {hasTagGroupDraft ? (
+                <span
+                  className="entry-list__tag-group-draft-mark"
+                  aria-label="下書きあり"
+                  title="下書きあり"
+                />
+              ) : null}
               <span className="entry-list__tag-group-add-plus" aria-hidden="true">＋</span>
             </button>
           ) : null}
@@ -803,14 +879,16 @@ export function EntryColumn({
           >
             <EntryComposer
               ref={tagGroupComposerRef}
+              memoId={memoId}
+              memoUpdatedAt={memoUpdatedAt}
               kind={kind}
               compact
               fixedTag={label}
               disabled={disabled || isDeletingAll}
               tagSuggestions={tagSuggestions}
               onDismiss={() => setTagGroupComposerState(null)}
-              onSubmit={(content, metadata) =>
-                handleCreateForTagGroup(label, content, metadata)
+              onSubmit={(content, metadata, draftId) =>
+                handleCreateForTagGroup(label, content, metadata, draftId)
               }
             />
           </div>
@@ -1003,6 +1081,8 @@ export function EntryColumn({
       {!compactView ? (
         <EntryComposer
           ref={composerRef}
+          memoId={memoId}
+          memoUpdatedAt={memoUpdatedAt}
           kind={kind}
           disabled={disabled || isDeletingAll}
           tagSuggestions={tagSuggestions}
