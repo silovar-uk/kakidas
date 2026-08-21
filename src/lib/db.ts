@@ -5,13 +5,14 @@ const DB_NAME = "kakidasu-db";
  * IndexedDB の open が完了しないことがある。そのため、レコード単位の補完は
  * 読み込み時の normalize 関数へ寄せ、DBアップグレードはストア／index準備だけにする。
  */
-const DB_VERSION = 9;
+const DB_VERSION = 10;
 const OPEN_TIMEOUT_MS = 12_000;
 
 export const STORE_NAMES = {
   memos: "memos",
   entries: "entries",
   memoSyncMeta: "memo_sync_meta",
+  drafts: "drafts",
 } as const;
 
 let databasePromise: Promise<IDBDatabase> | null = null;
@@ -145,6 +146,15 @@ function openDatabase(): Promise<IDBDatabase> {
         syncMetaStore.createIndex("by_cloud_state", "cloud_state");
         syncMetaStore.createIndex("by_cloud_user_id", "cloud_user_id");
         syncMetaStore.createIndex("by_updated_at", "updated_at");
+      }
+
+      if (!db.objectStoreNames.contains(STORE_NAMES.drafts)) {
+        const draftStore = db.createObjectStore(STORE_NAMES.drafts, {
+          keyPath: "id",
+        });
+
+        draftStore.createIndex("by_memo_id", "memo_id");
+        draftStore.createIndex("by_updated_at", "updated_at");
       }
 
       // 旧レコードの parent_id / heading / tag / note / satisfaction / is_completed / link_url は,
