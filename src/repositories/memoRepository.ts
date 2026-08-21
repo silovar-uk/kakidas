@@ -44,6 +44,12 @@ import {
   requestToPromise,
   transactionToPromise,
 } from "../lib/db";
+import {
+  buildEntryDraftId,
+  hasMeaningfulEntryDraft,
+  isEntryDraftExpired,
+  type EntryDraftRow,
+} from "./draftRepository";
 
 /**
  * UIはこのinterfaceだけを見る。
@@ -99,6 +105,7 @@ export interface MemoRepository {
   createEntry(
     input: Omit<EntryInsert, "id" | "created_at" | "updated_at">,
     position?: EntryInsertPosition,
+    draftId?: string,
   ): Promise<EntryRow>;
   updateEntry(entryId: string, patch: EntryUpdate): Promise<EntryRow>;
   /** 同じメモ・同じ区分の項目タグをまとめて別名へ置き換える。 */
@@ -611,13 +618,19 @@ class IndexedDbMemoRepository implements MemoRepository {
     const db = await getDatabase();
 
     const transaction = db.transaction(
-      [STORE_NAMES.memos, STORE_NAMES.entries, STORE_NAMES.memoSyncMeta],
+      [
+        STORE_NAMES.memos,
+        STORE_NAMES.entries,
+        STORE_NAMES.memoSyncMeta,
+        STORE_NAMES.drafts,
+      ],
       "readwrite",
     );
 
     const memoStore = transaction.objectStore(STORE_NAMES.memos);
     const entryStore = transaction.objectStore(STORE_NAMES.entries);
     const syncMetaStore = transaction.objectStore(STORE_NAMES.memoSyncMeta);
+    const draftStore = transaction.objectStore(STORE_NAMES.drafts);
 
     const current = await requestToPromise(
       memoStore.get(memoId) as IDBRequest<MemoRow | undefined>,
@@ -652,6 +665,11 @@ class IndexedDbMemoRepository implements MemoRepository {
     // 後で取り込み機能を作る時に、明示削除のUXを別途設計する。
     syncMetaStore.delete(memoId);
 
+    const draftKeys = await requestToPromise(
+      draftStore.index("by_memo_id").getAllKeys(memoId),
+    );
+    draftKeys.forEach((draftKey) => draftStore.delete(draftKey));
+
     await transactionToPromise(transaction);
   }
 
@@ -663,29 +681,47 @@ class IndexedDbMemoRepository implements MemoRepository {
   async discardUntitledEmptyMemo(memoId: string): Promise<boolean> {
     const db = await getDatabase();
     const transaction = db.transaction(
-      [STORE_NAMES.memos, STORE_NAMES.entries, STORE_NAMES.memoSyncMeta],
+      [
+        STORE_NAMES.memos,
+        STORE_NAMES.entries,
+        STORE_NAMES.memoSyncMeta,
+        STORE_NAMES.drafts,
+      ],
       "readwrite",
     );
 
     const memoStore = transaction.objectStore(STORE_NAMES.memos);
     const entryStore = transaction.objectStore(STORE_NAMES.entries);
     const syncMetaStore = transaction.objectStore(STORE_NAMES.memoSyncMeta);
+    const draftStore = transaction.objectStore(STORE_NAMES.drafts);
 
     const current = await requestToPromise(
       memoStore.get(memoId) as IDBRequest<MemoRow | undefined>,
     );
 
     if (!current || current.deleted_at !== null) {
-      // 読み取りだけのトランザクションは、ここで自然に完了する。
+      await transactionToPromise(transaction);
       return false;
     }
 
     const entries = await this.getEntriesForMemo(entryStore, memoId);
     const defaultTitle = formatDefaultMemoTitle(new Date(current.created_at));
     const hasActiveEntry = entries.some((entry) => entry.deleted_at === null);
+    const drafts = await requestToPromise(
+      draftStore.index("by_memo_id").getAll(memoId) as IDBRequest<EntryDraftRow[]>,
+    );
+    const activeDrafts = drafts.filter((draft) => !isEntryDraftExpired(draft));
+    const hasActiveDraft = activeDrafts.some((draft) =>
+      hasMeaningfulEntryDraft(draft)
+    );
 
-    if (current.title !== defaultTitle || hasActiveEntry) {
+    drafts
+      .filter(isEntryDraftExpired)
+      .forEach((draft) => draftStore.delete(draft.id));
+
+    if (current.title !== defaultTitle || hasActiveEntry || hasActiveDraft) {
       // 入力済みのメモには一切書き込まず、そのまま残す。
+      await transactionToPromise(transaction);
       return false;
     }
 
@@ -700,6 +736,8 @@ class IndexedDbMemoRepository implements MemoRepository {
     // 新規の空メモでも、過去に誤って同期情報だけ作られていた場合を残さない。
     syncMetaStore.delete(memoId);
 
+    drafts.forEach((draft) => draftStore.delete(draft.id));
+
     await transactionToPromise(transaction);
     return true;
   }
@@ -707,6 +745,7 @@ class IndexedDbMemoRepository implements MemoRepository {
   async createEntry(
     input: Omit<EntryInsert, "id" | "created_at" | "updated_at">,
     position: EntryInsertPosition = "bottom",
+    draftId?: string,
   ): Promise<EntryRow> {
     const content = input.content.trim();
 
@@ -717,13 +756,19 @@ class IndexedDbMemoRepository implements MemoRepository {
     const db = await getDatabase();
 
     const transaction = db.transaction(
-      [STORE_NAMES.memos, STORE_NAMES.entries, STORE_NAMES.memoSyncMeta],
+      [
+        STORE_NAMES.memos,
+        STORE_NAMES.entries,
+        STORE_NAMES.memoSyncMeta,
+        STORE_NAMES.drafts,
+      ],
       "readwrite",
     );
 
     const memoStore = transaction.objectStore(STORE_NAMES.memos);
     const entryStore = transaction.objectStore(STORE_NAMES.entries);
     const syncMetaStore = transaction.objectStore(STORE_NAMES.memoSyncMeta);
+    const draftStore = transaction.objectStore(STORE_NAMES.drafts);
 
     const memo = await requestToPromise(
       memoStore.get(input.memo_id) as IDBRequest<MemoRow | undefined>,
@@ -794,6 +839,10 @@ class IndexedDbMemoRepository implements MemoRepository {
       input.memo_id,
       timestamp,
     );
+
+    if (draftId) {
+      draftStore.delete(draftId);
+    }
 
     await transactionToPromise(transaction);
 
@@ -891,12 +940,18 @@ class IndexedDbMemoRepository implements MemoRepository {
 
     const db = await getDatabase();
     const transaction = db.transaction(
-      [STORE_NAMES.memos, STORE_NAMES.entries, STORE_NAMES.memoSyncMeta],
+      [
+        STORE_NAMES.memos,
+        STORE_NAMES.entries,
+        STORE_NAMES.memoSyncMeta,
+        STORE_NAMES.drafts,
+      ],
       "readwrite",
     );
     const memoStore = transaction.objectStore(STORE_NAMES.memos);
     const entryStore = transaction.objectStore(STORE_NAMES.entries);
     const syncMetaStore = transaction.objectStore(STORE_NAMES.memoSyncMeta);
+    const draftStore = transaction.objectStore(STORE_NAMES.drafts);
 
     const rawMemo = await requestToPromise(
       memoStore.get(memoId) as IDBRequest<LegacyMemoRow | undefined>,
@@ -924,6 +979,46 @@ class IndexedDbMemoRepository implements MemoRepository {
     const entriesToUpdate = matchingEntries.filter(
       (entry) => entry.tag !== normalizedNextTag,
     );
+
+    const currentDraftId = buildEntryDraftId(
+      memoId,
+      kind,
+      "tag-group",
+      currentTag,
+    );
+    const nextDraftId = buildEntryDraftId(
+      memoId,
+      kind,
+      "tag-group",
+      normalizedNextTag,
+    );
+
+    if (currentDraftId !== nextDraftId) {
+      const [currentDraft, destinationDraft] = await Promise.all([
+        requestToPromise(
+          draftStore.get(currentDraftId) as IDBRequest<EntryDraftRow | undefined>,
+        ),
+        requestToPromise(
+          draftStore.get(nextDraftId) as IDBRequest<EntryDraftRow | undefined>,
+        ),
+      ]);
+
+      if (currentDraft) {
+        const draftToKeep = destinationDraft &&
+          destinationDraft.updated_at > currentDraft.updated_at
+          ? destinationDraft
+          : currentDraft;
+
+        draftStore.delete(currentDraftId);
+        draftStore.put({
+          ...draftToKeep,
+          id: nextDraftId,
+          fixed_tag: normalizedNextTag,
+          tag_key: getEntryTagKey(normalizedNextTag),
+          updated_at: nowIso(),
+        } satisfies EntryDraftRow);
+      }
+    }
 
     if (entriesToUpdate.length === 0) {
       await transactionToPromise(transaction);
