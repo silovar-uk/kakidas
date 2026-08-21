@@ -6195,6 +6195,13 @@ a:focus-visible {
   line-height: 1.35;
 }
 
+.entry-composer__draft-error {
+  margin: 0 auto 0 0;
+  color: #a64236;
+  font-size: 10px;
+  line-height: 1.35;
+}
+
 .entry-composer__tag-picker {
   position: relative;
   display: inline-flex;
@@ -7121,6 +7128,15 @@ a:focus-visible {
 .entry-list__tag-group-add-label {
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.entry-list__tag-group-draft-mark {
+  width: 5px;
+  height: 5px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.72;
 }
 
 .entry-list__tag-group-add-plus {
