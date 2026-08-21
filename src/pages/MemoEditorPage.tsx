@@ -1026,7 +1026,7 @@ export function MemoEditorPage() {
       <div className="editor-tabs" role="tablist" aria-label="入力する粒度">
         {ENTRY_KINDS.map((kind) => (
           <button
-            key={kind}
+            key={`${memo.id}:${kind}`}
             type="button"
             role="tab"
             aria-selected={activeKind === kind}
@@ -1062,6 +1062,8 @@ export function MemoEditorPage() {
         {ENTRY_KINDS.map((kind) => (
           <EntryColumn
             key={kind}
+            memoId={memo.id}
+            memoUpdatedAt={memo.updated_at}
             kind={kind}
             entries={entriesByKind[kind]}
             isActiveOnMobile={activeKind === kind}
