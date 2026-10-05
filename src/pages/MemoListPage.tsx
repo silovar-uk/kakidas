@@ -449,7 +449,7 @@ export function MemoListPage() {
     });
   };
 
-  const selectedTargets = useMemo<CloudUploadTarget[]>(  const selectedTargets = useMemo<CloudUploadTarget[]>(
+  const selectedTargets = useMemo<CloudUploadTarget[]>(
     () =>
       memos
         .filter((memo) => selectedMemoIds.has(memo.id))
