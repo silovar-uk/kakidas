@@ -1080,3 +1080,12 @@ SQLの追加実行は不要です。
   - 操作面は32px、幅370px未満では30pxに縮小。本文は残り幅を使い、文・段落の操作レールは従来の34px・2列表示を維持する。
 - 項目データ、バックアップv7、クラウド同期、Supabase SQLは変更なし。
 
+---
+
+### kakidas v0.5.76｜Production originをkakidas-3gqwへ統一
+
+- 正式なProduction originを `https://kakidas-3gqw.vercel.app/` とする。
+- 旧 `kakidas.vercel.app` では、ブラウザ内データの取りこぼしを避けるため自動リダイレクトは行わず、旧環境であることと正式版へのリンクを表示する。
+- Supabase接続情報と既存IndexedDBがある `kakidas-3gqw` Vercel projectを、今後のProduction deployment対象として扱う。
+- v0.5.75のメモ一覧再設計・検索・タグ別ビュー・カード操作メニューはそのまま正式環境へ反映する。
+- IndexedDB schema、バックアップ形式、クラウド同期data model、Supabase schemaは変更なし。
