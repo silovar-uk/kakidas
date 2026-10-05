@@ -1,5 +1,6 @@
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { AuthProvider } from "./auth/AuthProvider";
+import { CanonicalHostNotice } from "./components/CanonicalHostNotice";
 import { ChatGptMemoButton } from "./components/ChatGptMemoButton";
 import { CloudUploadHeaderButton } from "./components/CloudUploadHeaderButton";
 import { EntryTagGroupDragOrder } from "./components/EntryTagGroupDragOrder";
@@ -16,6 +17,7 @@ import { TagManagerPage } from "./pages/TagManagerPage";
 export default function App() {
   return (
     <AuthProvider>
+      <CanonicalHostNotice />
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<MemoListPage />} />
