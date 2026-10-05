@@ -1067,7 +1067,7 @@ export function MemoListPage() {
                 検索を解除
               </button>
             ) : (
-              <span>{viewMode === "tags" ? `${tagGroups.length}グループ` : "更新順で表示"}</span>
+              <span>{viewMode === "tags" ? `${tagGroups.length}グループ` : MEMO_SORT_MODE_LABEL[memoSortMode]}</span>
             )}
           </div>
         </section>
