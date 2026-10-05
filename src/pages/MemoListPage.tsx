@@ -16,9 +16,8 @@ import {
   CloudUploadDialog,
   type CloudUploadTarget,
 } from "../components/CloudUploadDialog";
-import { CloudStatusBadge } from "../components/CloudStatusBadge";
 import { MemoDeleteDialog } from "../components/MemoDeleteDialog";
-import { MemoTagControl } from "../components/MemoTagControl";
+import { MemoCardMenu } from "../components/MemoCardMenu";
 import { NoticeToast } from "../components/NoticeToast";
 import { useCloudMemos } from "../hooks/useCloudMemos";
 import { useMemos } from "../hooks/useMemos";
@@ -35,8 +34,6 @@ import {
   type MemoListItem,
   type MemoSortMode,
   type MemoWithEntries,
-  ENTRY_KIND_LABEL,
-  ENTRY_KINDS,
   MEMO_SORT_MODE_LABEL,
   MEMO_SORT_MODES,
   formatUpdatedAt,
@@ -84,9 +81,9 @@ type MemoPreviewFragment = {
 };
 
 const MEMO_PREVIEW_MAX_LENGTH: Record<EntryKind, number> = {
-  word: 20,
-  sentence: 36,
-  paragraph: 54,
+  word: 36,
+  sentence: 64,
+  paragraph: 92,
 };
 
 function toMemoPreviewText(content: string, maxLength: number): string {
@@ -107,12 +104,14 @@ function getMemoPreviewFragments(memo: MemoWithEntries): MemoPreviewFragment[] {
     ? availableEntries.filter((entry) => !entry.is_completed)
     : availableEntries;
 
-  return ENTRY_KINDS.flatMap((kind) => {
+  const priority: EntryKind[] = ["paragraph", "sentence", "word"];
+
+  for (const kind of priority) {
     const latestEntry = sourceEntries
       .filter((entry) => entry.kind === kind)
       .sort((a, b) => b.updated_at.localeCompare(a.updated_at))[0];
 
-    if (!latestEntry) return [];
+    if (!latestEntry) continue;
 
     return [{
       kind,
@@ -121,7 +120,57 @@ function getMemoPreviewFragments(memo: MemoWithEntries): MemoPreviewFragment[] {
         MEMO_PREVIEW_MAX_LENGTH[kind],
       ),
     }];
-  });
+  }
+
+  return [];
+}
+
+type MemoListViewMode = "all" | "tags";
+
+const MEMO_LIST_VIEW_STORAGE_KEY = "kakidas.memo-list-view";
+const MEMO_LIST_COLLAPSED_TAGS_STORAGE_KEY = "kakidas.memo-list-collapsed-tags";
+
+function readMemoListViewMode(): MemoListViewMode {
+  try {
+    return window.localStorage.getItem(MEMO_LIST_VIEW_STORAGE_KEY) === "tags"
+      ? "tags"
+      : "all";
+  } catch {
+    return "all";
+  }
+}
+
+function writeMemoListViewMode(mode: MemoListViewMode): void {
+  try {
+    window.localStorage.setItem(MEMO_LIST_VIEW_STORAGE_KEY, mode);
+  } catch {
+    // 表示設定を保存できない環境でも、その場の切り替えは続ける。
+  }
+}
+
+function readCollapsedMemoTagKeys(): Set<string> {
+  try {
+    const stored = window.localStorage.getItem(MEMO_LIST_COLLAPSED_TAGS_STORAGE_KEY);
+    if (!stored) return new Set();
+
+    const parsed = JSON.parse(stored);
+    if (!Array.isArray(parsed)) return new Set();
+
+    return new Set(parsed.filter((value): value is string => typeof value === "string"));
+  } catch {
+    return new Set();
+  }
+}
+
+function writeCollapsedMemoTagKeys(keys: Set<string>): void {
+  try {
+    window.localStorage.setItem(
+      MEMO_LIST_COLLAPSED_TAGS_STORAGE_KEY,
+      JSON.stringify([...keys]),
+    );
+  } catch {
+    // 折りたたみ状態を保存できなくても、現在の表示は維持する。
+  }
 }
 
 export function MemoListPage() {
@@ -162,14 +211,22 @@ export function MemoListPage() {
   const [memoSortMode, setMemoSortMode] = useState<MemoSortMode>(
     readMemoSortMode,
   );
-  /** 空文字は「すべて」。タグは比較用キーで保持し、表記ゆれをまとめる。 */
-  const [selectedTagKey, setSelectedTagKey] = useState("");
+  const [viewMode, setViewMode] = useState<MemoListViewMode>(
+    readMemoListViewMode,
+  );
+  const [searchQuery, setSearchQuery] = useState("");
+  const [collapsedTagKeys, setCollapsedTagKeys] = useState<Set<string>>(
+    readCollapsedMemoTagKeys,
+  );
   // 一覧表示の間に本文を温めておく。スマホでも、コピーのタップ操作中に
   // Clipboard API を呼べるため、Safariの「The request is not allowed」を避けやすい。
   const memoCopyCacheRef = useRef<Map<string, MemoWithEntries>>(new Map());
   const [memoPreviews, setMemoPreviews] = useState<
     Map<string, MemoPreviewFragment[]>
   >(() => new Map());
+  const [memoSearchTexts, setMemoSearchTexts] = useState<Map<string, string>>(
+    () => new Map(),
+  );
   const [conflictSnapshot, setConflictSnapshot] =
     useState<MemoCloudSnapshot | null>(null);
 
@@ -201,12 +258,41 @@ export function MemoListPage() {
     writeMemoSortMode(memoSortMode);
   }, [memoSortMode]);
 
+  useEffect(() => {
+    writeMemoListViewMode(viewMode);
+  }, [viewMode]);
+
+  useEffect(() => {
+    writeCollapsedMemoTagKeys(collapsedTagKeys);
+  }, [collapsedTagKeys]);
+
+  const toMemoSearchText = (detail: MemoWithEntries): string =>
+    [
+      detail.title,
+      detail.tag ?? "",
+      ...detail.entries.flatMap((entry) => [
+        entry.heading,
+        entry.content,
+        entry.tag ?? "",
+        entry.note,
+        entry.link_url,
+      ]),
+    ]
+      .join("\n")
+      .toLocaleLowerCase("ja-JP");
+
   const cacheMemoDetail = (memoId: string, detail: MemoWithEntries) => {
     memoCopyCacheRef.current.set(memoId, detail);
 
     setMemoPreviews((current) => {
       const next = new Map(current);
       next.set(memoId, getMemoPreviewFragments(detail));
+      return next;
+    });
+
+    setMemoSearchTexts((current) => {
+      const next = new Map(current);
+      next.set(memoId, toMemoSearchText(detail));
       return next;
     });
   };
@@ -231,6 +317,7 @@ export function MemoListPage() {
     const cache = memoCopyCacheRef.current;
     cache.clear();
     setMemoPreviews(new Map());
+    setMemoSearchTexts(new Map());
 
     const warmCopyCache = async () => {
       const details = await Promise.all(
@@ -243,15 +330,18 @@ export function MemoListPage() {
       if (cancelled) return;
 
       const nextPreviews = new Map<string, MemoPreviewFragment[]>();
+      const nextSearchTexts = new Map<string, string>();
 
       for (const { id, detail } of details) {
         if (!detail) continue;
 
         cache.set(id, detail);
         nextPreviews.set(id, getMemoPreviewFragments(detail));
+        nextSearchTexts.set(id, toMemoSearchText(detail));
       }
 
       setMemoPreviews(nextPreviews);
+      setMemoSearchTexts(nextSearchTexts);
     };
 
     void warmCopyCache().catch(() => {
@@ -290,27 +380,74 @@ export function MemoListPage() {
 
   const tagSummaries = useMemo(() => getMemoTagSummaries(memos), [memos]);
 
-  useEffect(() => {
-    if (
-      selectedTagKey &&
-      !tagSummaries.some((summary) => summary.key === selectedTagKey)
-    ) {
-      setSelectedTagKey("");
-    }
-  }, [selectedTagKey, tagSummaries]);
-
-  const visibleMemos = useMemo(() => {
-    const filtered = selectedTagKey
-      ? memos.filter((memo) => getMemoTagKey(memo.tag) === selectedTagKey)
-      : memos;
-
-    return [...filtered].sort((left, right) => {
+  const sortedMemos = useMemo(() => {
+    return [...memos].sort((left, right) => {
       const primary = memoSortMode === "created_desc"
         ? right.created_at.localeCompare(left.created_at)
         : right.updated_at.localeCompare(left.updated_at);
       return primary || right.updated_at.localeCompare(left.updated_at);
     });
-  }, [memoSortMode, memos, selectedTagKey]);
+  }, [memoSortMode, memos]);
+
+  const normalizedSearchQuery = searchQuery.trim().toLocaleLowerCase("ja-JP");
+
+  const visibleMemos = useMemo(() => {
+    if (!normalizedSearchQuery) return sortedMemos;
+
+    return sortedMemos.filter((memo) => {
+      const fallback = `${memo.title}\n${memo.tag ?? ""}`
+        .toLocaleLowerCase("ja-JP");
+      const searchText = memoSearchTexts.get(memo.id) ?? fallback;
+      return searchText.includes(normalizedSearchQuery);
+    });
+  }, [memoSearchTexts, normalizedSearchQuery, sortedMemos]);
+
+  const tagGroups = useMemo(() => {
+    const grouped = new Map<string, MemoListItem[]>();
+
+    for (const memo of visibleMemos) {
+      const key = getMemoTagKey(memo.tag) || "__untagged__";
+      const current = grouped.get(key) ?? [];
+      current.push(memo);
+      grouped.set(key, current);
+    }
+
+    const groups = tagSummaries.flatMap((summary) => {
+      const groupMemos = grouped.get(summary.key);
+      return groupMemos?.length
+        ? [{
+            key: summary.key,
+            label: summary.label,
+            memos: groupMemos,
+            isUntagged: false,
+          }]
+        : [];
+    });
+
+    const untagged = grouped.get("__untagged__");
+    if (untagged?.length) {
+      groups.push({
+        key: "__untagged__",
+        label: "未分類",
+        memos: untagged,
+        isUntagged: true,
+      });
+    }
+
+    return groups;
+  }, [tagSummaries, visibleMemos]);
+
+  const toggleTagGroup = (key: string) => {
+    setCollapsedTagKeys((current) => {
+      const next = new Set(current);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
+      return next;
+    });
+  };
 
   const selectedTargets = useMemo<CloudUploadTarget[]>(
     () =>
@@ -653,6 +790,92 @@ export function MemoListPage() {
   const cloudButtonLabel = isAuthLoading ? "クラウド…" : "クラウド";
   const isCloudActionBusy = isImporting || isApplyingCloudUpdate || isUploading;
 
+  const renderMemoCard = (memo: MemoListItem) => {
+    const selected = selectedMemoIds.has(memo.id);
+    const cloudAction = getCloudAction(memo.sync_meta.cloud_state);
+    const preview = (memoPreviews.get(memo.id) ?? [])[0] ?? null;
+
+    return (
+      <li
+        key={memo.id}
+        className={`memo-card ${selected ? "memo-card--selected" : ""}`}
+      >
+        {isUploadMode ? (
+          <button
+            type="button"
+            className="memo-card__select"
+            aria-pressed={selected}
+            onClick={() => toggleMemoSelection(memo.id)}
+          >
+            <span className="memo-card__checkbox" aria-hidden="true">
+              {selected ? "✓" : ""}
+            </span>
+            <span className="memo-card__details">
+              <strong>{memo.title}</strong>
+              {memo.tag ? <span className="memo-card__tag">#{memo.tag}</span> : null}
+              <span>
+                単語 {memo.entry_counts.word}件 ／ 文 {memo.entry_counts.sentence}件 ／ 段落 {memo.entry_counts.paragraph}件
+              </span>
+            </span>
+          </button>
+        ) : (
+          <div className="memo-card__content">
+            <Link to={`/memos/${memo.id}`} className="memo-card__link">
+              <strong>{memo.title}</strong>
+              {preview ? (
+                <span
+                  className="memo-card__preview"
+                  aria-label={`${memo.title}の入力内容の抜粋`}
+                >
+                  <span className="memo-card__preview-content">
+                    {preview.content}
+                  </span>
+                </span>
+              ) : null}
+              <span className="memo-card__meta">
+                {memo.tag ? (
+                  <>
+                    <span className="memo-card__tag-text">#{memo.tag}</span>
+                    <span className="memo-card__tag-separator" aria-hidden="true">·</span>
+                  </>
+                ) : null}
+                <span>{formatUpdatedAt(memo.updated_at)}</span>
+              </span>
+            </Link>
+          </div>
+        )}
+
+        {isUploadMode ? (
+          <Link
+            to={`/memos/${memo.id}`}
+            className="memo-card__open-link"
+            aria-label={`${memo.title}を開く`}
+          >
+            開く
+          </Link>
+        ) : (
+          <div className="memo-card__actions">
+            <MemoCardMenu
+              memoTitle={memo.title}
+              tag={memo.tag}
+              suggestions={tagSummaries}
+              cloudAction={cloudAction}
+              isCloudActionBusy={isCloudActionBusy}
+              isCopying={copyingMemoId === memo.id}
+              copyDisabled={copyingMemoId !== null}
+              includeCompletedInCopy={includeCompletedInCopy}
+              onPrimeCopy={() => primeMemoCopy(memo.id)}
+              onCopy={() => handleCopyMemo(memo)}
+              onTagSave={(tag) => handleSaveMemoTag(memo, tag)}
+              onCloudAction={() => handleCloudAction(memo)}
+              onDelete={() => requestMemoDeletion(memo)}
+            />
+          </div>
+        )}
+      </li>
+    );
+  };
+
   return (
     <main className="app-shell memo-list-page">
       <header className="app-header">
@@ -717,99 +940,135 @@ export function MemoListPage() {
           </div>
         </section>
       ) : (
-        <section className="memo-list-toolbar" aria-label="メモ操作">
-          <div>
-            <h2>メモ</h2>
-            <span>
-              {selectedTagKey ? `${visibleMemos.length}/${memos.length}件` : `${memos.length}件`}
-            </span>
-          </div>
-
-          <div className="memo-list-toolbar__organize">
-            <label className="memo-list-select">
-              <span>並び順</span>
-              <select
-                value={memoSortMode}
-                onChange={(event) =>
-                  setMemoSortMode(event.target.value as MemoSortMode)
-                }
-                aria-label="メモの並び順"
-              >
-                {MEMO_SORT_MODES.map((mode) => (
-                  <option key={mode} value={mode}>
-                    {MEMO_SORT_MODE_LABEL[mode]}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label className="memo-list-select">
-              <span>タグ</span>
-              <select
-                value={selectedTagKey}
-                onChange={(event) => setSelectedTagKey(event.target.value)}
-                aria-label="タグで絞り込む"
-              >
-                <option value="">すべて</option>
-                {tagSummaries.map((summary) => (
-                  <option key={summary.key} value={summary.key}>
-                    {summary.label}（{summary.count}）
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <Link to="/tags" className="tag-manager-link">
-              タグ管理
-            </Link>
-          </div>
-
-          <div className="memo-list-toolbar__actions">
-            <button
-              type="button"
-              className="cloud-upload-button"
-              onClick={openUploadMode}
-            >
-              <span aria-hidden="true">☁</span>
-              クラウドへ送る
-            </button>
-            <button
-              type="button"
-              className="secondary-button"
-              onClick={() => void handleExport()}
-            >
-              JSONを書き出す
-            </button>
-
-            <button
-              type="button"
-              className="secondary-button"
-              onClick={() => importInputRef.current?.click()}
-            >
-              JSONを読み込む
-            </button>
-
-            <input
-              ref={importInputRef}
-              className="visually-hidden"
-              type="file"
-              accept="application/json,.json"
-              onChange={(event) => void handleImport(event.target.files?.[0])}
-            />
-          </div>
-
-          <div className="memo-list-toolbar__copy-options">
-            <label className="timestamp-visibility-toggle">
+        <section className="memo-list-toolbar memo-list-toolbar--quiet" aria-label="メモを探す・表示する">
+          <div className="memo-list-toolbar__primary">
+            <div className="memo-search">
+              <span aria-hidden="true">⌕</span>
               <input
-                type="checkbox"
-                checked={includeCompletedInCopy}
-                onChange={(event) => setIncludeCompletedInCopy(event.target.checked)}
+                type="search"
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                placeholder="タイトル・内容・タグを検索"
+                aria-label="メモを検索"
               />
-              <span className="timestamp-visibility-toggle__track" aria-hidden="true">
-                <span className="timestamp-visibility-toggle__thumb" />
-              </span>
-              <span>コピーに完了を含める</span>
-            </label>
+              {searchQuery ? (
+                <button
+                  type="button"
+                  className="memo-search__clear"
+                  onClick={() => setSearchQuery("")}
+                  aria-label="検索をクリア"
+                >
+                  ×
+                </button>
+              ) : null}
+            </div>
+
+            <div className="memo-view-switch" role="group" aria-label="メモの表示">
+              <button
+                type="button"
+                aria-pressed={viewMode === "all"}
+                onClick={() => setViewMode("all")}
+              >
+                すべて
+              </button>
+              <button
+                type="button"
+                aria-pressed={viewMode === "tags"}
+                onClick={() => setViewMode("tags")}
+              >
+                タグ別
+              </button>
+            </div>
+
+            <details className="memo-tools-menu">
+              <summary className="memo-tools-menu__trigger" aria-label="一覧のツールを開く" title="ツール・設定">
+                <span aria-hidden="true">•••</span>
+              </summary>
+              <div className="memo-tools-menu__panel">
+                <span className="memo-tools-menu__heading">表示・整理</span>
+                <label className="memo-tools-menu__sort">
+                  <span>並び順</span>
+                  <select
+                    value={memoSortMode}
+                    onChange={(event) =>
+                      setMemoSortMode(event.target.value as MemoSortMode)
+                    }
+                    aria-label="メモの並び順"
+                  >
+                    {MEMO_SORT_MODES.map((mode) => (
+                      <option key={mode} value={mode}>
+                        {MEMO_SORT_MODE_LABEL[mode]}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <Link to="/tags" className="memo-tools-menu__item">
+                  <span aria-hidden="true">#</span>
+                  <span>タグを整理</span>
+                </Link>
+
+                <div className="memo-tools-menu__divider" />
+
+                <button
+                  type="button"
+                  className="memo-tools-menu__item"
+                  onClick={openUploadMode}
+                >
+                  <span aria-hidden="true">☁</span>
+                  <span>クラウドへ送る</span>
+                </button>
+                <button
+                  type="button"
+                  className="memo-tools-menu__item"
+                  onClick={() => void handleExport()}
+                >
+                  <span aria-hidden="true">↓</span>
+                  <span>JSONを書き出す</span>
+                </button>
+                <button
+                  type="button"
+                  className="memo-tools-menu__item"
+                  onClick={() => importInputRef.current?.click()}
+                >
+                  <span aria-hidden="true">↑</span>
+                  <span>JSONを読み込む</span>
+                </button>
+                <input
+                  ref={importInputRef}
+                  className="visually-hidden"
+                  type="file"
+                  accept="application/json,.json"
+                  onChange={(event) => void handleImport(event.target.files?.[0])}
+                />
+
+                <div className="memo-tools-menu__divider" />
+
+                <label className="memo-tools-menu__toggle">
+                  <input
+                    type="checkbox"
+                    checked={includeCompletedInCopy}
+                    onChange={(event) => setIncludeCompletedInCopy(event.target.checked)}
+                  />
+                  <span>コピーに完了済みを含める</span>
+                </label>
+              </div>
+            </details>
+          </div>
+
+          <div className="memo-list-toolbar__status">
+            <strong>
+              {normalizedSearchQuery
+                ? `${visibleMemos.length} / ${memos.length}件`
+                : `${memos.length}件`}
+            </strong>
+            {normalizedSearchQuery ? (
+              <button type="button" onClick={() => setSearchQuery("")}>
+                検索を解除
+              </button>
+            ) : (
+              <span>{viewMode === "tags" ? `${tagGroups.length}グループ` : MEMO_SORT_MODE_LABEL[memoSortMode]}</span>
+            )}
           </div>
         </section>
       )}
@@ -844,141 +1103,60 @@ export function MemoListPage() {
         </section>
       ) : visibleMemos.length === 0 ? (
         <section className="empty-state empty-state--filtered">
-          <p>このタグのメモはありません。</p>
+          <p>検索に一致するメモがありません。</p>
           <button
             type="button"
             className="secondary-button"
-            onClick={() => setSelectedTagKey("")}
+            onClick={() => setSearchQuery("")}
           >
-            すべてのメモを見る
+            検索を解除
           </button>
         </section>
-      ) : (
-        <ul className={`memo-list ${isUploadMode ? "memo-list--selecting" : ""}`}>
-          {visibleMemos.map((memo) => {
-            const selected = selectedMemoIds.has(memo.id);
-            const cloudAction = getCloudAction(memo.sync_meta.cloud_state);
+      ) : isUploadMode ? (
+        <ul className="memo-list memo-list--selecting">
+          {sortedMemos.map(renderMemoCard)}
+        </ul>
+      ) : viewMode === "tags" ? (
+        <div className="memo-tag-groups" aria-label="タグ別のメモ">
+          {tagGroups.map((group) => {
+            const collapsed = collapsedTagKeys.has(group.key);
 
             return (
-              <li
-                key={memo.id}
-                className={`memo-card ${selected ? "memo-card--selected" : ""}`}
+              <section
+                key={group.key}
+                className={`memo-tag-group ${group.isUntagged ? "memo-tag-group--untagged" : ""}`}
               >
-                {isUploadMode ? (
-                  <button
-                    type="button"
-                    className="memo-card__select"
-                    aria-pressed={selected}
-                    onClick={() => toggleMemoSelection(memo.id)}
-                  >
-                    <span className="memo-card__checkbox" aria-hidden="true">
-                      {selected ? "✓" : ""}
-                    </span>
-                    <span className="memo-card__details">
-                      <strong>{memo.title}</strong>
-                      {memo.tag ? <span className="memo-card__tag">#{memo.tag}</span> : null}
-                      <span>
-                        単語 {memo.entry_counts.word}件 ／ 文 {memo.entry_counts.sentence}件 ／ 段落 {memo.entry_counts.paragraph}件
-                      </span>
-                    </span>
-                  </button>
-                ) : (
-                  <div className="memo-card__content">
-                    <Link to={`/memos/${memo.id}`} className="memo-card__link">
-                      <strong>{memo.title}</strong>
-                      {(memoPreviews.get(memo.id) ?? []).length > 0 ? (
-                        <span
-                          className="memo-card__preview"
-                          aria-label={`${memo.title}の入力内容の抜粋`}
-                        >
-                          {(memoPreviews.get(memo.id) ?? []).map((fragment) => (
-                            <span
-                              key={`${fragment.kind}-${fragment.content}`}
-                              className="memo-card__preview-item"
-                            >
-                              <span className="memo-card__preview-kind">
-                                {ENTRY_KIND_LABEL[fragment.kind]}
-                              </span>
-                              <span className="memo-card__preview-content">
-                                {fragment.content}
-                              </span>
-                            </span>
-                          ))}
-                        </span>
-                      ) : null}
-                      <span className="memo-card__meta">
-                        <span>最終更新 {formatUpdatedAt(memo.updated_at)}</span>
-                        <CloudStatusBadge syncMeta={memo.sync_meta} />
-                      </span>
-                    </Link>
+                <button
+                  type="button"
+                  className="memo-tag-group__header"
+                  aria-expanded={!collapsed}
+                  onClick={() => toggleTagGroup(group.key)}
+                >
+                  <span className="memo-tag-group__name">
+                    {group.isUntagged ? "未分類" : group.label}
+                  </span>
+                  <span className="memo-tag-group__count">{group.memos.length}</span>
+                  <span className="memo-tag-group__chevron" aria-hidden="true">
+                    {collapsed ? "›" : "⌄"}
+                  </span>
+                </button>
 
-                    <div className="memo-card__tag-control">
-                      <MemoTagControl
-                        tag={memo.tag}
-                        suggestions={tagSummaries}
-                        onSave={(tag) => handleSaveMemoTag(memo, tag)}
-                      />
-                    </div>
-                  </div>
-                )}
-
-                {isUploadMode ? (
-                  <Link
-                    to={`/memos/${memo.id}`}
-                    className="memo-card__open-link"
-                    aria-label={`${memo.title}を開く`}
-                  >
-                    開く
-                  </Link>
-                ) : (
-                  <div className="memo-card__actions">
-                    <button
-                      type="button"
-                      className="memo-card__copy"
-                      disabled={copyingMemoId !== null}
-                      onPointerEnter={() => primeMemoCopy(memo.id)}
-                      onPointerDown={() => primeMemoCopy(memo.id)}
-                      onFocus={() => primeMemoCopy(memo.id)}
-                      onClick={() => void handleCopyMemo(memo)}
-                      aria-label={`「${memo.title}」をコピー`}
-                      title={includeCompletedInCopy ? "完了済みを含めてコピー" : "完了済みを除いてコピー"}
-                    >
-                      {copyingMemoId === memo.id ? "コピー中…" : "コピー"}
-                    </button>
-                    {cloudAction ? (
-                      <button
-                        type="button"
-                        className={`memo-card__cloud-action memo-card__cloud-action--${cloudAction.kind}`}
-                        disabled={isCloudActionBusy}
-                        onClick={() => handleCloudAction(memo)}
-                      >
-                        {isApplyingCloudUpdate && cloudAction.kind === "update"
-                          ? "取り込み中…"
-                          : isImporting && cloudAction.kind === "clone"
-                            ? "確認中…"
-                            : cloudAction.label}
-                      </button>
-                    ) : null}
-                    <button
-                      type="button"
-                      className="icon-button memo-card__delete"
-                      onClick={(event) => {
-                        // 削除操作だけをカードを開く操作から切り離す。
-                        // 確認は Safari の標準 confirm ではなく、アプリ内ダイアログで行う。
-                        event.preventDefault();
-                        event.stopPropagation();
-                        requestMemoDeletion(memo);
-                      }}
-                      aria-label={`${memo.title}を削除`}
-                      title="削除する"
-                    >
-                      ×
-                    </button>
-                  </div>
-                )}
-              </li>
+                {!collapsed ? (
+                  <ul className="memo-list">
+                    {group.memos.map(renderMemoCard)}
+                  </ul>
+                ) : null}
+              </section>
             );
           })}
+
+          <Link to="/tags" className="memo-tag-groups__manage">
+            タグを整理する →
+          </Link>
+        </div>
+      ) : (
+        <ul className="memo-list">
+          {visibleMemos.map(renderMemoCard)}
         </ul>
       )}
 
