@@ -34,7 +34,6 @@ import {
   type MemoListItem,
   type MemoSortMode,
   type MemoWithEntries,
-  ENTRY_KINDS,
   MEMO_SORT_MODE_LABEL,
   MEMO_SORT_MODES,
   formatUpdatedAt,
