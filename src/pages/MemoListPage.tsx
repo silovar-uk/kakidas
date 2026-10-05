@@ -173,8 +173,6 @@ function writeCollapsedMemoTagKeys(keys: Set<string>): void {
   }
 }
 
-export function MemoListPage()}
-
 export function MemoListPage() {
   const navigate = useNavigate();
 
