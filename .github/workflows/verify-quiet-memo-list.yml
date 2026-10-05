@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - ui/quiet-memo-list-20261006
+  pull_request:
+    branches:
+      - main
   workflow_dispatch:
 
 permissions:
