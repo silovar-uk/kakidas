@@ -10,6 +10,7 @@
 - 旧 `kakidas.vercel.app` では、自動転送せず「旧環境」案内と正式版への導線を表示
   - originをまたぐ自動転送で、旧URL側に残る可能性があるIndexedDBへ触れなくなる事故を避ける
 - Supabase環境変数と既存ローカルメモがある `kakidas-3gqw` Vercel projectを今後の本番対象とする
+- 旧 `kakidas` Vercel projectは今後のGit自動ビルドを停止し、既存ローカルデータ確認用として現状を保持
 - メモ一覧のv0.5.75再設計はそのまま維持
 - IndexedDB schema・クラウド同期data model・Supabase schemaは変更なし
 
