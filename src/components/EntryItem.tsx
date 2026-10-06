@@ -800,8 +800,9 @@ export function EntryItem({
                     onClick={beginLinkEdit}
                     disabled={disabled}
                     aria-label="URLを編集"
+                    title="URLを編集"
                   >
-                    URL編集
+                    <span aria-hidden="true">✎</span>
                   </button>
                 </div>
               </div>
@@ -831,7 +832,7 @@ export function EntryItem({
               {hasNote ? (
                 <button
                   type="button"
-                  className="entry-item__note"
+                  className={`entry-item__note ${isReferenceUrl ? "entry-item__note--reference" : ""}`}
                   onClick={beginNoteEdit}
                   disabled={disabled}
                   aria-label={isReferenceUrl ? "備考を編集" : "気持ち・備考を編集"}
@@ -910,7 +911,7 @@ export function EntryItem({
           ) : null}
         </div>
 
-        <div className="entry-item__quick-actions">
+        <div className={`entry-item__quick-actions ${isReferenceUrl ? "entry-item__quick-actions--reference" : ""}`}>
           <EntrySatisfactionControl
             value={entry.satisfaction}
             disabled={disabled}
@@ -1036,14 +1037,16 @@ export function EntryItem({
           >
             ⧉ コピー
           </button>
-          <button
-            type="button"
-            className="structure-action structure-action--derive"
-            onClick={() => void onCreateMemoFromEntry(entry.id)}
-            disabled={disabled}
-          >
-            ↗ 新しいメモにする
-          </button>
+          {!isReferenceUrl ? (
+            <button
+              type="button"
+              className="structure-action structure-action--derive"
+              onClick={() => void onCreateMemoFromEntry(entry.id)}
+              disabled={disabled}
+            >
+              ↗ 新しいメモにする
+            </button>
+          ) : null}
           {moveTargets.length > 0 ? (
             <div className="entry-item__kind-actions" aria-label="区分を移動">
               {moveTargets.map((targetKind) => (
