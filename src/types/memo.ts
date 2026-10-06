@@ -346,8 +346,8 @@ export const ENTRY_KIND_PLACEHOLDER: Record<EntryKind, string> = {
  * 移動は内容を分割せず、移動先のルート項目として置く。
  */
 export const ENTRY_KIND_MOVE_TARGETS: Record<EntryKind, readonly EntryKind[]> = {
-  word: ["sentence", "paragraph"],
-  sentence: ["word", "paragraph"],
+  word: [],
+  sentence: ["paragraph"],
   paragraph: ["sentence"],
 };
 
