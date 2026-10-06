@@ -157,39 +157,83 @@
   display: grid;
   gap: 6px;
   margin-top: 8px;
+  padding: 8px 10px 10px;
+  border: 1px solid #ead5c8;
+  border-left: 3px solid #cf845f;
+  border-radius: 11px;
+  background: #fff7f1;
+  transition:
+    border-color 140ms ease,
+    background-color 140ms ease,
+    box-shadow 140ms ease;
+}
+
+.entry-composer__reference-note:focus-within {
+  border-color: #cf987b;
+  border-left-color: #bd562f;
+  background: #fffaf6;
+  box-shadow: 0 0 0 3px rgba(185, 91, 48, 0.1);
 }
 
 .entry-composer__reference-note-label {
   display: flex;
   align-items: baseline;
   gap: 6px;
+  color: #7a4c36;
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.entry-composer__reference-note-label::before {
+  content: "✎";
+  color: #bd562f;
+  font-size: 12px;
+  line-height: 1;
 }
 
 .entry-composer__reference-note-label small {
-  color: var(--muted, #6b7280);
+  color: #8d7f76;
   font-size: 10px;
-  font-weight: 400;
+  font-weight: 500;
 }
 
 .entry-composer__reference-note textarea {
   width: 100%;
-  min-height: 64px;
+  min-height: 58px;
   resize: vertical;
   box-sizing: border-box;
-  border: 1px solid color-mix(in srgb, currentColor 14%, transparent);
-  border-radius: 10px;
-  padding: 10px 12px;
-  background: transparent;
+  border: 1px solid #ddc4b4;
+  border-radius: 9px;
+  padding: 9px 11px;
+  background: rgba(255, 254, 250, 0.78);
   color: inherit;
   font: inherit;
   line-height: 1.5;
+  transition:
+    border-color 140ms ease,
+    background-color 140ms ease,
+    box-shadow 140ms ease;
+}
+
+.entry-composer__reference-note textarea::placeholder {
+  color: #9b877b;
+}
+
+.entry-composer__reference-note textarea:hover:not(:disabled) {
+  border-color: #cfaa93;
+  background: #fffefa;
 }
 
 .entry-composer__reference-note textarea:focus {
-  outline: 2px solid color-mix(in srgb, currentColor 22%, transparent);
+  border-color: #bd562f;
+  outline: 2px solid rgba(185, 91, 48, 0.2);
   outline-offset: 1px;
+  background: #fffefa;
+}
+
+.entry-composer__reference-note textarea:disabled {
+  opacity: 0.62;
 }
 
 .entry-item__reference-domain-row {
