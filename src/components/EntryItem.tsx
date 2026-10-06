@@ -292,7 +292,7 @@ export function EntryItem({
     setHeadingValue(entry.heading);
     setNoteValue(entry.note);
     setLinkValue(entry.link_url);
-    setShowNoteEditor(false);
+    setShowNoteEditor(isReferenceUrl || Boolean(entry.note.trim()));
     setShowLinkEditor(true);
     setLinkError(null);
     setEditMode("link");
@@ -310,6 +310,12 @@ export function EntryItem({
     } catch (error) {
       setShowLinkEditor(true);
       setLinkError(error instanceof Error ? error.message : "リンクのURLを確認してください。");
+      return false;
+    }
+
+    if (isReferenceUrl && !nextLinkUrl) {
+      setShowLinkEditor(true);
+      setLinkError("URLを入力してください。");
       return false;
     }
 
@@ -568,7 +574,9 @@ export function EntryItem({
             {showNoteEditor ? (
               <div className="entry-item__note-editor">
                 <div className="entry-item__note-editor-header">
-                  <label htmlFor={`entry-note-${entry.id}`}>気持ち・備考</label>
+                  <label htmlFor={`entry-note-${entry.id}`}>
+                    {isReferenceUrl ? "備考" : "気持ち・備考"}
+                  </label>
                   <button
                     type="button"
                     className="text-button entry-item__remove-note"
@@ -576,10 +584,10 @@ export function EntryItem({
                     onMouseDown={(event) => event.preventDefault()}
                     onClick={() => {
                       setNoteValue("");
-                      setShowNoteEditor(false);
+                      if (!isReferenceUrl) setShowNoteEditor(false);
                     }}
                   >
-                    消す
+                    {isReferenceUrl ? "クリア" : "消す"}
                   </button>
                 </div>
                 <textarea
@@ -592,8 +600,8 @@ export function EntryItem({
                   onCompositionStart={() => setIsComposing(true)}
                   onCompositionEnd={() => setIsComposing(false)}
                   rows={3}
-                  placeholder="そのときの気持ち・補足"
-                  aria-label="気持ち・備考を編集"
+                  placeholder={isReferenceUrl ? "このURLについての短いメモ" : "そのときの気持ち・補足"}
+                  aria-label={isReferenceUrl ? "備考を編集" : "気持ち・備考を編集"}
                 />
               </div>
             ) : editMode !== "link" ? (
@@ -608,7 +616,7 @@ export function EntryItem({
                 }}
               >
                 <NoteIcon />
-                <span>気持ち・備考</span>
+                <span>{isReferenceUrl ? "備考" : "気持ち・備考"}</span>
               </button>
             ) : null}
 
@@ -635,7 +643,7 @@ export function EntryItem({
                     aria-label="リンクURLを編集"
                     aria-invalid={linkError ? true : undefined}
                   />
-                  {linkValue ? (
+                  {linkValue && !isReferenceUrl ? (
                     <button
                       type="button"
                       className="entry-item__remove-link"
@@ -782,9 +790,20 @@ export function EntryItem({
                 >
                   <span className="entry-item__content-text">{entry.content}</span>
                 </a>
-                {referenceHostname ? (
-                  <span className="entry-item__reference-domain">{referenceHostname}</span>
-                ) : null}
+                <div className="entry-item__reference-domain-row">
+                  {referenceHostname ? (
+                    <span className="entry-item__reference-domain">{referenceHostname}</span>
+                  ) : null}
+                  <button
+                    type="button"
+                    className="entry-item__reference-edit-url"
+                    onClick={beginLinkEdit}
+                    disabled={disabled}
+                    aria-label="URLを編集"
+                  >
+                    URL編集
+                  </button>
+                </div>
               </div>
             </div>
           ) : (
@@ -815,10 +834,10 @@ export function EntryItem({
                   className="entry-item__note"
                   onClick={beginNoteEdit}
                   disabled={disabled}
-                  aria-label="気持ち・備考を編集"
+                  aria-label={isReferenceUrl ? "備考を編集" : "気持ち・備考を編集"}
                 >
                   <span className="entry-item__note-label">
-                    {isReferenceUrl ? "メモ" : "気持ち"}
+                    {isReferenceUrl ? "備考" : "気持ち"}
                   </span>
                   <span className="entry-item__note-text">{entry.note}</span>
                 </button>
@@ -843,12 +862,12 @@ export function EntryItem({
               disabled={disabled}
               aria-label={
                 isReferenceUrl
-                  ? hasNote ? "一言メモを編集" : "一言メモを追加"
+                  ? hasNote ? "備考を編集" : "備考を追加"
                   : hasNote ? "気持ち・備考を編集" : "気持ち・備考を追加"
               }
               title={
                 isReferenceUrl
-                  ? hasNote ? "一言メモを編集" : "一言メモを追加"
+                  ? hasNote ? "備考を編集" : "備考を追加"
                   : hasNote ? "気持ち・備考を編集" : "気持ち・備考を追加"
               }
             >
@@ -905,8 +924,16 @@ export function EntryItem({
             }`}
             onClick={beginNoteEdit}
             disabled={disabled || isSaving}
-            aria-label={hasNote ? "気持ち・備考を編集" : "気持ち・備考を追加"}
-            title={hasNote ? "気持ち・備考を編集" : "気持ち・備考を追加"}
+            aria-label={
+              isReferenceUrl
+                ? hasNote ? "備考を編集" : "備考を追加"
+                : hasNote ? "気持ち・備考を編集" : "気持ち・備考を追加"
+            }
+            title={
+              isReferenceUrl
+                ? hasNote ? "備考を編集" : "備考を追加"
+                : hasNote ? "気持ち・備考を編集" : "気持ち・備考を追加"
+            }
           >
             <NoteIcon />
           </button>
@@ -933,8 +960,16 @@ export function EntryItem({
               className="entry-item__note-trigger entry-item__note-trigger--inline"
               onClick={beginNoteEdit}
               disabled={disabled || isSaving}
-              aria-label={hasNote ? "気持ち・備考を編集" : "気持ち・備考を追加"}
-              title={hasNote ? "気持ち・備考を編集" : "気持ち・備考を追加"}
+              aria-label={
+                isReferenceUrl
+                  ? hasNote ? "備考を編集" : "備考を追加"
+                  : hasNote ? "気持ち・備考を編集" : "気持ち・備考を追加"
+              }
+              title={
+                isReferenceUrl
+                  ? hasNote ? "備考を編集" : "備考を追加"
+                  : hasNote ? "気持ち・備考を編集" : "気持ち・備考を追加"
+              }
             >
               <NoteIcon />
             </button>

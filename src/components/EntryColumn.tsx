@@ -32,6 +32,7 @@ import {
   type EntryTreeNode,
   ENTRY_KIND_LABEL,
   getEntryTagKey,
+  getLinkHostname,
   normalizeEntryTag,
   supportsHierarchy,
 } from "../types/memo";
@@ -482,6 +483,33 @@ export function EntryColumn({
     }
   };
 
+  const handleUpdateEntry = async (
+    entryId: string,
+    patch: EntryUpdate,
+  ) => {
+    const nextPatch = { ...patch };
+
+    if (
+      kind === "word" &&
+      typeof patch.link_url === "string" &&
+      patch.link_url.trim()
+    ) {
+      nextPatch.content = getLinkHostname(patch.link_url) || patch.link_url;
+    }
+
+    const updated = await onUpdate(entryId, nextPatch);
+
+    if (
+      kind === "word" &&
+      typeof patch.link_url === "string" &&
+      patch.link_url.trim()
+    ) {
+      void enrichReferenceTitle(entryId, patch.link_url);
+    }
+
+    return updated;
+  };
+
   const handleCreate = async (
     content: string,
     metadata: EntryCreateMetadata,
@@ -517,7 +545,7 @@ export function EntryColumn({
     metadata: EntryCreateMetadata,
     draftId: string,
   ) => {
-    await onCreate(
+    const created = await onCreate(
       kind,
       content,
       { ...metadata, tag },
@@ -525,6 +553,18 @@ export function EntryColumn({
       addAtBottom ? "bottom" : "top",
       draftId,
     );
+
+    if (
+      kind === "word" &&
+      metadata.link_url &&
+      created &&
+      typeof created === "object" &&
+      "id" in created &&
+      typeof created.id === "string"
+    ) {
+      void enrichReferenceTitle(created.id, metadata.link_url);
+    }
+
     const committedTagKey = getEntryTagKey(tag);
     setTagGroupDraftKeys((current) => {
       const next = new Set(current);
@@ -710,7 +750,7 @@ export function EntryColumn({
       onMoveToKind={requestMoveToKind}
       onCopy={requestCopyEntry}
       onCreateMemoFromEntry={requestCreateMemoFromEntry}
-      onUpdate={onUpdate}
+      onUpdate={handleUpdateEntry}
       onDelete={requestDelete}
     />
   );
