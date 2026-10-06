@@ -328,14 +328,14 @@ export type BackupPayload = {
 
 /** 画面に出す名前だけを日本語にする。kind / DB値は従来のまま。 */
 export const ENTRY_KIND_LABEL: Record<EntryKind, string> = {
-  word: "単語",
+  word: "参考URL",
   sentence: "文",
   paragraph: "段落",
 };
 
 /** 入力欄でだけ使う、短い補助文。 */
 export const ENTRY_KIND_PLACEHOLDER: Record<EntryKind, string> = {
-  word: "思いつき",
+  word: "URLを貼り付け…",
   sentence: "一文で書く",
   paragraph: "少し長めに書く",
 };
@@ -543,6 +543,70 @@ export function getOpenableLinkUrl(value: unknown): string | null {
     return normalized || null;
   } catch {
     return null;
+  }
+}
+
+const REFERENCE_TRACKING_QUERY_PARAMS = new Set([
+  "fbclid",
+  "gclid",
+  "mc_cid",
+  "mc_eid",
+]);
+
+/**
+ * 参考URLの重複判定だけに使う正規化キー。
+ * 保存する元URLは変えず、UTM等の追跡パラメータとhashを比較時だけ除外する。
+ */
+export function getReferenceUrlKey(value: unknown): string {
+  const openable = getOpenableLinkUrl(value);
+  if (!openable) return "";
+
+  const parsed = new URL(openable);
+  parsed.hash = "";
+  parsed.hostname = parsed.hostname.toLocaleLowerCase("en-US");
+
+  for (const key of Array.from(parsed.searchParams.keys())) {
+    const normalizedKey = key.toLocaleLowerCase("en-US");
+    if (
+      normalizedKey.startsWith("utm_") ||
+      REFERENCE_TRACKING_QUERY_PARAMS.has(normalizedKey)
+    ) {
+      parsed.searchParams.delete(key);
+    }
+  }
+
+  parsed.searchParams.sort();
+
+  if (parsed.pathname.length > 1) {
+    parsed.pathname = parsed.pathname.replace(/\/+$/u, "") || "/";
+  }
+
+  return parsed.href;
+}
+
+export function getLinkHostname(value: unknown): string {
+  const openable = getOpenableLinkUrl(value);
+  if (!openable) return "";
+
+  try {
+    return new URL(openable).hostname.replace(/^www\./u, "");
+  } catch {
+    return "";
+  }
+}
+
+/**
+ * 一覧表示用の軽量favicon。取得に失敗しても画像だけ消せるため、
+ * URL保存・タイトル取得とは切り離して扱う。
+ */
+export function getReferenceFaviconUrl(value: unknown): string {
+  const openable = getOpenableLinkUrl(value);
+  if (!openable) return "";
+
+  try {
+    return `${new URL(openable).origin}/favicon.ico`;
+  } catch {
+    return "";
   }
 }
 
