@@ -1,5 +1,6 @@
 import {
   type ChangeEvent,
+  type ClipboardEvent,
   type FormEvent,
   type KeyboardEvent,
   forwardRef,
@@ -14,6 +15,8 @@ import {
   type EntryKind,
   ENTRY_KIND_LABEL,
   ENTRY_KIND_PLACEHOLDER,
+  getLinkHostname,
+  getReferenceUrlKey,
   normalizeEntryTag,
   normalizeLinkUrlForSave,
 } from "../types/memo";
@@ -43,6 +46,8 @@ type EntryComposerProps = {
   fixedTag?: string;
   /** タグ見出し直下で使う、余白を抑えた入力面。 */
   compact?: boolean;
+  /** 参考URLの重複判定に使う、このメモ内の既存URL。 */
+  existingReferenceUrls?: string[];
   /** タグ見出しから開いた専用入力を閉じる。 */
   onDismiss?: () => void;
   onSubmit: (
@@ -109,6 +114,7 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
       tagSuggestions,
       fixedTag,
       compact = false,
+      existingReferenceUrls = [],
       onDismiss,
       onSubmit,
     },
@@ -124,6 +130,8 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
     const [linkDraft, setLinkDraft] = useState("");
     const [activeMetaPicker, setActiveMetaPicker] = useState<MetaPicker>(null);
     const [linkError, setLinkError] = useState<string | null>(null);
+    const [referenceNotice, setReferenceNotice] = useState<string | null>(null);
+    const [duplicateCandidate, setDuplicateCandidate] = useState<string | null>(null);
     const [isComposing, setIsComposing] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -135,11 +143,21 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
     const paragraphResizeFrameRef = useRef<number | null>(null);
     const isComposingRef = useRef(false);
     const isParagraph = kind === "paragraph";
+    const isReferenceUrl = kind === "word";
     const lockedTag = normalizeEntryTag(fixedTag);
     const selectedTag = lockedTag ?? normalizeEntryTag(tagValue);
     const hasNote = noteValue.trim().length > 0;
     const hasLink = linkValue.trim().length > 0;
     const canSubmit = value.trim().length > 0 && !disabled && !isSubmitting;
+    const existingReferenceUrlKeys = useMemo(
+      () =>
+        new Set(
+          existingReferenceUrls
+            .map((url) => getReferenceUrlKey(url))
+            .filter(Boolean),
+        ),
+      [existingReferenceUrls],
+    );
     const recommendedTags = useMemo(
       () => getRecommendedEntryTags(tagSuggestions, tagDraft),
       [tagDraft, tagSuggestions],
@@ -372,22 +390,69 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
       setActiveMetaPicker(null);
     };
 
-    const submit = async () => {
-      const content = value.trim();
+    const resetAfterSubmit = () => {
+      markDraftCommitted();
+      setValue("");
+      setHeadingValue("");
+      // 補助情報は新しい項目へ勝手に持ち越さない。
+      setTagValue("");
+      setNoteValue("");
+      setLinkValue("");
+      setTagDraft("");
+      setNoteDraft("");
+      setLinkDraft("");
+      setLinkError(null);
+      setDuplicateCandidate(null);
+      setActiveMetaPicker(null);
+      scheduleParagraphTextareaResize({ allowShrink: true });
+      window.requestAnimationFrame(() => inputRef.current?.focus());
+    };
 
-      if (!content || isSubmitting || disabled) return;
+    const submit = async (
+      { allowDuplicate = false }: { allowDuplicate?: boolean } = {},
+    ) => {
+      const rawValue = value.trim();
+
+      if (!rawValue || isSubmitting || disabled) return;
 
       let normalizedLink = "";
+      let content = rawValue;
 
-      try {
-        normalizedLink = normalizeLinkUrlForSave(linkValue);
-      } catch (error) {
-        setLinkDraft(linkValue);
-        setLinkError(
-          error instanceof Error ? error.message : "リンクのURLを確認してください。",
-        );
-        setActiveMetaPicker("link");
-        return;
+      if (isReferenceUrl) {
+        try {
+          normalizedLink = normalizeLinkUrlForSave(rawValue);
+          setLinkError(null);
+        } catch (error) {
+          setLinkError(
+            error instanceof Error ? error.message : "URLを確認してください。",
+          );
+          setReferenceNotice(null);
+          return;
+        }
+
+        const referenceKey = getReferenceUrlKey(normalizedLink);
+        if (
+          !allowDuplicate &&
+          referenceKey &&
+          existingReferenceUrlKeys.has(referenceKey)
+        ) {
+          setDuplicateCandidate(normalizedLink);
+          setReferenceNotice("このURLはすでに保存済みです。");
+          return;
+        }
+
+        content = getLinkHostname(normalizedLink) || normalizedLink;
+      } else {
+        try {
+          normalizedLink = normalizeLinkUrlForSave(linkValue);
+        } catch (error) {
+          setLinkDraft(linkValue);
+          setLinkError(
+            error instanceof Error ? error.message : "リンクのURLを確認してください。",
+          );
+          setActiveMetaPicker("link");
+          return;
+        }
       }
 
       setIsSubmitting(true);
@@ -400,24 +465,91 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
           note: noteValue.trim(),
           link_url: normalizedLink,
         }, draftId);
-        markDraftCommitted();
-        setValue("");
-        setHeadingValue("");
-        // 補助情報は新しい項目へ勝手に持ち越さない。
-        setTagValue("");
-        setNoteValue("");
-        setLinkValue("");
-        setTagDraft("");
-        setNoteDraft("");
-        setLinkDraft("");
-        setLinkError(null);
-        setActiveMetaPicker(null);
-        // 送信後は空の基準高へ戻してよい。入力中だけ縮小を抑える。
-        scheduleParagraphTextareaResize({ allowShrink: true });
-        window.requestAnimationFrame(() => inputRef.current?.focus());
+        setReferenceNotice(isReferenceUrl ? "保存しました。" : null);
+        resetAfterSubmit();
       } finally {
         setIsSubmitting(false);
       }
+    };
+
+    const saveReferenceBatch = async (urls: string[]) => {
+      if (!isReferenceUrl || isSubmitting || disabled) return;
+
+      const seen = new Set(existingReferenceUrlKeys);
+      const uniqueUrls: string[] = [];
+      let duplicateCount = 0;
+
+      urls.forEach((url) => {
+        const key = getReferenceUrlKey(url);
+        if (!key || seen.has(key)) {
+          duplicateCount += 1;
+          return;
+        }
+
+        seen.add(key);
+        uniqueUrls.push(url);
+      });
+
+      if (uniqueUrls.length === 0) {
+        setReferenceNotice("貼り付けたURLはすべて保存済みです。");
+        return;
+      }
+
+      setIsSubmitting(true);
+      setLinkError(null);
+      setDuplicateCandidate(null);
+
+      try {
+        await flushDraft();
+
+        for (const [index, url] of uniqueUrls.entries()) {
+          await onSubmit(
+            getLinkHostname(url) || url,
+            {
+              heading: "",
+              tag: selectedTag,
+              note: "",
+              link_url: url,
+            },
+            `${draftId}:bulk:${index}`,
+          );
+        }
+
+        setReferenceNotice(
+          duplicateCount > 0
+            ? `${uniqueUrls.length}件保存しました（重複${duplicateCount}件はスキップ）。`
+            : `${uniqueUrls.length}件保存しました。`,
+        );
+        resetAfterSubmit();
+      } finally {
+        setIsSubmitting(false);
+      }
+    };
+
+    const handleReferencePaste = (event: ClipboardEvent<HTMLInputElement>) => {
+      if (!isReferenceUrl || disabled || isSubmitting) return;
+
+      const pastedText = event.clipboardData.getData("text");
+      const lines = pastedText
+        .split(/\r?\n/u)
+        .map((line) => line.trim())
+        .filter(Boolean);
+
+      if (lines.length < 2) return;
+
+      const urls: string[] = [];
+
+      for (const line of lines) {
+        try {
+          urls.push(normalizeLinkUrlForSave(line));
+        } catch {
+          // 文章が混ざった貼り付けは通常入力へ戻し、誤分割を避ける。
+          return;
+        }
+      }
+
+      event.preventDefault();
+      void saveReferenceBatch(urls);
     };
 
     const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
@@ -497,6 +629,12 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
       markDraftEdited();
       setValue(event.target.value);
 
+      if (isReferenceUrl) {
+        setLinkError(null);
+        setReferenceNotice(null);
+        setDuplicateCandidate(null);
+      }
+
       /**
        * IME変換中は高さ測定を保留する。変換の各候補更新でDOMを揺らさず、
        * 変換確定後に一度だけ伸長を判定する。
@@ -530,7 +668,9 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
 
     return (
       <form
-        className={`entry-composer ${compact ? "entry-composer--tag-group" : ""}`}
+        className={`entry-composer ${compact ? "entry-composer--tag-group" : ""} ${
+          isReferenceUrl ? "entry-composer--reference-url" : ""
+        }`}
         onSubmit={handleSubmit}
       >
         {lockedTag ? (
@@ -596,8 +736,11 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
                 inputRef.current = element;
               }}
               className="entry-composer__input"
-              type="text"
-              aria-label={`${ENTRY_KIND_LABEL[kind]}を入力`}
+              type={isReferenceUrl ? "url" : "text"}
+              inputMode={isReferenceUrl ? "url" : undefined}
+              autoComplete={isReferenceUrl ? "url" : undefined}
+              onPaste={isReferenceUrl ? handleReferencePaste : undefined}
+              aria-label={isReferenceUrl ? "参考URLを入力" : `${ENTRY_KIND_LABEL[kind]}を入力`}
             />
           )}
 
@@ -605,11 +748,31 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
             type="submit"
             className="entry-composer__submit"
             disabled={!canSubmit}
-            aria-label={`${ENTRY_KIND_LABEL[kind]}を置く`}
+            aria-label={isReferenceUrl ? "参考URLを保存" : `${ENTRY_KIND_LABEL[kind]}を置く`}
           >
-            {isSubmitting ? "…" : "置く"}
+            {isSubmitting ? "…" : isReferenceUrl ? "保存" : "置く"}
           </button>
         </div>
+
+        {isReferenceUrl && (linkError || referenceNotice) ? (
+          <div
+            className={`entry-composer__reference-notice ${
+              linkError ? "entry-composer__reference-notice--error" : ""
+            }`}
+            role={linkError ? "alert" : "status"}
+          >
+            <span>{linkError ?? referenceNotice}</span>
+            {duplicateCandidate && !linkError ? (
+              <button
+                type="button"
+                onClick={() => void submit({ allowDuplicate: true })}
+                disabled={disabled || isSubmitting}
+              >
+                もう一度追加
+              </button>
+            ) : null}
+          </div>
+        ) : null}
 
         <div className="entry-composer__meta-row">
           {draftStatus === "error" ? (
@@ -634,11 +797,23 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
                 disabled={disabled || isSubmitting}
                 onClick={() => openMetaPicker("note")}
                 aria-expanded={activeMetaPicker === "note"}
-                aria-label={hasNote ? "気持ち・備考を変更" : "気持ち・備考を付ける"}
-                title={hasNote ? "気持ち・備考を変更" : "気持ち・備考を付ける"}
+                aria-label={
+                  isReferenceUrl
+                    ? hasNote ? "一言メモを変更" : "一言メモを付ける"
+                    : hasNote ? "気持ち・備考を変更" : "気持ち・備考を付ける"
+                }
+                title={
+                  isReferenceUrl
+                    ? hasNote ? "一言メモを変更" : "一言メモを付ける"
+                    : hasNote ? "気持ち・備考を変更" : "気持ち・備考を付ける"
+                }
               >
                 <NoteIcon />
-                <span>{hasNote ? "気持ちあり" : "気持ち"}</span>
+                <span>
+                  {isReferenceUrl
+                    ? hasNote ? "メモあり" : "一言メモ"
+                    : hasNote ? "気持ちあり" : "気持ち"}
+                </span>
               </button>
 
               {activeMetaPicker === "note" ? (
@@ -673,7 +848,7 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
                         setNoteDraft(event.target.value);
                       }}
                       onKeyDown={handleNoteInputKeyDown}
-                      placeholder="例：あとで確認したい"
+                      placeholder={isReferenceUrl ? "なぜ残した？" : "例：あとで確認したい"}
                       rows={3}
                       aria-label="気持ち・備考"
                     />
@@ -698,6 +873,7 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
               ) : null}
             </div>
 
+            {!isReferenceUrl ? (
             <div className="entry-composer__meta-picker">
               <button
                 type="button"
@@ -779,6 +955,7 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
                 </>
               ) : null}
             </div>
+            ) : null}
 
             {!lockedTag ? (
               <div className="entry-composer__tag-picker">
