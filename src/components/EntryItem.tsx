@@ -584,10 +584,10 @@ export function EntryItem({
                     onMouseDown={(event) => event.preventDefault()}
                     onClick={() => {
                       setNoteValue("");
-                      setShowNoteEditor(false);
+                      if (!isReferenceUrl) setShowNoteEditor(false);
                     }}
                   >
-                    消す
+                    {isReferenceUrl ? "クリア" : "消す"}
                   </button>
                 </div>
                 <textarea
