@@ -313,6 +313,12 @@ export function EntryItem({
       return false;
     }
 
+    if (isReferenceUrl && !nextLinkUrl) {
+      setShowLinkEditor(true);
+      setLinkError("URLを入力してください。");
+      return false;
+    }
+
     if (!nextContent) {
       setValue(entry.content);
       if (exitEditing) setEditMode(null);
@@ -637,7 +643,7 @@ export function EntryItem({
                     aria-label="リンクURLを編集"
                     aria-invalid={linkError ? true : undefined}
                   />
-                  {linkValue ? (
+                  {linkValue && !isReferenceUrl ? (
                     <button
                       type="button"
                       className="entry-item__remove-link"
