@@ -537,6 +537,12 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
 
       if (lines.length < 2) return;
 
+      if (noteValue.trim()) {
+        event.preventDefault();
+        setReferenceNotice("備考がある場合は、URLを1件ずつ保存してください。");
+        return;
+      }
+
       const urls: string[] = [];
 
       for (const line of lines) {
@@ -754,6 +760,25 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
           </button>
         </div>
 
+        {isReferenceUrl ? (
+          <label className="entry-composer__reference-note">
+            <span className="entry-composer__reference-note-label">
+              備考 <small>任意</small>
+            </span>
+            <textarea
+              value={noteValue}
+              disabled={disabled || isSubmitting}
+              onChange={(event) => {
+                markDraftEdited();
+                setNoteValue(event.target.value);
+              }}
+              rows={2}
+              placeholder="このURLについての短いメモ"
+              aria-label="参考URLの備考"
+            />
+          </label>
+        ) : null}
+
         {isReferenceUrl && (linkError || referenceNotice) ? (
           <div
             className={`entry-composer__reference-notice ${
@@ -788,6 +813,7 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
           ) : null}
 
           <div className="entry-composer__meta-controls" ref={metaPickerRef}>
+            {!isReferenceUrl ? (
             <div className="entry-composer__meta-picker">
               <button
                 type="button"
@@ -872,6 +898,7 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
                 </>
               ) : null}
             </div>
+            ) : null}
 
             {!isReferenceUrl ? (
             <div className="entry-composer__meta-picker">
