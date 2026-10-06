@@ -95,6 +95,7 @@ export function MobileEntryActionSheet({
 
   if (!entry || typeof document === "undefined") return null;
 
+  const isReferenceUrl = kind === "word" && Boolean(entry.link_url.trim());
   const moveTargets = ENTRY_KIND_MOVE_TARGETS[kind];
   const visibleNumber = displayNumber ?? entry.outline_number;
   const titleText = kind === "paragraph" && entry.heading ? entry.heading : entry.content;
@@ -160,17 +161,19 @@ export function MobileEntryActionSheet({
           </button>
         </header>
 
-        <button
-          type="button"
-          className={`mobile-action-sheet__complete ${
-            entry.is_completed ? "mobile-action-sheet__complete--active" : ""
-          }`}
-          onClick={() => void run(() => onToggleCompleted(entry.id))}
-          disabled={disabled || isWorking}
-        >
-          <span aria-hidden="true">✓</span>
-          {entry.is_completed ? "未完了に戻す" : "完了にする"}
-        </button>
+        {!isReferenceUrl ? (
+          <button
+            type="button"
+            className={`mobile-action-sheet__complete ${
+              entry.is_completed ? "mobile-action-sheet__complete--active" : ""
+            }`}
+            onClick={() => void run(() => onToggleCompleted(entry.id))}
+            disabled={disabled || isWorking}
+          >
+            <span aria-hidden="true">✓</span>
+            {entry.is_completed ? "未完了に戻す" : "完了にする"}
+          </button>
+        ) : null}
 
         <button
           type="button"
@@ -182,15 +185,17 @@ export function MobileEntryActionSheet({
           コピー
         </button>
 
-        <button
-          type="button"
-          className="mobile-action-sheet__derive"
-          onClick={() => void run(() => onCreateMemoFromEntry(entry.id))}
-          disabled={disabled || isWorking}
-        >
-          <span aria-hidden="true">↗</span>
-          新しいメモにする
-        </button>
+        {!isReferenceUrl ? (
+          <button
+            type="button"
+            className="mobile-action-sheet__derive"
+            onClick={() => void run(() => onCreateMemoFromEntry(entry.id))}
+            disabled={disabled || isWorking}
+          >
+            <span aria-hidden="true">↗</span>
+            新しいメモにする
+          </button>
+        ) : null}
 
         {moveTargets.length > 0 ? (
           <section className="mobile-action-sheet__section" aria-label="区分を移動">
