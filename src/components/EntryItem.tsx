@@ -19,7 +19,9 @@ import {
   type EntryUpdate,
   ENTRY_KIND_LABEL,
   ENTRY_KIND_MOVE_TARGETS,
+  getLinkHostname,
   getOpenableLinkUrl,
+  getReferenceFaviconUrl,
   normalizeLinkUrlForSave,
   normalizeSatisfaction,
   supportsHierarchy,
@@ -126,12 +128,20 @@ export function EntryItem({
   const paragraphCompositionRef = useRef(false);
 
   const isParagraph = kind === "paragraph";
-  const isHierarchical = supportsHierarchy(kind);
+  const isReferenceUrl = kind === "word" && Boolean(entry.link_url.trim());
+  const isLegacyWord = kind === "word" && !entry.link_url.trim();
+  const isHierarchical = supportsHierarchy(kind) && !isReferenceUrl;
   const hasNote = entry.note.trim().length > 0;
   const showTagInMeta = Boolean(entry.tag) && (
     tagPresentation === "meta" || tagPresentation === "completed_meta"
   );
   const openableLinkUrl = getOpenableLinkUrl(entry.link_url);
+  const referenceHostname = isReferenceUrl
+    ? getLinkHostname(openableLinkUrl)
+    : "";
+  const referenceFaviconUrl = isReferenceUrl
+    ? getReferenceFaviconUrl(openableLinkUrl)
+    : "";
   const isEditing = editMode !== null;
   const completionLabel = entry.is_completed ? "未完了に戻す" : "完了にする";
   const moveTargets = ENTRY_KIND_MOVE_TARGETS[kind];
@@ -716,6 +726,8 @@ export function EntryItem({
         isStructureOpen ? "entry-item--structure-open" : ""
       } ${isMobileActionOpen ? "entry-item--mobile-action-open" : ""} ${
         mobileParagraphEditorFocus ? "entry-item--mobile-paragraph-editing" : ""
+      } ${isReferenceUrl ? "entry-item--reference-url" : ""} ${
+        isLegacyWord ? "entry-item--legacy-word" : ""
       }`}
       style={style}
     >
@@ -743,19 +755,57 @@ export function EntryItem({
             </button>
           ) : null}
 
-          <button
-            type="button"
-            className="entry-item__content"
-            onClick={beginContentEdit}
-            disabled={disabled}
-            aria-label={
-              showEntryNumbers
-                ? `${visibleNumber} ${entry.heading ? `${entry.heading} ` : ""}${entry.content}を編集`
-                : "編集する"
-            }
-          >
-            <span className="entry-item__content-text">{entry.content}</span>
-          </button>
+          {isReferenceUrl && openableLinkUrl ? (
+            <div className="entry-item__reference-main">
+              {referenceFaviconUrl ? (
+                <img
+                  className="entry-item__reference-favicon"
+                  src={referenceFaviconUrl}
+                  alt=""
+                  loading="lazy"
+                  onError={(event) => {
+                    event.currentTarget.hidden = true;
+                  }}
+                />
+              ) : (
+                <span className="entry-item__reference-favicon-fallback" aria-hidden="true">
+                  ↗
+                </span>
+              )}
+              <div className="entry-item__reference-copy">
+                <a
+                  className="entry-item__content entry-item__reference-link"
+                  href={openableLinkUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  aria-label={`${entry.content}を開く`}
+                >
+                  <span className="entry-item__content-text">{entry.content}</span>
+                </a>
+                {referenceHostname ? (
+                  <span className="entry-item__reference-domain">{referenceHostname}</span>
+                ) : null}
+              </div>
+            </div>
+          ) : (
+            <button
+              type="button"
+              className="entry-item__content"
+              onClick={beginContentEdit}
+              disabled={disabled}
+              aria-label={
+                showEntryNumbers
+                  ? `${visibleNumber} ${entry.heading ? `${entry.heading} ` : ""}${entry.content}を編集`
+                  : "編集する"
+              }
+            >
+              <span className="entry-item__content-text">{entry.content}</span>
+            </button>
+          )}
+
+          {isLegacyWord ? (
+            <span className="entry-item__legacy-label">以前の単語</span>
+          ) : null}
 
           {hasNote || showTagInMeta ? (
             <div className="entry-item__meta-row">
@@ -767,7 +817,9 @@ export function EntryItem({
                   disabled={disabled}
                   aria-label="気持ち・備考を編集"
                 >
-                  <span className="entry-item__note-label">気持ち</span>
+                  <span className="entry-item__note-label">
+                    {isReferenceUrl ? "メモ" : "気持ち"}
+                  </span>
                   <span className="entry-item__note-text">{entry.note}</span>
                 </button>
               ) : null}
@@ -789,8 +841,16 @@ export function EntryItem({
               className="entry-item__note-trigger entry-item__note-trigger--inline"
               onClick={beginNoteEdit}
               disabled={disabled}
-              aria-label={hasNote ? "気持ち・備考を編集" : "気持ち・備考を追加"}
-              title={hasNote ? "気持ち・備考を編集" : "気持ち・備考を追加"}
+              aria-label={
+                isReferenceUrl
+                  ? hasNote ? "一言メモを編集" : "一言メモを追加"
+                  : hasNote ? "気持ち・備考を編集" : "気持ち・備考を追加"
+              }
+              title={
+                isReferenceUrl
+                  ? hasNote ? "一言メモを編集" : "一言メモを追加"
+                  : hasNote ? "気持ち・備考を編集" : "気持ち・備考を追加"
+              }
             >
               <NoteIcon />
             </button>

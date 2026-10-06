@@ -185,8 +185,17 @@ export function EntryColumn({
     ? entries.find((entry) => entry.id === mobileActionEntryId) ?? null
     : null;
 
-  const openEntries = entries.filter((entry) => !entry.is_completed);
-  const completedEntries = entries.filter((entry) => entry.is_completed);
+  const legacyWordEntries = kind === "word"
+    ? entries.filter((entry) => !entry.link_url.trim())
+    : [];
+  const primaryEntries = kind === "word"
+    ? entries.filter((entry) => Boolean(entry.link_url.trim()))
+    : entries;
+  const openEntries = primaryEntries.filter((entry) => !entry.is_completed);
+  const completedEntries = primaryEntries.filter((entry) => entry.is_completed);
+  const existingReferenceUrls = kind === "word"
+    ? primaryEntries.map((entry) => entry.link_url)
+    : [];
   const isTagGrouped = displayMode === "tag_grouped";
 
   // タグ見出し内のComposerは通常は閉じているため、再訪時は最新Draftだけを開く。
@@ -447,12 +456,38 @@ export function EntryColumn({
     setStructureEntryId((current) => (current === entryId ? null : entryId));
   };
 
+  const enrichReferenceTitle = async (entryId: string, url: string) => {
+    try {
+      const response = await fetch(
+        `/api/link-preview?url=${encodeURIComponent(url)}`,
+        {
+          headers: { Accept: "application/json" },
+        },
+      );
+
+      if (!response.ok) return;
+
+      const payload = await response.json() as {
+        title?: unknown;
+      };
+      const title = typeof payload.title === "string"
+        ? payload.title.replace(/\s+/gu, " ").trim()
+        : "";
+
+      if (!title) return;
+
+      await onUpdate(entryId, { content: title });
+    } catch {
+      // 外部サイト側の失敗で、保存済みURLまで失敗扱いにしない。
+    }
+  };
+
   const handleCreate = async (
     content: string,
     metadata: EntryCreateMetadata,
     draftId: string,
   ) => {
-    await onCreate(
+    const created = await onCreate(
       kind,
       content,
       metadata,
@@ -460,6 +495,19 @@ export function EntryColumn({
       addAtBottom ? "bottom" : "top",
       draftId,
     );
+
+    if (
+      kind === "word" &&
+      metadata.link_url &&
+      created &&
+      typeof created === "object" &&
+      "id" in created &&
+      typeof created.id === "string"
+    ) {
+      void enrichReferenceTitle(created.id, metadata.link_url);
+    }
+
+    return created;
   };
 
   /** タグ見出しからの追加は、見出しのタグを固定して保存する。 */
@@ -886,6 +934,7 @@ export function EntryColumn({
               fixedTag={label}
               disabled={disabled || isDeletingAll}
               tagSuggestions={tagSuggestions}
+              existingReferenceUrls={existingReferenceUrls}
               onDismiss={() => setTagGroupComposerState(null)}
               onSubmit={(content, metadata, draftId) =>
                 handleCreateForTagGroup(label, content, metadata, draftId)
@@ -1086,19 +1135,22 @@ export function EntryColumn({
           kind={kind}
           disabled={disabled || isDeletingAll}
           tagSuggestions={tagSuggestions}
+          existingReferenceUrls={existingReferenceUrls}
           onSubmit={handleCreate}
         />
       ) : null}
 
       <div className="entry-list" aria-live="polite">
-        {entries.length === 0 ? (
-          <p className="entry-list__empty">まだありません。</p>
+        {primaryEntries.length === 0 ? (
+          <p className="entry-list__empty">
+            {kind === "word" ? "参考URLはまだありません。" : "まだありません。"}
+          </p>
         ) : compactView ? (
           isTagGrouped
-            ? renderTagGroupedEntries(entries, "compact")
-            : entries.map((entry) => renderEntry(entry))
+            ? renderTagGroupedEntries(primaryEntries, "compact")
+            : primaryEntries.map((entry) => renderEntry(entry))
         ) : isTagGrouped ? (
-          renderTagGroupedEntries(entries, "grouped")
+          renderTagGroupedEntries(primaryEntries, "grouped")
         ) : (
           <>
             {openEntries.map((entry) => renderEntry(entry))}
@@ -1123,6 +1175,18 @@ export function EntryColumn({
             ) : null}
           </>
         )}
+
+        {kind === "word" && legacyWordEntries.length > 0 ? (
+          <details className="entry-list__legacy-words">
+            <summary>
+              <span>以前の単語</span>
+              <span>{legacyWordEntries.length}件</span>
+            </summary>
+            <div className="entry-list__legacy-word-items">
+              {legacyWordEntries.map((entry) => renderEntry(entry))}
+            </div>
+          </details>
+        ) : null}
       </div>
 
       {isActiveOnMobile && !compactView ? (
