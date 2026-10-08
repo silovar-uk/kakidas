@@ -43,6 +43,10 @@ type EntryColumnProps = {
   kind: EntryKind;
   entries: EntryTreeNode[];
   isActiveOnMobile: boolean;
+  /** PCでこの列を細いレールへ畳んでいるか。モバイル表示には影響させない。 */
+  isCollapsed?: boolean;
+  /** PCの列を折りたたみ／展開する。 */
+  onToggleCollapsed?: () => void;
   /** 各項目の作成日時を表示するか。 */
   showCreatedAt: boolean;
   /** 振り番を画面に含めるか。 */
@@ -120,6 +124,8 @@ export function EntryColumn({
   kind,
   entries,
   isActiveOnMobile,
+  isCollapsed = false,
+  onToggleCollapsed,
   showCreatedAt,
   showEntryNumbers,
   compactView = false,
@@ -160,7 +166,7 @@ export function EntryColumn({
   const [isTagOrderLocked, setIsTagOrderLocked] = useState(
     () => readEntryTagOrderLocked(kind),
   );
-  /** タググループは初期状態では閉じ、開閉だけをブラウザ内に記憶する。 */
+  /** タググループは初期状態では開き、ユーザーが変えた開閉だけをブラウザ内に記憶する。 */
   const [expandedTagGroups, setExpandedTagGroups] = useState(
     readEntryTagGroupExpandedState,
   );
@@ -755,10 +761,11 @@ export function EntryColumn({
     />
   );
 
-  const toggleTagGroup = (stateKey: string) => {
+  const toggleTagGroup = (stateKey: string, defaultExpanded: boolean) => {
+    const currentExpanded = expandedTagGroups[stateKey] ?? defaultExpanded;
     const nextState = {
       ...expandedTagGroups,
-      [stateKey]: !(expandedTagGroups[stateKey] ?? false),
+      [stateKey]: !currentExpanded,
     };
 
     setExpandedTagGroups(nextState);
@@ -777,9 +784,10 @@ export function EntryColumn({
   const isTagGroupExpanded = (
     stateKey: string,
     legacyStateKey?: string,
+    defaultExpanded = false,
   ): boolean => expandedTagGroups[stateKey] ?? (
     legacyStateKey ? expandedTagGroups[legacyStateKey] : undefined
-  ) ?? false;
+  ) ?? defaultExpanded;
 
   const openTagRename = (
     sourceTag: string,
@@ -818,6 +826,7 @@ export function EntryColumn({
     const wasExpanded = isTagGroupExpanded(
       tagRenameState.stateKey,
       tagRenameState.legacyStateKey,
+      true,
     );
 
     setIsRenamingTag(true);
@@ -880,7 +889,11 @@ export function EntryColumn({
     const legacyStateKey = groupType === "tag"
       ? getLegacyEntryTagGroupStateKey(kind, label ?? null)
       : undefined;
-    const isExpanded = isTagGroupExpanded(stateKey, legacyStateKey);
+    const isExpanded = isTagGroupExpanded(
+      stateKey,
+      legacyStateKey,
+      groupType === "tag",
+    );
     const isTagComposerOpen = groupType === "tag" && label
       ? tagGroupComposerState?.stateKey === stateKey
       : false;
@@ -930,7 +943,7 @@ export function EntryColumn({
           <button
             type="button"
             className="entry-list__tag-group-toggle"
-            onClick={() => toggleTagGroup(stateKey)}
+            onClick={() => toggleTagGroup(stateKey, groupType === "tag")}
             aria-expanded={isExpanded}
             aria-label={isExpanded ? `${groupAriaLabel}を閉じる` : `${groupAriaLabel}を開く`}
           >
@@ -1044,9 +1057,9 @@ export function EntryColumn({
   };
 
   /**
-   * タグなし → 未完了のタグ別 → 完了 の順に並べる。
+   * タグなしは通常項目としてそのまま表示し、タグ付きだけを意味のあるセクションへまとめる。
    * 順番固定は未完了側だけに効き、完了項目は常に最下部の単一グループへ集める。
-   * どのグループも初回は閉じ、開閉は区分ごとに記憶する。
+   * タグセクションは初回open、完了セクションは初回closed。ユーザーの開閉は区分ごとに記憶する。
    */
   const renderTagGroupedEntries = (
     sourceEntries: EntryTreeNode[],
@@ -1058,7 +1071,7 @@ export function EntryColumn({
 
     return (
       <>
-        {renderFoldableTagGroup("untagged", grouped.untagged, sectionKey)}
+        {grouped.untagged.map((entry) => renderEntry(entry, "meta"))}
         {grouped.groups.map((group) =>
           renderFoldableTagGroup("tag", group.entries, sectionKey, group.label),
         )}
@@ -1071,11 +1084,39 @@ export function EntryColumn({
     <section
       className={`entry-column entry-column--${kind} ${
         isActiveOnMobile ? "entry-column--active" : ""
-      } ${compactView ? "entry-column--compact" : ""}`}
+      } ${compactView ? "entry-column--compact" : ""} ${
+        isCollapsed ? "entry-column--collapsed" : ""
+      }`}
       aria-labelledby={`${kind}-heading`}
     >
+      <button
+        type="button"
+        className="entry-column__collapsed-rail"
+        onClick={onToggleCollapsed}
+        aria-label={`${ENTRY_KIND_LABEL[kind]}を展開`}
+        aria-expanded={false}
+        title={`${ENTRY_KIND_LABEL[kind]}を展開`}
+      >
+        <span className="entry-column__collapsed-label">{ENTRY_KIND_LABEL[kind]}</span>
+        <span className="entry-column__collapsed-count">{openEntries.length}</span>
+        <span className="entry-column__collapsed-chevron" aria-hidden="true">›</span>
+      </button>
       <div className="entry-column__header">
-        <h2 id={`${kind}-heading`}>{ENTRY_KIND_LABEL[kind]}</h2>
+        <div className="entry-column__heading-group">
+          <h2 id={`${kind}-heading`}>{ENTRY_KIND_LABEL[kind]}</h2>
+          {onToggleCollapsed ? (
+            <button
+              type="button"
+              className="entry-column__collapse-toggle"
+              onClick={onToggleCollapsed}
+              aria-label={`${ENTRY_KIND_LABEL[kind]}を折りたたむ`}
+              aria-expanded={!isCollapsed}
+              title={`${ENTRY_KIND_LABEL[kind]}を折りたたむ`}
+            >
+              ‹
+            </button>
+          ) : null}
+        </div>
 
         <div className="entry-column__header-actions">
           <span

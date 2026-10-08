@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { resetBodyScrollLock } from "../lib/bodyScrollLock";
 import { copyToClipboard } from "../lib/clipboard";
 import {
@@ -78,6 +78,38 @@ const ENTRY_NUMBER_VISIBILITY_STORAGE_KEY = "kakidas.show-entry-numbers";
 const HIDE_COMPLETED_ENTRIES_STORAGE_KEY = "kakidas.hide-completed-entries";
 const ADD_ENTRIES_AT_BOTTOM_STORAGE_KEY = "kakidas.add-entries-at-bottom";
 const COMPACT_ENTRY_VIEW_STORAGE_KEY = "kakidas.compact-entry-view";
+const COLLAPSED_ENTRY_COLUMNS_STORAGE_KEY = "kakidas.collapsed-entry-columns.v1";
+
+type CollapsedEntryColumns = Record<EntryKind, boolean>;
+
+function readCollapsedEntryColumns(): CollapsedEntryColumns {
+  const fallback: CollapsedEntryColumns = {
+    word: false,
+    sentence: false,
+    paragraph: false,
+  };
+
+  try {
+    const raw = window.localStorage.getItem(COLLAPSED_ENTRY_COLUMNS_STORAGE_KEY);
+    if (!raw) return fallback;
+
+    const parsed = JSON.parse(raw) as Partial<Record<EntryKind, unknown>>;
+    const next: CollapsedEntryColumns = {
+      word: parsed.word === true,
+      sentence: parsed.sentence === true,
+      paragraph: parsed.paragraph === true,
+    };
+
+    // 空の作業面は作らない。壊れた保存値でも最低1列は必ず開く。
+    if (ENTRY_KINDS.every((kind) => next[kind])) {
+      next.paragraph = false;
+    }
+
+    return next;
+  } catch {
+    return fallback;
+  }
+}
 
 function readEntryTimestampVisibility(): boolean {
   try {
@@ -208,6 +240,9 @@ export function MemoEditorPage() {
   const [compactEntryView, setCompactEntryView] = useState(
     readCompactEntryView,
   );
+  const [collapsedEntryColumns, setCollapsedEntryColumns] = useState<CollapsedEntryColumns>(
+    readCollapsedEntryColumns,
+  );
   /** 画面と出力に共通で使う、端末ごとの並び順。 */
   const [entrySortMode, setEntrySortMode] = useState<EntrySortMode>(
     readEntrySortMode,
@@ -274,12 +309,50 @@ export function MemoEditorPage() {
   }, [compactEntryView]);
 
   useEffect(() => {
+    try {
+      window.localStorage.setItem(
+        COLLAPSED_ENTRY_COLUMNS_STORAGE_KEY,
+        JSON.stringify(collapsedEntryColumns),
+      );
+    } catch {
+      // 端末設定を保存できない場合でも、現在の画面では列の開閉を維持する。
+    }
+  }, [collapsedEntryColumns]);
+
+  useEffect(() => {
     writeCopyIncludeCompleted(includeCompletedInCopy);
   }, [includeCompletedInCopy]);
 
   useEffect(() => {
     writeEntrySortMode(entrySortMode);
   }, [entrySortMode]);
+
+  const toggleEntryColumnCollapsed = useCallback((targetKind: EntryKind) => {
+    setCollapsedEntryColumns((current) => {
+      const openCount = ENTRY_KINDS.filter((kind) => !current[kind]).length;
+
+      // 最後の1列だけは閉じない。復帰先がない空画面を作らない。
+      if (!current[targetKind] && openCount <= 1) {
+        return current;
+      }
+
+      return {
+        ...current,
+        [targetKind]: !current[targetKind],
+      };
+    });
+  }, []);
+
+  const editorGridStyle = useMemo<CSSProperties>(
+    () => ({
+      gridTemplateColumns: ENTRY_KINDS
+        .map((kind) =>
+          collapsedEntryColumns[kind] ? "44px" : "minmax(0, 1fr)"
+        )
+        .join(" "),
+    }),
+    [collapsedEntryColumns],
+  );
 
   // メモ画面を離れた後に、モバイル操作シート等のスクロールロックを残さない。
   useEffect(() => {
@@ -1058,7 +1131,11 @@ export function MemoEditorPage() {
         </p>
       ) : null}
 
-      <section className="editor-grid" aria-label="書き出しスペース">
+      <section
+        className="editor-grid"
+        aria-label="書き出しスペース"
+        style={editorGridStyle}
+      >
         {ENTRY_KINDS.map((kind) => (
           <EntryColumn
             key={kind}
@@ -1067,6 +1144,8 @@ export function MemoEditorPage() {
             kind={kind}
             entries={entriesByKind[kind]}
             isActiveOnMobile={activeKind === kind}
+            isCollapsed={collapsedEntryColumns[kind]}
+            onToggleCollapsed={() => toggleEntryColumnCollapsed(kind)}
             showCreatedAt={showEntryTimestamps}
             showEntryNumbers={showEntryNumbers}
             compactView={compactEntryView}
