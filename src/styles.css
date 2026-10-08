@@ -7998,3 +7998,180 @@ a:focus-visible {
 .entry-tag-control__suggestions {
   align-content: flex-start;
 }
+
+
+/* --------------------------------------------------------------------------
+   Workspace density — collapsible desktop columns + quiet tag sections
+   PCでは列をレールへ畳み、空いた幅を残りの列へ返す。
+   タグなしは通常項目、タグ付きだけを意味のある章見出しとして扱う。
+   -------------------------------------------------------------------------- */
+.entry-column__heading-group {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 5px;
+}
+
+.entry-column__collapse-toggle,
+.entry-column__collapsed-rail {
+  border: 0;
+  color: #82786f;
+  background: transparent;
+  font: inherit;
+}
+
+.entry-column__collapse-toggle {
+  display: inline-grid;
+  width: 26px;
+  min-width: 26px;
+  height: 26px;
+  place-items: center;
+  border-radius: 7px;
+  font-size: 20px;
+  line-height: 1;
+  opacity: .55;
+  transition:
+    opacity 120ms ease,
+    color 120ms ease,
+    background-color 120ms ease;
+}
+
+.entry-column__collapse-toggle:hover,
+.entry-column__collapse-toggle:focus-visible {
+  color: #8f4528;
+  background: #fff0e8;
+  opacity: 1;
+  outline: 0;
+}
+
+.entry-column__collapsed-rail {
+  display: none;
+}
+
+@media (min-width: 921px) {
+  .editor-grid {
+    transition: grid-template-columns 180ms ease;
+  }
+
+  .entry-column--collapsed {
+    min-height: 260px;
+    align-self: stretch;
+    padding: 0 !important;
+  }
+
+  .entry-column--collapsed > :not(.entry-column__collapsed-rail) {
+    display: none !important;
+  }
+
+  .entry-column--collapsed .entry-column__collapsed-rail {
+    position: sticky;
+    top: 14px;
+    display: flex;
+    width: 100%;
+    min-height: 220px;
+    align-items: center;
+    justify-content: flex-start;
+    flex-direction: column;
+    gap: 8px;
+    padding: 11px 4px;
+    border-radius: 9px;
+    color: #766d65;
+    cursor: pointer;
+    transition:
+      color 120ms ease,
+      background-color 120ms ease,
+      box-shadow 120ms ease;
+  }
+
+  .entry-column--collapsed .entry-column__collapsed-rail:hover,
+  .entry-column--collapsed .entry-column__collapsed-rail:focus-visible {
+    color: #854228;
+    background: #fff7f1;
+    box-shadow: inset 0 0 0 1px #ead8cc;
+    outline: 0;
+  }
+
+  .entry-column__collapsed-label {
+    writing-mode: vertical-rl;
+    text-orientation: upright;
+    font-size: 12px;
+    font-weight: 760;
+    letter-spacing: .08em;
+  }
+
+  .entry-column__collapsed-count {
+    display: inline-grid;
+    min-width: 22px;
+    height: 20px;
+    place-items: center;
+    border-radius: 999px;
+    color: #8a8178;
+    background: #f0ece6;
+    font-size: 9px;
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+  }
+
+  .entry-column__collapsed-chevron {
+    margin-top: auto;
+    padding-bottom: 3px;
+    font-size: 18px;
+    line-height: 1;
+  }
+}
+
+/* タグは「箱」ではなく、内容を読むための静かな章見出しに寄せる。 */
+.entry-list__tag-group--tag {
+  margin-top: 14px;
+  border-top: 1px solid #e8e2da;
+  background: transparent;
+}
+
+.entry-list__tag-group--tag .entry-list__tag-group-header {
+  min-height: 36px;
+  padding: 5px 2px 2px;
+}
+
+.entry-list__tag-group--tag .entry-list__tag-group-add {
+  min-height: 26px;
+  border-color: transparent;
+  background: transparent;
+  padding-inline: 3px 6px;
+}
+
+.entry-list__tag-group--tag .entry-list__tag-group-add:hover:not(:disabled),
+.entry-list__tag-group--tag .entry-list__tag-group-add:focus-visible {
+  border-color: var(--entry-tag-border, #d8d0c5);
+  background: var(--entry-tag-background, #faf8f4);
+}
+
+.entry-list__tag-group--tag .entry-list__tag-group-header .entry-list__tag-group-toggle {
+  min-height: 30px;
+  padding-inline: 3px 1px;
+  border-radius: 6px;
+}
+
+.entry-list__tag-group--tag .entry-list__tag-group-count {
+  min-width: 24px;
+  font-size: 10px;
+}
+
+.entry-list__tag-group--tag .entry-list__tag-group-chevron {
+  width: 18px;
+  font-size: 11px;
+}
+
+.entry-list__tag-group--tag .entry-list__tag-group-items {
+  margin-top: 1px;
+}
+
+@media (max-width: 920px) {
+  .entry-column__collapse-toggle,
+  .entry-column__collapsed-rail {
+    display: none !important;
+  }
+
+  .entry-column--collapsed {
+    min-height: 0;
+  }
+}
