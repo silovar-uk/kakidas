@@ -126,6 +126,10 @@ export function EntryItem({
   const linkInputRef = useRef<HTMLInputElement | null>(null);
   const paragraphResizeFrameRef = useRef<number | null>(null);
   const paragraphCompositionRef = useRef(false);
+  const paragraphPreviewRef = useRef<HTMLSpanElement | null>(null);
+  const paragraphPreviewButtonRef = useRef<HTMLButtonElement | null>(null);
+  const [paragraphNeedsFold, setParagraphNeedsFold] = useState(false);
+  const [paragraphExpanded, setParagraphExpanded] = useState(false);
 
   const isParagraph = kind === "paragraph";
   const isReferenceUrl = kind === "word" && Boolean(entry.link_url.trim());
@@ -179,6 +183,38 @@ export function EntryItem({
       }
     };
   }, []);
+
+  // 本文の表示高さを実測する。文字数ではなく、実際の行の高さと画面高で判定する。
+  // compactViewは既存の2行省略を維持し、編集時もこの表示制限を適用しない。
+  useEffect(() => {
+    if (!isParagraph || compactView || isEditing) return;
+
+    const text = paragraphPreviewRef.current;
+    const button = paragraphPreviewButtonRef.current;
+    if (!text || !button) return;
+
+    const measure = () => {
+      const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
+      setParagraphNeedsFold(text.scrollHeight > viewportHeight * 0.6 + 1);
+    };
+
+    measure();
+    const observer = typeof ResizeObserver !== "undefined"
+      ? new ResizeObserver(measure)
+      : null;
+    observer?.observe(button);
+    window.addEventListener("resize", measure);
+
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener("resize", measure);
+    };
+  }, [entry.content, isParagraph, compactView, isEditing]);
+
+  useEffect(() => {
+    // 本文を更新した場合は、新しい内容の既定（省略）表示へ戻す。
+    setParagraphExpanded(false);
+  }, [entry.content]);
 
   const adjustParagraphTextareaHeight = ({ allowShrink = false } = {}) => {
     const textarea = contentInputRef.current;
@@ -811,6 +847,7 @@ export function EntryItem({
             <button
               type="button"
               className="entry-item__content"
+              ref={isParagraph ? paragraphPreviewButtonRef : undefined}
               onClick={beginContentEdit}
               disabled={disabled}
               aria-label={
@@ -819,9 +856,31 @@ export function EntryItem({
                   : "編集する"
               }
             >
-              <span className="entry-item__content-text">{entry.content}</span>
+              <span
+                ref={isParagraph ? paragraphPreviewRef : undefined}
+                id={isParagraph ? `paragraph-preview-${entry.id}` : undefined}
+                className={`entry-item__content-text${isParagraph && paragraphNeedsFold && !paragraphExpanded ? " entry-item__content-text--folded" : ""}`}
+              >
+                {entry.content}
+              </span>
             </button>
           )}
+
+          {isParagraph && paragraphNeedsFold ? (
+            <button
+              type="button"
+              className="entry-item__paragraph-toggle"
+              onClick={() => setParagraphExpanded((expanded) => !expanded)}
+              aria-expanded={paragraphExpanded}
+              aria-controls={`paragraph-preview-${entry.id}`}
+              aria-label={paragraphExpanded ? "段落を折りたたむ" : "段落の続きを読む"}
+            >
+              <span>{paragraphExpanded ? "折りたたむ" : "続きを読む・全文を表示"}</span>
+              <span className="entry-item__paragraph-toggle-chevron" aria-hidden="true">
+                {paragraphExpanded ? "⌃" : "⌄"}
+              </span>
+            </button>
+          ) : null}
 
           {isLegacyWord ? (
             <span className="entry-item__legacy-label">以前の単語</span>
