@@ -343,6 +343,8 @@ export function MemoEditorPage() {
     });
   }, []);
 
+  const openEntryColumnCount = ENTRY_KINDS.filter((kind) => !collapsedEntryColumns[kind]).length;
+
   const editorGridStyle = useMemo<CSSProperties>(
     () => ({
       gridTemplateColumns: ENTRY_KINDS
@@ -1145,6 +1147,7 @@ export function MemoEditorPage() {
             entries={entriesByKind[kind]}
             isActiveOnMobile={activeKind === kind}
             isCollapsed={collapsedEntryColumns[kind]}
+            canCollapse={openEntryColumnCount > 1}
             onToggleCollapsed={() => toggleEntryColumnCollapsed(kind)}
             showCreatedAt={showEntryTimestamps}
             showEntryNumbers={showEntryNumbers}
