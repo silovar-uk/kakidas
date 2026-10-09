@@ -45,6 +45,8 @@ type EntryColumnProps = {
   isActiveOnMobile: boolean;
   /** PCでこの列を細いレールへ畳んでいるか。モバイル表示には影響させない。 */
   isCollapsed?: boolean;
+  /** 最後の1列は閉じられないため、閉じる操作を非表示にする。 */
+  canCollapse?: boolean;
   /** PCの列を折りたたみ／展開する。 */
   onToggleCollapsed?: () => void;
   /** 各項目の作成日時を表示するか。 */
@@ -125,6 +127,7 @@ export function EntryColumn({
   entries,
   isActiveOnMobile,
   isCollapsed = false,
+  canCollapse = true,
   onToggleCollapsed,
   showCreatedAt,
   showEntryNumbers,
@@ -1104,16 +1107,17 @@ export function EntryColumn({
       <div className="entry-column__header">
         <div className="entry-column__heading-group">
           <h2 id={`${kind}-heading`}>{ENTRY_KIND_LABEL[kind]}</h2>
-          {onToggleCollapsed ? (
+          {onToggleCollapsed && canCollapse && !isCollapsed ? (
             <button
               type="button"
               className="entry-column__collapse-toggle"
               onClick={onToggleCollapsed}
               aria-label={`${ENTRY_KIND_LABEL[kind]}を折りたたむ`}
-              aria-expanded={!isCollapsed}
+              aria-expanded={true}
               title={`${ENTRY_KIND_LABEL[kind]}を折りたたむ`}
             >
-              ‹
+              <span className="entry-column__collapse-toggle-icon" aria-hidden="true">‹</span>
+              <span className="entry-column__collapse-toggle-label" aria-hidden="true">畳む</span>
             </button>
           ) : null}
         </div>
