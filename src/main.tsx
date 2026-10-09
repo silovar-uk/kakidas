@@ -21,6 +21,7 @@ import "./styles-completed-entry-danger.css";
 import "./styles-memo-list-quiet.css";
 import "./styles-canonical-host.css";
 import "./styles-reference-url.css";
+import "./styles-workspace-fold.css";
 
 // 以前のオーバーレイが残したスクロール停止を、起動時に必ず初期化する。
 resetBodyScrollLock();
