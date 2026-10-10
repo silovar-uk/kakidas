@@ -10,6 +10,12 @@ export async function withViewTransition(update:()=>void|Promise<unknown>):Promi
   });
   // 新しい移行が始まると finished は AbortError で拒否される。
   // updateCallbackDone が成功していても未処理例外にならないよう監視する。
+  // ready も開始前の中断で拒否される。標準的な競合は無害。
+  void transition.ready.catch((error: unknown) => {
+    if (!(error instanceof DOMException && error.name === "AbortError")) {
+      console.error("画面遷移の開始に失敗しました", error);
+    }
+  });
   void transition.finished.catch((error: unknown) => {
     if (!(error instanceof DOMException && error.name === "AbortError")) {
       console.error("画面の移り変わりに失敗しました", error);
