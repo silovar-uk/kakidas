@@ -137,3 +137,13 @@
  animation:kakidas-fresh-line 1.2s var(--ease) forwards;pointer-events:none}
 @keyframes kakidas-fresh-line {0%{opacity:1;transform:scaleY(1)}100%{opacity:0;transform:scaleY(.8)}}
 @media(prefers-reduced-motion:reduce){.entry-item--fresh::before{animation:none;opacity:0}}
+
+/* PCは3列が同時に見えるため、スマホ専用の棚タブを重ねない。 */
+@media (min-width:921px) {
+ .editor-tabs {display:none;}
+ .editor-page.app-shell {padding-top:0;}
+ .entry-composer--desk {padding:6px 10px;margin:2px 0 4px;}
+ .entry-item__quick-actions:focus-within,
+ .entry-item:focus-within > .entry-item__row .entry-item__quick-actions,
+ .entry-item:focus-within .entry-item__quick-actions {opacity:1 !important;pointer-events:auto !important;}
+}
