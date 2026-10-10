@@ -71,7 +71,7 @@ const deskOf = page => page.getByRole('textbox', { name: '書く', exact: true }
 async function write(page, kind, text, { heading = '' } = {}) {
   const desk = deskOf(page);
   if (await desk.count()) {
-    if (kind === 'paragraph') await page.getByRole('radio', { name: '段落', exact: true }).click();
+    await page.getByRole('radio', { name: LABEL[kind], exact: true }).click();
     if (heading) await page.getByRole('textbox', { name: '段落タイトル', exact: true }).fill(heading);
     await desk.fill(text);
     await desk.press(kind === 'paragraph' ? 'Control+Enter' : 'Enter');
@@ -283,6 +283,7 @@ check('P2', 'P2-5', 'Alt+1/2/3で置き先を選べる', async ({ pc }) => {
   for (const [key, name] of [['Alt+1', '参考URL'], ['Alt+3', '段落'], ['Alt+2', '文']]) {
     await page.keyboard.press(key);
     console.log('P2キー', key, await page.evaluate(() => window.__keytrace));
+    await page.waitForFunction(name => [...document.querySelectorAll('[role="radio"]')].some(el => el.getAttribute('aria-label') === name && el.getAttribute('aria-checked') === 'true'), name, {timeout:1500});
     assert.equal(await page.getByRole('radio', { name, exact: true }).getAttribute('aria-checked'), 'true', `${key}で${name}にならない`);
   }
 });
