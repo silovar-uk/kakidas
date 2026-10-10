@@ -8,7 +8,18 @@ export async function withViewTransition(update:()=>void|Promise<unknown>):Promi
     flushSync(()=>{result=update()});
     await result;
   });
-  await transition.updateCallbackDone;
+  // 新しい移行が始まると finished は AbortError で拒否される。
+  // updateCallbackDone が成功していても未処理例外にならないよう監視する。
+  void transition.finished.catch((error: unknown) => {
+    if (!(error instanceof DOMException && error.name === "AbortError")) {
+      console.error("画面の移り変わりに失敗しました", error);
+    }
+  });
+  try {
+    await transition.updateCallbackDone;
+  } catch (error) {
+    if (!(error instanceof DOMException && error.name === "AbortError")) throw error;
+  }
 }
 
 /** IndexedDB保存後の描画を少しだけ待ち、写しと行の形をつなぐ。 */
