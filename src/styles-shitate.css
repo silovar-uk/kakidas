@@ -147,3 +147,12 @@
  .entry-item:focus-within > .entry-item__row .entry-item__quick-actions,
  .entry-item:focus-within .entry-item__quick-actions {opacity:1 !important;pointer-events:auto !important;}
 }
+
+/* 二重の余白を解消した書き口と、コンパクトな列見出し。 */
+.editor-grid .entry-list {margin-top:8px;}
+.editor-grid .entry-column__header {min-height:36px;padding-top:2px;padding-bottom:2px;}
+@media (min-width:921px) {
+ .entry-column__collapse-toggle {opacity:0;pointer-events:none;transition:opacity .12s;}
+ .entry-column__header:hover .entry-column__collapse-toggle,
+ .entry-column__header:focus-within .entry-column__collapse-toggle {opacity:1;pointer-events:auto;}
+}
