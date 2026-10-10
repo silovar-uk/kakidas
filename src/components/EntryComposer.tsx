@@ -100,7 +100,6 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
       memoUpdatedAt,
       kind: baseKind,
       variant,
-      mobileKind = "sentence",
       onPlaced,
       disabled = false,
       tagSuggestions,
@@ -116,7 +115,6 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
     const [headingValue, setHeadingValue] = useState("");
     const [chosenKind, setChosenKind] = useState<EntryKind | null>(null);
     const isDesk = variant === "desk";
-    const isMobile = typeof window !== "undefined" && window.matchMedia("(max-width:920px)").matches;
     const automaticKind: EntryKind = /^(https?:\/\/|www\.)\S+$/iu.test(value.trim())
       ? "word" : value.includes("\n") || headingValue.trim()
         ? "paragraph" : "sentence";
