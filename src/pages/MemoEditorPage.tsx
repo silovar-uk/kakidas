@@ -1065,7 +1065,6 @@ export function MemoEditorPage() {
             tagSuggestions={entryTagSuggestions}
             disabled={isUploading}
             addAtBottom={addEntriesAtBottom}
-            onAutoFocusHandled={handleComposerAutoFocusHandled}
             onCreate={createEntry}
             onUpdate={(entryId, patch) => updateEntry(entryId, patch)}
             onDelete={deleteEntry}
