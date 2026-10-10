@@ -190,10 +190,12 @@ check('P1', 'P1-3', '行の操作は、触れたとき(ホバー・フォーカ�
   await page.mouse.move(2, 2);
   await actions.locator('button').first().focus(); await page.waitForTimeout(300);
   const focus = await actions.evaluate(el => parseFloat(getComputedStyle(el).opacity));
+  console.log('P1操作フォーカス', await actions.evaluate(el => ({active:document.activeElement?.outerHTML.slice(0,150),firstButton:el.querySelector('button')?.outerHTML.slice(0,250),activeInside:el.contains(document.activeElement)})));
   assert.ok(focus > 0.95, `キーボードで操作に入っても見えない(opacity ${focus})`);
 });
 check('P2', 'P2-9', `PCの最初の画面に見える操作部品は${LIMIT.pcControls}個まで`, async ({ pc }) => {
   const n = await countControls(pc.page);
+  console.log('P2ボタン一覧', await pc.page.evaluate(`(() => { const vis=${VISIBLE_FN}; return [...document.querySelectorAll('button, select, input:not([type=hidden]), textarea, a[href]')].filter(vis).map(el=>({tag:el.tagName,name:el.getAttribute('aria-label')||el.getAttribute('title')||el.textContent?.trim().slice(0,25),cls:String(el.className).slice(0,100),top:Math.round(el.getBoundingClientRect().top)})); })()`));
   assert.ok(n <= LIMIT.pcControls, `${n}個見えている`);
 });
 check('P1', 'P1-4', `PCの最初の画面で使う色は${LIMIT.pcColors}色まで`, async ({ pc }) => {
@@ -277,8 +279,10 @@ check('P2', 'P2-4', 'ふつうに書いてEnterなら文に置かれる', async 
 check('P2', 'P2-5', 'Alt+1/2/3で置き先を選べる', async ({ pc }) => {
   const { page } = pc;
   await deskOf(page).click();
+  await page.evaluate(() => { window.__keytrace = []; window.addEventListener('keydown', e => window.__keytrace.push([e.key,e.code,e.altKey,e.ctrlKey]),{capture:true}); });
   for (const [key, name] of [['Alt+1', '参考URL'], ['Alt+3', '段落'], ['Alt+2', '文']]) {
     await page.keyboard.press(key);
+    console.log('P2キー', key, await page.evaluate(() => window.__keytrace));
     assert.equal(await page.getByRole('radio', { name, exact: true }).getAttribute('aria-checked'), 'true', `${key}で${name}にならない`);
   }
 });
@@ -307,6 +311,7 @@ check('P2', 'P2-7', '上の帯の「メモの操作」に、クラウド・コ�
 });
 check('P2', 'P2-10', `PCで最初の項目の上端は${LIMIT.pcFirstEntryTop}px以内`, async ({ pc }) => {
   const top = Math.min(...await Promise.all(['url', 'sentence', 'paragraph'].map(k => topOf(rowsOf(pc.page, k)))));
+  console.log('P2画面位置',await pc.page.evaluate(()=>Object.fromEntries(['.editor-header--shitate','.editor-tabs','.entry-composer--desk','.editor-grid','.entry-column__header','.entry-item'].map(c=>[c,Math.round(document.querySelector(c)?.getBoundingClientRect().top??-1)]))));
   assert.ok(top <= LIMIT.pcFirstEntryTop, `最初の項目が${top}px`);
 });
 check('P2', 'P2-11', `スマホで書き口は${LIMIT.seDeskTop}px、最初の項目は${LIMIT.seFirstEntryTop}px以内`, async ({ se }) => {
