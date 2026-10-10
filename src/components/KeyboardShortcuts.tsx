@@ -7,9 +7,10 @@ export function KeyboardShortcuts(){
    if((e.ctrlKey||e.metaKey)&&e.key==='/'){e.preventDefault();setOpen(o=>!o);return;}
    if(e.key==='Escape'){setOpen(false);return;}
    if(!pathname.startsWith('/memos/')||e.isComposing)return;
-   if(e.altKey&&!e.ctrlKey&&!e.metaKey&&['1','2','3'].includes(e.key)){
+   const digit = /^Digit[123]$/.test(e.code) ? e.code.slice(-1) : e.key;
+   if(e.altKey&&!e.ctrlKey&&!e.metaKey&&['1','2','3'].includes(digit)){
      e.preventDefault();window.dispatchEvent(new CustomEvent('kakidas:choose-entry-kind',{
-       detail:({1:'word',2:'sentence',3:'paragraph'} as Record<string,string>)[e.key]}));
+       detail:({1:'word',2:'sentence',3:'paragraph'} as Record<string,string>)[digit]}));
    }
  };const show=()=>setOpen(true);window.addEventListener('keydown',action);
  window.addEventListener('kakidas:show-shortcuts',show);
