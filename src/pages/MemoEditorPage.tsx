@@ -215,6 +215,16 @@ export function MemoEditorPage() {
   const [activeKind, setActiveKind] = useState<EntryKind>(
     () => getNavigationKind(initialNavigationState),
   );
+  // 移動先の保存に成功した場合だけ、スマホの表示タブも切り替える。
+  const handleMoveEntryToKind = useCallback(
+    async (entryId: string, targetKind: EntryKind): Promise<void> => {
+      await moveEntryToKind(entryId, targetKind);
+      if (window.matchMedia("(max-width: 920px)").matches) {
+        setActiveKind(targetKind);
+      }
+    },
+    [moveEntryToKind],
+  );
   const noticeIdRef = useRef(0);
   const [notice, setNoticeState] = useState<{ id: number; message: string } | null>(null);
   const setNotice = useCallback((message: string | null) => {
@@ -1079,7 +1089,7 @@ export function MemoEditorPage() {
             onRenameTag={(currentTag, nextTag) =>
               renameEntryTag(kind, currentTag, nextTag)
             }
-            onMoveToKind={moveEntryToKind}
+            onMoveToKind={handleMoveEntryToKind}
           />
         ))}
       </section>
