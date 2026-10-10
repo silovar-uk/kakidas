@@ -1,0 +1,41 @@
+name: 仕立て直しの検証
+on:
+  push:
+    branches: [shitate-p1-p3-review-20261010]
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  verify:
+    name: 受け入れ確認 ${{ matrix.phase }}
+    strategy:
+      fail-fast: false
+      matrix:
+        phase: [P1, P2, P3]
+    runs-on: ubuntu-latest
+    steps:
+      - name: ソース取得
+        uses: actions/checkout@v5
+      - name: Node.js 22
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - name: 依存関係を復元
+        run: npm ci
+      - name: 型検査と本番ビルド
+        run: npm run build
+      - name: Playwrightを用意
+        run: |
+          npm install --no-save --package-lock=false playwright
+          npx playwright install --with-deps chromium
+      - name: P1〜P3 29項目の受け入れ確認
+        timeout-minutes: 15
+        run: |
+          npm run preview -- --host 127.0.0.1 --port 4173 > /tmp/kakidas-preview.log 2>&1 &
+          for i in $(seq 1 40); do
+            if curl -fsS http://127.0.0.1:4173/ >/dev/null; then break; fi
+            sleep 1
+          done
+          QA_TARGET=app QA_PHASES=${{ matrix.phase }} BASE_URL=http://127.0.0.1:4173/ node docs/shitate/qa.mjs

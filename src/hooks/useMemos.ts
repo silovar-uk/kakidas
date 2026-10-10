@@ -259,6 +259,7 @@ export function useMemoDetail(memoId: string | undefined) {
       parentId: string | null = null,
       position: EntryInsertPosition = "bottom",
       draftId?: string,
+      entryId?: string,
     ): Promise<EntryRow> => {
       if (!memoId) {
         throw new Error("メモIDがありません。");
@@ -266,6 +267,7 @@ export function useMemoDetail(memoId: string | undefined) {
 
       return runWrite(async () => {
         const entry = await memoRepository.createEntry({
+          id: entryId,
           memo_id: memoId,
           kind,
           parent_id: parentId,

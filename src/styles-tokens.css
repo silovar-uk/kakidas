@@ -1,0 +1,21 @@
+/* 紙・墨・朱の意匠。すべての画面で共有する */
+:root {
+ --color-paper:#f5f4f0; --color-sheet:#fffefb; --color-ink:#23211d;
+ --color-ink-2:#5c5952; --color-ink-3:#8e8a81;
+ --color-line:#e6e2da; --color-line-strong:#d4cec3;
+ --color-shu:#bd562f; --color-shu-ink:#9f4321; --color-shu-wash:#f7ebe4;
+ --color-danger:#b23a32; --color-danger-wash:#f9e9e7; --color-ok:#7a9a6c;
+ --sat-1:color-mix(in srgb,var(--color-shu) 3%,var(--color-paper));
+ --sat-2:color-mix(in srgb,var(--color-shu) 5%,var(--color-paper));
+ --sat-3:color-mix(in srgb,var(--color-shu) 7%,var(--color-paper));
+ --sat-4:color-mix(in srgb,var(--color-shu) 9%,var(--color-paper));
+ --sat-5:color-mix(in srgb,var(--color-shu) 12%,var(--color-paper));
+ --font-sans:"Hiragino Sans","Hiragino Kaku Gothic ProN","Noto Sans JP","BIZ UDPGothic","Yu Gothic UI",Meiryo,sans-serif;
+ --font-serif:"Hiragino Mincho ProN","Noto Serif JP","BIZ UDPMincho","Yu Mincho",serif;
+ --text-xs:12px; --text-s:13px; --text-m:15px; --text-l:17px; --text-xl:22px; --text-xxl:28px;
+ --radius-s:6px; --radius-m:10px; --radius-pill:999px;
+ --shadow-1:0 1px 2px rgb(35 33 29 / .06),0 1px 1px rgb(35 33 29 / .04);
+ --shadow-2:0 10px 30px rgb(35 33 29 / .13),0 2px 6px rgb(35 33 29 / .06);
+ --ease:cubic-bezier(.2,.8,.2,1);
+ --z-sticky:20; --z-popover:60; --z-sheet:70; --z-toast:80; --z-dialog:90; --z-top:100;
+}

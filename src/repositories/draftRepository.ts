@@ -148,6 +148,19 @@ class IndexedDbDraftRepository {
     await transactionToPromise(transaction);
   }
 
+  async migrateOldMainDraft(fromId: string, toId: string): Promise<void> {
+    const db = await getDatabase();
+    const tx = db.transaction(STORE_NAMES.drafts, "readwrite");
+    const store = tx.objectStore(STORE_NAMES.drafts);
+    const old = await requestToPromise(store.get(fromId) as IDBRequest<EntryDraftRow | undefined>);
+    const current = await requestToPromise(store.get(toId) as IDBRequest<EntryDraftRow | undefined>);
+    if (old && !current) {
+      store.put({...old, id:toId,kind:"sentence",updated_at:nowIso()});
+      store.delete(fromId);
+    }
+    await transactionToPromise(tx);
+  }
+
   async listForMemo(memoId: string): Promise<EntryDraftRow[]> {
     const db = await getDatabase();
     const transaction = db.transaction(STORE_NAMES.drafts, "readonly");

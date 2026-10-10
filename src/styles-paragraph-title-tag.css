@@ -6,10 +6,10 @@
   justify-content: center;
   margin-top: 8px;
   padding: 0 10px;
-  border: 1px solid #ccd4dd;
+  border: 1px solid var(--color-line);
   border-radius: 8px;
-  color: #4b6077;
-  background: #f4f7fa;
+  color: var(--color-ink-2);
+  background: var(--color-line);
   font-size: 11px;
   font-weight: 700;
   line-height: 1.25;
@@ -22,15 +22,15 @@
 
 .paragraph-title-tag-assist:hover:not(:disabled),
 .paragraph-title-tag-assist:focus-visible:not(:disabled) {
-  border-color: #9babbc;
-  color: #314a64;
-  background: #eaf0f5;
+  border-color: var(--color-line);
+  color: var(--color-ink-2);
+  background: var(--color-line);
 }
 
 .paragraph-title-tag-assist::before {
   content: "↳";
   margin-right: 6px;
-  color: #72859a;
+  color: var(--color-ink-2);
   font-size: 12px;
 }
 

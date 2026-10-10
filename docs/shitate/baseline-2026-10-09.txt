@@ -1,0 +1,33 @@
+
+受け入れ確認「飾らずに、仕立てる」 対象: app https://kakidas-3gqw.vercel.app/
+不合格  P1-1  続けて打っても、打った文が消えない  …「連打の二」がそのまま文に置かれていない(字が消えたか、前の文とつながった)
+不合格  P1-2  保存中も入力欄を止めない(disabledにしない)  …保存中に入力欄がdisabledになった
+不合格  P1-3  行の操作は、触れたとき(ホバー・フォーカス)だけ見える  …行の操作をまとめた要素に data-entry-actions がない
+不合格  P1-4  PCの最初の画面で使う色は26色まで  …70色使っている
+不合格  P1-5  和文の書体を先頭にし、題にはpaltを効かせる  …本文の書体の先頭が「Inter」
+不合格  P1-6  スマホに「Alt+Q」などのキー表示を出さない  …スマホでAlt+Qが見えている
+不合格  P1-7  スマホの1行に見える操作は2個まで  …1行に7個見えている
+不合格  P1-8  スマホの「この項目の操作」に満足度・完了・気持ち・リンク・タグがそろう  …locator.click: Timeout 8000ms exceeded.
+不合格  P2-1  書き口はひとつ(各列の入力欄はない)  …「書く」の入力欄がひとつではない
+不合格  P2-2  URLを書くと参考URLに置かれる  …locator.fill: Timeout 8000ms exceeded.
+不合格  P2-3  Shift+Enterで段落へ育ち、Ctrl+Enterで段落に置かれる  …locator.click: Timeout 8000ms exceeded.
+不合格  P2-4  ふつうに書いてEnterなら文に置かれる  …locator.fill: Timeout 8000ms exceeded.
+不合格  P2-5  Alt+1/2/3で置き先を選べる  …locator.click: Timeout 8000ms exceeded.
+不合格  P2-6  列見出しに見える操作は2個まで、設定は「…の操作」にまとまる  …参考URLの見出しに5個見えている
+不合格  P2-7  上の帯の「メモの操作」に、クラウド・コピー・並び順・削除などがまとまる  …locator.click: Timeout 8000ms exceeded.
+不合格  P2-8  削除のボタンを表に出さない(PC・スマホ)  …PCで削除ボタンが1個見えている
+不合格  P2-9  PCの最初の画面に見える操作部品は30個まで  …70個見えている
+不合格  P2-10  PCで最初の項目の上端は300px以内  …最初の項目が393px
+不合格  P2-11  スマホで書き口は200px、最初の項目は420px以内  …locator.evaluate: Timeout 8000ms exceeded.
+不合格  P2-12  スマホで置くと、置いた棚のタブへ移る  …locator.fill: Timeout 8000ms exceeded.
+不合格  P2-13  前の段落の下書きを、書き口が拾う  …locator.inputValue: Timeout 8000ms exceeded.
+不合格  P2-14  余白は上の帯から開く  …locator.click: Timeout 8000ms exceeded.
+不合格  P3-1  清書にすると一枚の紙になり、URLで戻れる形になる  …locator.click: Timeout 8000ms exceeded.
+不合格  P3-2  清書は要点・本文・参考の順。題は「」の中身、日付は日付行へ  …見出しの順が
+不合格  P3-3  完了した項目と満足度は清書に入れない  …locator.innerText: Timeout 8000ms exceeded.
+不合格  P3-4  書式つきでコピーすると、見出しつきのHTMLが入る  …locator.click: Timeout 8000ms exceeded.
+不合格  P3-5  「書き口へ戻る」で作業台に戻る  …locator.click: Timeout 8000ms exceeded.
+不合格  P3-6  印刷では紙だけが出る  …locator.click: Timeout 8000ms exceeded.
+不合格  P3-7  清書と置くときに移り変わりを使い、動きを減らす設定では使わない  …locator.click: Timeout 8000ms exceeded.
+
+0/29 合格

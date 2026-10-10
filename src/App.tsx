@@ -1,15 +1,12 @@
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { AuthProvider } from "./auth/AuthProvider";
 import { CanonicalHostNotice } from "./components/CanonicalHostNotice";
-import { ChatGptMemoButton } from "./components/ChatGptMemoButton";
-import { CloudUploadHeaderButton } from "./components/CloudUploadHeaderButton";
 import { EntryTagGroupDragOrder } from "./components/EntryTagGroupDragOrder";
 import { KeyboardShortcuts } from "./components/KeyboardShortcuts";
 import { MobileInteractionMotion } from "./components/MobileInteractionMotion";
 import { MobileNewMemoTitleFocus } from "./components/MobileNewMemoTitleFocus";
 import { ParagraphTitleTagAssist } from "./components/ParagraphTitleTagAssist";
 import { TemporaryMemoDock } from "./components/TemporaryMemoDock";
-import { TemporaryMemoShortcut } from "./components/TemporaryMemoShortcut";
 import { MemoEditorPage } from "./pages/MemoEditorPage";
 import { MemoListPage } from "./pages/MemoListPage";
 import { TagManagerPage } from "./pages/TagManagerPage";
@@ -29,10 +26,7 @@ export default function App() {
         <MobileNewMemoTitleFocus />
         <ParagraphTitleTagAssist />
         <EntryTagGroupDragOrder />
-        <ChatGptMemoButton />
-        <CloudUploadHeaderButton />
         <TemporaryMemoDock />
-        <TemporaryMemoShortcut />
         <MobileInteractionMotion />
       </BrowserRouter>
     </AuthProvider>
