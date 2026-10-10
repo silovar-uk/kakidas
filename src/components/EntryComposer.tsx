@@ -100,6 +100,7 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
       memoUpdatedAt,
       kind: baseKind,
       variant,
+      mobileKind = "sentence",
       onPlaced,
       disabled = false,
       tagSuggestions,
@@ -115,9 +116,10 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
     const [headingValue, setHeadingValue] = useState("");
     const [chosenKind, setChosenKind] = useState<EntryKind | null>(null);
     const isDesk = variant === "desk";
+    const isMobile = typeof window !== "undefined" && window.matchMedia("(max-width:920px)").matches;
     const automaticKind: EntryKind = /^(https?:\/\/|www\.)\S+$/iu.test(value.trim())
       ? "word" : value.includes("\n") || headingValue.trim()
-        ? "paragraph" : "sentence";
+        ? "paragraph" : isMobile ? mobileKind : "sentence";
     const kind: EntryKind = isDesk ? chosenKind ?? automaticKind : baseKind;
 
     const [tagValue, setTagValue] = useState("");
@@ -777,7 +779,7 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
       <section aria-label={isDesk ? "書き口" : undefined} className={isDesk ? "entry-composer entry-composer--desk" : undefined}>
       <form
         aria-label={isDesk ? "書き口" : undefined}
-        className={`entry-composer ${isDesk ? "entry-composer--desk" : ""} ${compact ? "entry-composer--tag-group" : ""} ${
+        className={`entry-composer ${isDesk ? "entry-composer--desk-inner" : ""} ${compact ? "entry-composer--tag-group" : ""} ${
           isReferenceUrl ? "entry-composer--reference-url" : ""
         }`}
         onSubmit={handleSubmit}
