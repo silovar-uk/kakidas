@@ -898,6 +898,8 @@ export function MemoEditorPage() {
   };
   const handleDeskCreate=async(content:string,metadata:import('../types/memo').EntryCreateMetadata,draftId:string,kind:EntryKind='sentence',entryId?:string)=>{
     const created=await createEntry(kind,content,metadata,null,addEntriesAtBottom?'bottom':'top',draftId,entryId);
+    // 保存成功直後にスマホの棚を切り替える。演出の完了は待たない。
+    if (window.matchMedia("(max-width: 920px)").matches) setActiveKind(kind);
     if(kind==='word'&&metadata.link_url){
       void fetchReferenceTitle(metadata.link_url).then(result=>{
         if(result)return updateEntry(created.id,{content:result});
