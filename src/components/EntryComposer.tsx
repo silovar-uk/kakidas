@@ -119,7 +119,7 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
     const isMobile = typeof window !== "undefined" && window.matchMedia("(max-width:920px)").matches;
     const automaticKind: EntryKind = /^(https?:\/\/|www\.)\S+$/iu.test(value.trim())
       ? "word" : value.includes("\n") || headingValue.trim()
-        ? "paragraph" : isMobile ? mobileKind : "sentence";
+        ? "paragraph" : "sentence";
     const kind: EntryKind = isDesk ? chosenKind ?? automaticKind : baseKind;
 
     const [tagValue, setTagValue] = useState("");
