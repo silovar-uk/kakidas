@@ -8,6 +8,11 @@ permissions:
   contents: read
 jobs:
   verify:
+    name: 受け入れ確認 ${{ matrix.phase }}
+    strategy:
+      fail-fast: false
+      matrix:
+        phase: [P1, P2, P3]
     runs-on: ubuntu-latest
     steps:
       - name: ソース取得
@@ -33,4 +38,4 @@ jobs:
             if curl -fsS http://127.0.0.1:4173/ >/dev/null; then break; fi
             sleep 1
           done
-          QA_TARGET=app BASE_URL=http://127.0.0.1:4173/ node docs/shitate/qa.mjs
+          QA_TARGET=app QA_PHASES=${{ matrix.phase }} BASE_URL=http://127.0.0.1:4173/ node docs/shitate/qa.mjs
