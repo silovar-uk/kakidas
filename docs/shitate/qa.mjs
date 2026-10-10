@@ -111,6 +111,16 @@ async function open(browser, url, viewport, extra = {}, seed = viewport.width >=
     await page.getByRole('button', { name: /新しいメモ/ }).first().click();
     await page.waitForURL(/\/memos\//);
     const title = page.getByRole('textbox', { name: 'メモのタイトル', exact: true });
+    try {
+      await title.waitFor({ state: 'visible', timeout: 8000 });
+    } catch (error) {
+      console.error('QAメモ初期化失敗', {
+        url: page.url(),
+        body: (await page.locator('body').innerText()).slice(0, 3000),
+        pageErrors: errors,
+      });
+      throw error;
+    }
     await title.fill(SAMPLE.title);
     await title.press('Tab');
     if (seed) {
