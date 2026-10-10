@@ -984,27 +984,6 @@ export function EntryItem({
 
           <button
             type="button"
-            className={`entry-item__note-trigger entry-item__note-trigger--rail ${
-              hasNote ? "entry-item__note-trigger--active" : ""
-            }`}
-            onClick={beginNoteEdit}
-            disabled={disabled || isSaving}
-            aria-label={
-              isReferenceUrl
-                ? hasNote ? "備考を編集" : "備考を追加"
-                : hasNote ? "気持ち・備考を編集" : "気持ち・備考を追加"
-            }
-            title={
-              isReferenceUrl
-                ? hasNote ? "備考を編集" : "備考を追加"
-                : hasNote ? "気持ち・備考を編集" : "気持ち・備考を追加"
-            }
-          >
-            <NoteIcon />
-          </button>
-
-          <button
-            type="button"
             className={`entry-item__complete ${
               entry.is_completed ? "entry-item__complete--active" : ""
             }`}
