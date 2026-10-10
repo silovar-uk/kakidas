@@ -11,14 +11,14 @@
   align-items: center;
   gap: 7px;
   padding: 0 13px;
-  border: 1px solid #d3b95f;
+  border: 1px solid var(--color-ink-2);
   border-radius: 12px;
-  color: #5c4b20;
+  color: var(--color-ink-2);
   background:
-    linear-gradient(180deg, rgba(255, 253, 218, 0.98), rgba(250, 241, 174, 0.98));
+    linear-gradient(180deg, var(--color-line), var(--color-line));
   box-shadow:
-    0 10px 24px rgba(75, 61, 25, 0.18),
-    inset 0 1px 0 rgba(255, 255, 255, 0.78);
+    0 10px 24px color-mix(in srgb,var(--color-ink) 16%,transparent),
+    inset 0 1px 0 var(--color-sheet);
   font: inherit;
   font-size: 12px;
   font-weight: 800;
@@ -34,12 +34,12 @@
 
 .temporary-memo-trigger:hover:not(:disabled),
 .temporary-memo-trigger:focus-visible {
-  border-color: #b99d42;
+  border-color: var(--color-ink-2);
   background:
-    linear-gradient(180deg, #fffdd2, #f7e99c);
+    linear-gradient(180deg, var(--color-line), var(--color-line));
   box-shadow:
-    0 13px 30px rgba(75, 61, 25, 0.22),
-    inset 0 1px 0 rgba(255, 255, 255, 0.82);
+    0 13px 30px color-mix(in srgb,var(--color-ink) 16%,transparent),
+    inset 0 1px 0 var(--color-sheet);
   outline: none;
   transform: translateY(-2px);
 }
@@ -54,7 +54,7 @@
 }
 
 .temporary-memo-trigger__icon {
-  color: #7b631d;
+  color: var(--color-ink-2);
   font-size: 16px;
   line-height: 1;
 }
@@ -63,18 +63,18 @@
   width: 7px;
   height: 7px;
   border-radius: 999px;
-  background: #bd562f;
-  box-shadow: 0 0 0 3px rgba(189, 86, 47, 0.12);
+  background: var(--color-shu);
+  box-shadow: 0 0 0 3px color-mix(in srgb,var(--color-ink) 16%,transparent);
 }
 
 .temporary-memo-trigger--filled {
-  border-color: #c9aa45;
+  border-color: var(--color-ink-2);
 }
 
 .temporary-memo-trigger--error {
-  border-color: #c96a5e;
-  color: #7b342d;
-  background: #fff0e7;
+  border-color: var(--color-danger);
+  color: var(--color-danger);
+  background: var(--color-shu-wash);
 }
 
 .temporary-memo-layer {
@@ -92,7 +92,7 @@
   height: 100%;
   padding: 0;
   border: 0;
-  background: rgba(47, 40, 29, 0.13);
+  background: color-mix(in srgb,var(--color-ink) 16%,transparent);
   backdrop-filter: blur(1px);
   animation: temporary-memo-backdrop-in 260ms ease both;
 }
@@ -108,14 +108,14 @@
   grid-template-rows: auto minmax(0, 1fr) auto auto;
   overflow: hidden;
   padding: 13px 15px 14px;
-  border: 1px solid #d2bc65;
+  border: 1px solid var(--color-ink-2);
   border-radius: 18px;
-  color: #473e2c;
+  color: var(--color-shu-ink);
   background:
-    linear-gradient(180deg, rgba(255, 253, 221, 0.99), rgba(250, 244, 190, 0.99));
+    linear-gradient(180deg, var(--color-line), var(--color-line));
   box-shadow:
-    0 25px 65px rgba(60, 49, 24, 0.28),
-    inset 0 1px 0 rgba(255, 255, 255, 0.8);
+    0 25px 65px color-mix(in srgb,var(--color-ink) 16%,transparent),
+    inset 0 1px 0 var(--color-sheet);
   animation: temporary-memo-panel-in 320ms cubic-bezier(0.22, 0.78, 0.24, 1) both;
 }
 
@@ -126,7 +126,7 @@
   width: 34px;
   height: 34px;
   clip-path: polygon(100% 0, 0 100%, 100% 100%);
-  background: rgba(196, 166, 63, 0.16);
+  background: color-mix(in srgb,var(--color-ink) 16%,transparent);
   content: "";
   pointer-events: none;
 }
@@ -142,7 +142,7 @@
   justify-content: space-between;
   gap: 13px;
   padding: 1px 1px 12px;
-  border-bottom: 1px solid rgba(154, 130, 52, 0.22);
+  border-bottom: 1px solid color-mix(in srgb,var(--color-ink) 16%,transparent);
 }
 
 .temporary-memo-panel__header > div {
@@ -151,7 +151,7 @@
 
 .temporary-memo-panel__eyebrow {
   margin: 0 0 4px;
-  color: #8f7224;
+  color: var(--color-ink-2);
   font-size: 9px;
   font-weight: 900;
   letter-spacing: 0.15em;
@@ -159,7 +159,7 @@
 
 .temporary-memo-panel__header h2 {
   margin: 0;
-  color: #42381f;
+  color: var(--color-ink-2);
   font-size: 20px;
   line-height: 1.15;
   letter-spacing: -0.025em;
@@ -169,7 +169,7 @@
   max-width: 31ch;
   margin: 5px 0 0;
   overflow: hidden;
-  color: #786b46;
+  color: var(--color-ink-2);
   font-size: 11px;
   line-height: 1.35;
   text-overflow: ellipsis;
@@ -180,10 +180,10 @@
   min-width: 56px;
   min-height: 32px;
   padding: 0 9px;
-  border: 1px solid rgba(135, 111, 39, 0.28);
+  border: 1px solid color-mix(in srgb,var(--color-ink) 16%,transparent);
   border-radius: 9px;
-  color: #685721;
-  background: rgba(255, 255, 240, 0.62);
+  color: var(--color-ink-2);
+  background: color-mix(in srgb,var(--color-ink) 55%,transparent);
   font: inherit;
   font-size: 11px;
   font-weight: 800;
@@ -191,8 +191,8 @@
 
 .temporary-memo-panel__close:hover,
 .temporary-memo-panel__close:focus-visible {
-  border-color: #a78c39;
-  background: rgba(255, 255, 246, 0.92);
+  border-color: var(--color-ink-2);
+  background: var(--color-line);
   outline: none;
 }
 
@@ -202,18 +202,18 @@
   margin: 12px 0 10px;
   padding: 13px 14px;
   overflow-y: auto;
-  border: 1px solid rgba(151, 127, 47, 0.24);
+  border: 1px solid color-mix(in srgb,var(--color-ink) 16%,transparent);
   border-radius: 12px;
   outline: none;
-  color: #343026;
+  color: var(--color-ink-2);
   background:
     repeating-linear-gradient(
       to bottom,
-      rgba(255, 255, 247, 0.72) 0,
-      rgba(255, 255, 247, 0.72) 28px,
-      rgba(178, 159, 91, 0.16) 29px
+      color-mix(in srgb,var(--color-ink) 55%,transparent) 0,
+      color-mix(in srgb,var(--color-ink) 55%,transparent) 28px,
+      color-mix(in srgb,var(--color-ink) 16%,transparent) 29px
     );
-  box-shadow: inset 0 1px 4px rgba(94, 77, 29, 0.08);
+  box-shadow: inset 0 1px 4px color-mix(in srgb,var(--color-ink) 6%,transparent);
   font: inherit;
   font-size: 15px;
   line-height: 29px;
@@ -223,14 +223,14 @@
 }
 
 .temporary-memo-panel__textarea::placeholder {
-  color: #a29670;
+  color: var(--color-ink-2);
 }
 
 .temporary-memo-panel__textarea:focus {
-  border-color: #b2963f;
+  border-color: var(--color-ink-2);
   box-shadow:
-    inset 0 1px 4px rgba(94, 77, 29, 0.08),
-    0 0 0 3px rgba(178, 150, 63, 0.15);
+    inset 0 1px 4px color-mix(in srgb,var(--color-ink) 6%,transparent),
+    0 0 0 3px color-mix(in srgb,var(--color-ink) 16%,transparent);
 }
 
 .temporary-memo-panel__footer {
@@ -247,14 +247,14 @@
   grid-template-columns: auto minmax(0, max-content);
   align-items: center;
   gap: 2px 6px;
-  color: #655b3f;
+  color: var(--color-ink-2);
   font-size: 10px;
   font-weight: 760;
 }
 
 .temporary-memo-panel__status small {
   grid-column: 2;
-  color: #8b8060;
+  color: var(--color-ink-2);
   font-size: 9px;
   font-weight: 650;
 }
@@ -264,26 +264,26 @@
   height: 7px;
   grid-row: 1 / span 2;
   border-radius: 999px;
-  background: #6f9164;
+  background: var(--color-ink-2);
 }
 
 .temporary-memo-panel__status-dot.is-dirty {
-  background: #c48b2e;
+  background: var(--color-shu);
   animation: temporary-memo-status-pulse 1.2s ease-in-out infinite;
 }
 
 .temporary-memo-panel__status-dot.is-error {
-  background: #bd564c;
+  background: var(--color-danger);
 }
 
 .temporary-memo-panel__clear {
   flex: 0 0 auto;
   min-height: 32px;
   padding: 0 9px;
-  border: 1px solid rgba(155, 79, 64, 0.2);
+  border: 1px solid color-mix(in srgb,var(--color-ink) 16%,transparent);
   border-radius: 9px;
-  color: #8a5148;
-  background: rgba(255, 248, 236, 0.5);
+  color: var(--color-danger);
+  background: color-mix(in srgb,var(--color-ink) 55%,transparent);
   font: inherit;
   font-size: 10px;
   font-weight: 760;
@@ -291,8 +291,8 @@
 
 .temporary-memo-panel__clear:hover:not(:disabled),
 .temporary-memo-panel__clear:focus-visible:not(:disabled) {
-  border-color: #c18b7e;
-  background: #fff1e9;
+  border-color: var(--color-shu);
+  background: var(--color-shu-wash);
   outline: none;
 }
 
@@ -304,8 +304,8 @@
   margin: 8px 0 0;
   padding: 7px 8px;
   border-radius: 8px;
-  color: #8d3f37;
-  background: rgba(255, 231, 224, 0.78);
+  color: var(--color-danger);
+  background: var(--color-shu-wash);
   font-size: 10px;
   line-height: 1.45;
 }
@@ -364,12 +364,12 @@
     padding-inline: 12px;
     border-radius: 11px;
     box-shadow:
-      0 8px 20px rgba(75, 61, 25, 0.2),
-      inset 0 1px 0 rgba(255, 255, 255, 0.78);
+      0 8px 20px color-mix(in srgb,var(--color-ink) 16%,transparent),
+      inset 0 1px 0 var(--color-sheet);
   }
 
   .temporary-memo-backdrop {
-    background: rgba(47, 40, 29, 0.24);
+    background: color-mix(in srgb,var(--color-ink) 16%,transparent);
     backdrop-filter: blur(1.5px);
   }
 
@@ -402,7 +402,7 @@
     height: 4px;
     margin: 0 auto 8px;
     border-radius: 999px;
-    background: rgba(112, 91, 30, 0.35);
+    background: color-mix(in srgb,var(--color-ink) 16%,transparent);
   }
 
   .temporary-memo-panel__header {

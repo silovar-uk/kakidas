@@ -10,7 +10,7 @@
   position: absolute;
   left: 50%;
   bottom: -14px;
-  color: rgba(89, 78, 47, 0.66);
+  color: color-mix(in srgb,var(--color-ink) 55%,transparent);
   font-size: 8px;
   font-weight: 700;
   letter-spacing: 0.02em;
@@ -31,7 +31,7 @@
 .temporary-memo-panel__footer::after {
   grid-column: 1 / -1;
   justify-self: start;
-  color: rgba(102, 88, 48, 0.64);
+  color: color-mix(in srgb,var(--color-ink) 55%,transparent);
   content: "Alt＋Q で開閉";
   font-size: 9px;
   font-weight: 650;

@@ -1,3 +1,6 @@
+import {withViewTransition, waitForCreatedEntry} from "../lib/viewTransition";
+import {flushSync} from "react-dom";
+import { NoteIcon, LinkIcon, TagIcon } from "./icons";
 import {
   type ChangeEvent,
   type ClipboardEvent,
@@ -25,6 +28,7 @@ import {
   type EntryTagSummary,
 } from "../lib/memoTags";
 import { getEntryTagToneClassName } from "../lib/entryTagGroups";
+import { draftRepository } from "../repositories/draftRepository";
 import { useDraftPersistence } from "../hooks/useDraftPersistence";
 import {
   buildEntryDraftId,
@@ -46,6 +50,10 @@ type EntryComposerProps = {
   fixedTag?: string;
   /** タグ見出し直下で使う、余白を抑えた入力面。 */
   compact?: boolean;
+  /** 共通の書き口。既存のタグ固定入力はこれまでどおり独立する。 */
+  variant?: "desk";
+  mobileKind?: EntryKind;
+  onPlaced?: (kind: EntryKind) => void;
   /** 参考URLの重複判定に使う、このメモ内の既存URL。 */
   existingReferenceUrls?: string[];
   /** タグ見出しから開いた専用入力を閉じる。 */
@@ -54,6 +62,8 @@ type EntryComposerProps = {
     content: string,
     metadata: EntryCreateMetadata,
     draftId: string,
+    placedKind?: EntryKind,
+    entryId?: string,
   ) => Promise<unknown> | unknown;
 };
 
@@ -67,32 +77,11 @@ type ParagraphResizeOptions = {
 
 type MetaPicker = "note" | "link" | "tag" | null;
 
-function TagIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-      <path d="M4.8 4.8h7.5l6.9 6.9-6.6 6.6-7.8-7.8V4.8Z" />
-      <path d="M8.4 8.4h.01" />
-    </svg>
-  );
-}
 
-function NoteIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-      <path d="M5.5 4.8h13v14.4H9.3l-3.8 2.4V4.8Z" />
-      <path d="M8.3 9h7.4M8.3 12.6h5.4" />
-    </svg>
-  );
-}
 
-function LinkIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-      <path d="M10.4 13.6a4.3 4.3 0 0 0 6.1 0l2.3-2.3a4.3 4.3 0 0 0-6.1-6.1l-1.3 1.3" />
-      <path d="M13.6 10.4a4.3 4.3 0 0 0-6.1 0l-2.3 2.3a4.3 4.3 0 0 0 6.1 6.1l1.3-1.3" />
-    </svg>
-  );
-}
+
+
+
 
 function readCssPixel(value: string): number | null {
   const parsed = Number.parseFloat(value);
@@ -109,7 +98,10 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
     {
       memoId,
       memoUpdatedAt,
-      kind,
+      kind: baseKind,
+      variant,
+      mobileKind = "sentence",
+      onPlaced,
       disabled = false,
       tagSuggestions,
       fixedTag,
@@ -122,6 +114,14 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
   ) {
     const [value, setValue] = useState("");
     const [headingValue, setHeadingValue] = useState("");
+    const [chosenKind, setChosenKind] = useState<EntryKind | null>(null);
+    const isDesk = variant === "desk";
+    const isMobile = typeof window !== "undefined" && window.matchMedia("(max-width:920px)").matches;
+    const automaticKind: EntryKind = /^(https?:\/\/|www\.)\S+$/iu.test(value.trim())
+      ? "word" : value.includes("\n") || headingValue.trim()
+        ? "paragraph" : isMobile ? mobileKind : "sentence";
+    const kind: EntryKind = isDesk ? chosenKind ?? automaticKind : baseKind;
+
     const [tagValue, setTagValue] = useState("");
     const [noteValue, setNoteValue] = useState("");
     const [linkValue, setLinkValue] = useState("");
@@ -134,6 +134,8 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
     const [duplicateCandidate, setDuplicateCandidate] = useState<string | null>(null);
     const [isComposing, setIsComposing] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [flyingCopy, setFlyingCopy] = useState<{id:string; text:string}|null>(null);
+    const latestValueRef = useRef("");
 
     const inputRef = useRef<HTMLInputElement | HTMLTextAreaElement | null>(null);
     const tagInputRef = useRef<HTMLInputElement | null>(null);
@@ -148,7 +150,7 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
     const selectedTag = lockedTag ?? normalizeEntryTag(tagValue);
     const hasNote = noteValue.trim().length > 0;
     const hasLink = linkValue.trim().length > 0;
-    const canSubmit = value.trim().length > 0 && !disabled && !isSubmitting;
+    const canSubmit = value.trim().length > 0 && !disabled;
     const existingReferenceUrlKeys = useMemo(
       () =>
         new Set(
@@ -164,8 +166,8 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
     );
     const draftScope = lockedTag ? "tag-group" : "main";
     const draftId = useMemo(
-      () => buildEntryDraftId(memoId, kind, draftScope, lockedTag),
-      [draftScope, kind, lockedTag, memoId],
+      () => buildEntryDraftId(memoId, isDesk ? "sentence" : kind, draftScope, lockedTag),
+      [draftScope, isDesk, kind, lockedTag, memoId],
     );
     const draftSnapshot = useMemo<EntryDraftSnapshot>(() => ({
       content: value,
@@ -196,12 +198,13 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
     } = useDraftPersistence({
       id: draftId,
       memo_id: memoId,
-      kind,
+      kind: isDesk ? "sentence" : kind,
       scope: draftScope,
       fixed_tag: lockedTag,
       base_memo_updated_at: memoUpdatedAt,
       snapshot: draftSnapshot,
       onRestore: (draft) => {
+        latestValueRef.current = draft.content;
         setValue(draft.content);
         setHeadingValue(draft.heading);
         setTagValue(draft.tag_value);
@@ -217,6 +220,40 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
         );
       },
     });
+
+    useEffect(() => {
+      if (!isDesk || !memoId) return;
+      let cancelled = false;
+      // 旧「段落・参考URL」のmain下書きを、新しい書き口へ安全に引き継ぐ。
+      const migrate = async () => {
+        const main = await draftRepository.get(draftId);
+        if (main) return;
+        const old = (await draftRepository.listForMemo(memoId)).filter(row =>
+          row.scope === "main" && (row.kind === "word" || row.kind === "paragraph")
+        )[0];
+        if (!old || cancelled) return;
+        await draftRepository.migrateOldMainDraft(old.id, draftId);
+        if (cancelled || latestValueRef.current) return;
+        latestValueRef.current = old.content;
+        setValue(old.content); setHeadingValue(old.heading);
+        setTagValue(old.tag_value); setNoteValue(old.note_value); setLinkValue(old.link_value);
+        setChosenKind(old.kind);
+      };
+      void migrate().catch(error => console.error("下書きを移せませんでした", error));
+      return () => { cancelled = true; };
+    }, [draftId, isDesk, memoId]);
+
+    useEffect(() => {
+      if (!isDesk) return;
+      const changeKind = (event: Event) => {
+        const target = (event as CustomEvent<EntryKind>).detail;
+        if (target !== "word" && target !== "sentence" && target !== "paragraph") return;
+        setChosenKind(target);
+        inputRef.current?.focus({preventScroll:true});
+      };
+      window.addEventListener("kakidas:choose-entry-kind", changeKind);
+      return () => window.removeEventListener("kakidas:choose-entry-kind", changeKind);
+    }, [isDesk]);
 
     function resetMetaDrafts() {
       markDraftEdited();
@@ -330,7 +367,7 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
     const scheduleParagraphTextareaResize = (
       options: ParagraphResizeOptions = {},
     ) => {
-      if (!isParagraph) return;
+      if (!isParagraph && !isDesk) return;
 
       if (paragraphResizeFrameRef.current !== null) {
         window.cancelAnimationFrame(paragraphResizeFrameRef.current);
@@ -411,9 +448,9 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
     const submit = async (
       { allowDuplicate = false }: { allowDuplicate?: boolean } = {},
     ) => {
-      const rawValue = value.trim();
+      const rawValue = latestValueRef.current.trim();
 
-      if (!rawValue || isSubmitting || disabled) return;
+      if (!rawValue || disabled) return;
 
       let normalizedLink = "";
       let content = rawValue;
@@ -455,20 +492,74 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
         }
       }
 
-      setIsSubmitting(true);
-
+      // 入力欄を同期的に空け、保存中の続きの打鍵を受け入れる。
+      const submittedValue = latestValueRef.current || value;
+      const createdId = isDesk ? crypto.randomUUID() : undefined;
+      const canTransition = Boolean(isDesk && createdId && document.startViewTransition &&
+        !window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+      latestValueRef.current = "";
+      // Reactの状態更新をここで描画し、VTが古い画面を撮る時点で写しを置く。
+      // VTの非同期コールバックで入力欄を空にすると、連続入力が失われる。
+      if (canTransition && createdId) {
+        flushSync(() => {
+          setValue("");
+          setFlyingCopy({id:createdId, text:submittedValue});
+        });
+      } else {
+        setValue("");
+      }
+      const submittedHeading = headingValue;
+      const submittedTag = tagValue;
+      const submittedNote = noteValue;
+      const submittedLink = linkValue;
+      setHeadingValue(""); setTagValue(""); setNoteValue(""); setLinkValue("");
+      setTagDraft(""); setNoteDraft(""); setLinkDraft(""); setActiveMetaPicker(null);
+      markDraftEdited();
       try {
-        await flushDraft();
-        await onSubmit(content, {
-          heading: isParagraph ? headingValue.trim() : "",
-          tag: selectedTag,
-          note: noteValue.trim(),
-          link_url: normalizedLink,
-        }, draftId);
+        const create = async (): Promise<void> => {
+          if (canTransition) setFlyingCopy(null);
+          await onSubmit(content, {
+            heading: isParagraph ? submittedHeading.trim() : "",
+            tag: lockedTag ?? normalizeEntryTag(submittedTag),
+            note: submittedNote.trim(),
+            link_url: normalizedLink,
+          }, draftId, kind, createdId);
+          if (createdId) await waitForCreatedEntry(createdId, 300);
+        };
+        if (isDesk) await withViewTransition(create);
+        else await create();
+        if (createdId) {
+          const row = document.querySelector<HTMLElement>(`[data-entry-id="${CSS.escape(createdId)}"]`);
+          if (row) {
+            row.classList.add("entry-item--fresh");
+            window.setTimeout(() => row.classList.remove("entry-item--fresh"), 1200);
+          }
+        }
+        onPlaced?.(kind);
+        if (isDesk) setChosenKind(null);
         setReferenceNotice(isReferenceUrl ? "保存しました。" : null);
-        resetAfterSubmit();
-      } finally {
-        setIsSubmitting(false);
+        // 作成側で旧下書きを消す。続きがあれば削除後に改めて保存する。
+        if (latestValueRef.current.trim()) {
+          markDraftEdited();
+          window.setTimeout(() => void flushDraft(), 0);
+        } else {
+          markDraftCommitted();
+        }
+        scheduleParagraphTextareaResize({ allowShrink: true });
+      } catch (error) {
+        setFlyingCopy(null);
+        const hadNewText = Boolean(latestValueRef.current);
+        const restored = hadNewText
+          ? `${latestValueRef.current}\n${submittedValue}` : submittedValue;
+        latestValueRef.current = restored;
+        setValue(restored);
+        if (!hadNewText) {
+          setHeadingValue(submittedHeading); setTagValue(submittedTag);
+          setNoteValue(submittedNote); setLinkValue(submittedLink);
+        }
+        markDraftEdited();
+        setReferenceNotice("保存できませんでした。入力内容を残しました。");
+        window.setTimeout(() => void flushDraft(), 0);
       }
     };
 
@@ -580,10 +671,21 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
       // 日本語IMEの変換確定Enterを「保存」に使わない。
       if (isComposing || event.nativeEvent.isComposing) return;
 
+      if (isDesk && !isParagraph && event.shiftKey) {
+        // 一行から段落へ育てる。IME確定のEnterとは分ける。
+        event.preventDefault();
+        const el = inputRef.current;
+        const position = el?.selectionStart ?? latestValueRef.current.length;
+        const next = latestValueRef.current.slice(0, position) + "\n" + latestValueRef.current.slice(position);
+        latestValueRef.current = next; setValue(next); setChosenKind("paragraph");
+        markDraftEdited();
+        window.requestAnimationFrame(() => { el?.focus(); el?.setSelectionRange(position+1, position+1); });
+        return;
+      }
       if (isParagraph) {
         // 段落は長文入力が前提。Enterは改行としてそのまま通し、
         // 明示的なショートカットだけを「置く」に使う。
-        if (!event.shiftKey && !event.ctrlKey) return;
+        if (!event.shiftKey && !event.ctrlKey && !event.metaKey) return;
 
         event.preventDefault();
         void submit();
@@ -633,6 +735,7 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
       event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
     ) => {
       markDraftEdited();
+      latestValueRef.current = event.target.value;
       setValue(event.target.value);
 
       if (isReferenceUrl) {
@@ -645,7 +748,7 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
        * IME変換中は高さ測定を保留する。変換の各候補更新でDOMを揺らさず、
        * 変換確定後に一度だけ伸長を判定する。
        */
-      if (isParagraph && !isComposingRef.current) {
+      if ((isParagraph || isDesk) && !isComposingRef.current) {
         scheduleParagraphTextareaResize();
       }
     };
@@ -663,8 +766,8 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
 
     const commonProps = {
       value,
-      disabled: disabled || isSubmitting,
-      placeholder: ENTRY_KIND_PLACEHOLDER[kind],
+      disabled,
+      placeholder: isDesk ? "ここに書く。Enterで置く" : ENTRY_KIND_PLACEHOLDER[kind],
       onChange: handleChange,
       onKeyDown: handleKeyDown,
       onCompositionStart: handleCompositionStart,
@@ -673,8 +776,10 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
 
 
     return (
+      <section aria-label={isDesk ? "書き口" : undefined} className={isDesk ? "entry-composer entry-composer--desk" : undefined}>
       <form
-        className={`entry-composer ${compact ? "entry-composer--tag-group" : ""} ${
+        aria-label={isDesk ? "書き口" : undefined}
+        className={`entry-composer ${isDesk ? "entry-composer--desk" : ""} ${compact ? "entry-composer--tag-group" : ""} ${
           isReferenceUrl ? "entry-composer--reference-url" : ""
         }`}
         onSubmit={handleSubmit}
@@ -693,7 +798,7 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
                 type="button"
                 className="entry-composer__tag-group-context-close"
                 onClick={onDismiss}
-                disabled={disabled || isSubmitting}
+                disabled={disabled}
                 aria-label={`タグ「${lockedTag}」への追加を閉じる`}
                 title="閉じる"
               >
@@ -703,18 +808,41 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
           </div>
         ) : null}
 
+        {isDesk ? (
+          <div className="entry-composer__destinations" role="radiogroup" aria-label="置き先">
+            {(["word", "sentence", "paragraph"] as EntryKind[]).map((target) => (
+              <button key={target} type="button" role="radio" aria-label={ENTRY_KIND_LABEL[target]}
+                aria-checked={kind === target} onClick={() => { setChosenKind(target); inputRef.current?.focus(); }}>
+                {ENTRY_KIND_LABEL[target]}
+              </button>
+            ))}
+          </div>
+        ) : null}
         <div
           className={`entry-composer__control-row ${
             isParagraph ? "entry-composer__control-row--paragraph" : ""
           }`}
         >
-          {isParagraph ? (
+          {isDesk ? (
+            <div className="entry-composer__desk-fields">
+              <div className={`entry-composer__desk-heading ${isParagraph ? "entry-composer__desk-heading--open" : ""}`}>
+                <input className="entry-composer__paragraph-title" type="text" value={headingValue}
+                  aria-label="段落タイトル" placeholder="段落タイトル（任意）"
+                  onChange={event => { markDraftEdited(); setHeadingValue(event.target.value); }}
+                  onKeyDown={handleHeadingKeyDown} />
+              </div>
+              <textarea {...commonProps} className="entry-composer__textarea" ref={element => {inputRef.current = element;}}
+                aria-label="書く" rows={1} onBlur={() => scheduleParagraphTextareaResize({allowShrink:true})} />
+              {flyingCopy ? <div className="entry-composer__copy-flight"
+                style={{viewTransitionName:`e-${flyingCopy.id}`}} aria-hidden="true">{flyingCopy.text}</div> : null}
+            </div>
+          ) : isParagraph ? (
             <div className="entry-composer__paragraph-fields">
               <input
                 className="entry-composer__paragraph-title"
                 type="text"
                 value={headingValue}
-                disabled={disabled || isSubmitting}
+                disabled={disabled}
                 placeholder="段落タイトル（任意）"
                 onChange={(event) => {
                   markDraftEdited();
@@ -754,9 +882,9 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
             type="submit"
             className="entry-composer__submit"
             disabled={!canSubmit}
-            aria-label={isReferenceUrl ? "参考URLを保存" : `${ENTRY_KIND_LABEL[kind]}を置く`}
+            aria-label={isDesk ? "置く" : isReferenceUrl ? "参考URLを保存" : `${ENTRY_KIND_LABEL[kind]}を置く`}
           >
-            {isSubmitting ? "…" : isReferenceUrl ? "保存" : "置く"}
+            {isDesk ? "置く" : isReferenceUrl ? "保存" : "置く"}
           </button>
         </div>
 
@@ -767,7 +895,7 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
             </span>
             <textarea
               value={noteValue}
-              disabled={disabled || isSubmitting}
+              disabled={disabled}
               onChange={(event) => {
                 markDraftEdited();
                 setNoteValue(event.target.value);
@@ -791,7 +919,7 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
               <button
                 type="button"
                 onClick={() => void submit({ allowDuplicate: true })}
-                disabled={disabled || isSubmitting}
+                disabled={disabled}
               >
                 もう一度追加
               </button>
@@ -820,7 +948,7 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
                 className={`entry-composer__meta-trigger ${
                   hasNote ? "entry-composer__meta-trigger--active" : ""
                 }`}
-                disabled={disabled || isSubmitting}
+                disabled={disabled}
                 onClick={() => openMetaPicker("note")}
                 aria-expanded={activeMetaPicker === "note"}
                 aria-label={
@@ -907,7 +1035,7 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
                 className={`entry-composer__meta-trigger ${
                   hasLink ? "entry-composer__meta-trigger--active" : ""
                 }`}
-                disabled={disabled || isSubmitting}
+                disabled={disabled}
                 onClick={() => openMetaPicker("link")}
                 aria-expanded={activeMetaPicker === "link"}
                 aria-label={hasLink ? "リンクを変更" : "リンクを付ける"}
@@ -991,7 +1119,7 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
                 className={`entry-composer__tag-trigger ${
                   selectedTag ? getEntryTagToneClassName(selectedTag) : ""
                 }`}
-                disabled={disabled || isSubmitting}
+                disabled={disabled}
                 onClick={() => openMetaPicker("tag")}
                 aria-expanded={activeMetaPicker === "tag"}
                 aria-label={selectedTag ? `タグ「${selectedTag}」を変更` : "タグを付ける"}
@@ -1081,6 +1209,7 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
         </div>
 
       </form>
+      </section>
     );
   },
 );

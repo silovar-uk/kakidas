@@ -1,3 +1,4 @@
+import { NoteIcon, LinkIcon, MoreIcon } from "./icons";
 import {
   type ChangeEvent,
   type CSSProperties,
@@ -32,24 +33,10 @@ type MobileParagraphEditorFocus = "heading" | "content" | "note" | "link";
 /** タグの文脈に応じて、カード内ではチップか編集アイコンだけを見せる。 */
 type EntryTagPresentation = "meta" | "group_action" | "completed_meta";
 
-function LinkIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-      <path d="M10.4 13.6a4.3 4.3 0 0 0 6.1 0l2.3-2.3a4.3 4.3 0 0 0-6.1-6.1l-1.3 1.3" />
-      <path d="M13.6 10.4a4.3 4.3 0 0 0-6.1 0l-2.3 2.3a4.3 4.3 0 0 0 6.1 6.1l1.3-1.3" />
-    </svg>
-  );
-}
+
 
 /** 気持ち・備考を書く入口。追加と編集で見た目を変えず、常に「書く」操作として扱う。 */
-function NoteIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-      <path d="M5.5 4.8h13v14.4H9.3l-3.8 2.4V4.8Z" />
-      <path d="M8.3 9h7.4M8.3 12.6h5.4" />
-    </svg>
-  );
-}
+
 
 function readCssPixel(value: string): number | null {
   const parsed = Number.parseFloat(value);
@@ -73,6 +60,8 @@ type EntryItemProps = {
   /** 通常表示は気持ち行のタグ、タググループ内は右側アイコン、完了内は元タグを再表示する。 */
   tagPresentation?: EntryTagPresentation;
   disabled?: boolean;
+  editRequest?:"note"|"link"|"tag"|null;
+  onEditRequestHandled?:()=>void;
   onOpenStructure: (entryId: string) => void;
   onMoveToKind: (entryId: string, targetKind: EntryKind) => Promise<unknown>;
   /** 「…」から本文をそのままコピーする。 */
@@ -99,6 +88,8 @@ export function EntryItem({
   tagSuggestions,
   tagPresentation = "meta",
   disabled = false,
+  editRequest,
+  onEditRequestHandled,
   onOpenStructure,
   onMoveToKind,
   onCopy,
@@ -334,6 +325,18 @@ export function EntryItem({
     setEditMode("link");
   };
 
+  useEffect(()=>{
+    if(!editRequest)return;
+    if(editRequest==="note")beginNoteEdit();
+    else if(editRequest==="link")beginLinkEdit();
+    else {
+      // タグ編集は既存のタグ管理ボタンを操作する。
+      const row=document.querySelector(`[data-entry-id="${CSS.escape(entry.id)}"]`);
+      (row?.querySelector('.entry-tag-control button') as HTMLButtonElement|null)?.click();
+    }
+    onEditRequestHandled?.();
+  },[editRequest]);
+
   const persist = async (exitEditing = true): Promise<boolean> => {
     const nextContent = value.trim();
     const nextHeading = isParagraph ? headingValue.trim() : "";
@@ -497,6 +500,7 @@ export function EntryItem({
 
   const style = {
     "--entry-depth": Math.min(entry.depth, 6),
+    viewTransitionName: `e-${entry.id}`,
   } as CSSProperties;
 
   const createdAtLabel = formatEntryCreatedAt(entry.created_at);
@@ -526,7 +530,7 @@ export function EntryItem({
   if (isEditing) {
     return (
       <article
-        className={`entry-item entry-item--editing ${
+        data-entry-id={entry.id} className={`entry-item entry-item--editing ${
           isParagraph && editMode === "content" ? "entry-item--paragraph-editing" : ""
         } ${completionClassName} ${satisfactionClassName} ${numberVisibilityClassName} ${
           isHierarchical ? "entry-item--hierarchical" : ""
@@ -764,7 +768,7 @@ export function EntryItem({
   return (
     <>
       <article
-      className={`entry-item ${completionClassName} ${satisfactionClassName} ${numberVisibilityClassName} ${
+      data-entry-id={entry.id} className={`entry-item ${completionClassName} ${satisfactionClassName} ${numberVisibilityClassName} ${
         isHierarchical ? "entry-item--hierarchical" : ""
       } ${entry.depth > 0 ? "entry-item--nested" : ""} ${
         isStructureOpen ? "entry-item--structure-open" : ""
@@ -970,7 +974,8 @@ export function EntryItem({
           ) : null}
         </div>
 
-        <div className={`entry-item__quick-actions ${isReferenceUrl ? "entry-item__quick-actions--reference" : ""}`}>
+        {entry.satisfaction>0?<small className="entry-item__satisfaction-mark" aria-label={`満足度${entry.satisfaction}`}>{entry.satisfaction}</small>:null}
+        <div data-entry-actions="" className={`entry-item__quick-actions ${isReferenceUrl ? "entry-item__quick-actions--reference" : ""}`}>
           <EntrySatisfactionControl
             value={entry.satisfaction}
             disabled={disabled}
@@ -1073,15 +1078,11 @@ export function EntryItem({
             className="icon-button entry-item__quick-action entry-item__structure-button"
             onClick={() => onOpenStructure(entry.id)}
             disabled={disabled}
-            aria-label={
-              isStructureOpen || isMobileActionOpen
-                ? "操作を閉じる"
-                : "操作を開く"
-            }
+            aria-label="この項目の操作"
             aria-expanded={isStructureOpen || isMobileActionOpen}
             title="操作"
           >
-            ⋯
+            <MoreIcon />
           </button>
         </div>
       </div>

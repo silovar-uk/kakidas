@@ -26,7 +26,7 @@
   justify-content: center;
   gap: 6px;
   padding: 0 10px;
-  border: 1px solid #d8c2b3;
+  border: 1px solid var(--color-shu);
   border-radius: 9px;
   font-size: 11px;
   font-weight: 760;
@@ -38,37 +38,37 @@
 }
 
 .editor-header__cloud-save {
-  color: #7b432d;
-  background: rgba(255, 254, 250, 0.72);
+  color: var(--color-shu-ink);
+  background: color-mix(in srgb,var(--color-ink) 55%,transparent);
 }
 
 .editor-header__cloud-save:hover:not(:disabled),
 .editor-header__cloud-save:focus-visible {
-  border-color: #bd8f74;
-  color: #6b3521;
-  background: #fff7f1;
+  border-color: var(--color-shu);
+  color: var(--color-shu-ink);
+  background: var(--color-shu-wash);
 }
 
 .editor-header__cloud-save:active:not(:disabled) {
-  background: #f7e9df;
+  background: var(--color-shu-wash);
 }
 
 /* 端末側を上書きする操作なので、保存より一段静かだが意味の違う寒色へ分ける。 */
 .editor-header__cloud-sync {
-  border-color: #c7d2d4;
-  color: #466268;
-  background: rgba(247, 251, 251, 0.82);
+  border-color: var(--color-line);
+  color: var(--color-ink-2);
+  background: var(--color-line);
 }
 
 .editor-header__cloud-sync:hover:not(:disabled),
 .editor-header__cloud-sync:focus-visible {
-  border-color: #93aaae;
-  color: #304f55;
-  background: #f1f8f8;
+  border-color: var(--color-ink-2);
+  color: var(--color-ink-2);
+  background: var(--color-line);
 }
 
 .editor-header__cloud-sync:active:not(:disabled) {
-  background: #e5f0f0;
+  background: var(--color-line);
 }
 
 .editor-header__cloud-label--compact {
