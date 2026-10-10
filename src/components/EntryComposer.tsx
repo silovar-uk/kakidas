@@ -495,7 +495,7 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
       // 入力欄を同期的に空け、保存中の続きの打鍵を受け入れる。
       const submittedValue = latestValueRef.current || value;
       const createdId = isDesk ? crypto.randomUUID() : undefined;
-      const canTransition = Boolean(isDesk && createdId && document.startViewTransition &&
+      const canTransition = Boolean(isDesk && createdId && typeof document.startViewTransition === "function" &&
         !window.matchMedia("(prefers-reduced-motion: reduce)").matches);
       latestValueRef.current = "";
       // Reactの状態更新をここで描画し、VTが古い画面を撮る時点で写しを置く。
