@@ -21,3 +21,16 @@ jobs:
         run: npm ci
       - name: 型検査と本番ビルド
         run: npm run build
+      - name: Playwrightを用意
+        run: |
+          npm install --no-save --package-lock=false playwright
+          npx playwright install --with-deps chromium
+      - name: P1〜P3 29項目の受け入れ確認
+        timeout-minutes: 15
+        run: |
+          npm run preview -- --host 127.0.0.1 --port 4173 > /tmp/kakidas-preview.log 2>&1 &
+          for i in $(seq 1 40); do
+            if curl -fsS http://127.0.0.1:4173/ >/dev/null; then break; fi
+            sleep 1
+          done
+          QA_TARGET=app BASE_URL=http://127.0.0.1:4173/ node docs/shitate/qa.mjs
