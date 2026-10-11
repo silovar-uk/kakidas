@@ -2,7 +2,7 @@
 .memo-tag-chip,
 .memo-card__tag {
   border-color: var(--color-ink-2);
-  color: var(--color-sheet) !important;
+  color: var(--color-sheet);
   background: var(--color-ink-2);
   box-shadow: 0 3px 8px color-mix(in srgb,var(--color-ink) 16%,transparent);
 }
@@ -21,9 +21,9 @@
 }
 
 .memo-tag-control__add {
-  border: 1px dashed var(--color-shu);
+  border: 1px dashed var(--color-line-strong);
   color: var(--color-ink-2);
-  background: var(--color-shu-wash);
+  background: color-mix(in srgb,var(--color-sheet) 82%,transparent);
   box-shadow: none;
   font-weight: 720;
   transition:
@@ -36,7 +36,7 @@
 .memo-tag-control__add:focus-visible:not(:disabled) {
   border-color: var(--color-shu);
   color: var(--color-shu-ink);
-  background: var(--color-shu-wash);
+  background: var(--color-paper);
   box-shadow: none;
   outline: none;
   transform: none;
@@ -44,14 +44,14 @@
 
 .memo-tag-control__add:active:not(:disabled) {
   color: var(--color-shu-ink);
-  background: var(--color-shu-wash);
+  background: var(--color-line);
   transform: none;
 }
 
 .memo-tag-control__add:disabled {
-  border-color: var(--color-shu);
+  border-color: var(--color-line);
   color: var(--color-ink-3);
-  background: var(--color-shu-wash);
+  background: var(--color-paper);
   box-shadow: none;
 }
 

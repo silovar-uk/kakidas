@@ -36,7 +36,7 @@
   padding: 0 10px;
   border: 1px solid var(--color-line);
   border-radius: 11px;
-  background: var(--color-line);
+  background: color-mix(in srgb,var(--color-sheet) 78%,transparent);
 }
 
 .memo-search > span[aria-hidden="true"] {
@@ -60,8 +60,8 @@
 }
 
 .memo-search:focus-within {
-  border-color: var(--color-shu);
-  box-shadow: 0 0 0 3px color-mix(in srgb,var(--color-ink) 16%,transparent);
+  border-color: var(--color-line-strong);
+  box-shadow: 0 0 0 3px color-mix(in srgb,var(--color-shu) 10%,transparent);
 }
 
 .memo-search__clear {
@@ -89,7 +89,7 @@
   gap: 2px;
   padding: 3px;
   border-radius: 11px;
-  background: var(--color-shu-wash);
+  background: var(--color-line);
 }
 
 .memo-view-switch button {
@@ -105,7 +105,7 @@
 
 .memo-view-switch button[aria-pressed="true"] {
   color: var(--color-ink);
-  background: var(--color-line);
+  background: var(--color-sheet);
   box-shadow: 0 1px 5px color-mix(in srgb,var(--color-ink) 6%,transparent);
 }
 
@@ -128,13 +128,13 @@
   padding: 2px 4px;
   border: 0;
   border-radius: 6px;
-  color: var(--color-shu-ink);
+  color: var(--color-ink-2);
   background: transparent;
   font-size: 11px;
 }
 
 .memo-list-toolbar__status button:hover {
-  background: var(--color-shu-wash);
+  background: var(--color-line);
 }
 
 .memo-tools-menu,
@@ -158,7 +158,7 @@
   place-items: center;
   border: 1px solid var(--color-line);
   color: var(--color-ink-2);
-  background: var(--color-line);
+  background: var(--color-sheet);
   cursor: pointer;
   user-select: none;
 }
@@ -173,9 +173,9 @@
 
 .memo-tools-menu[open] > .memo-tools-menu__trigger,
 .memo-card-menu[open] > .memo-card-menu__trigger {
-  border-color: var(--color-shu);
+  border-color: var(--color-line-strong);
   color: var(--color-ink);
-  background: var(--color-shu-wash);
+  background: var(--color-paper);
 }
 
 .memo-tools-menu__panel {
@@ -187,9 +187,9 @@
   width: min(320px, calc(100vw - 32px));
   gap: 5px;
   padding: 10px;
-  border: 1px solid var(--color-shu);
+  border: 1px solid var(--color-line);
   border-radius: 14px;
-  background: var(--color-line);
+  background: var(--color-sheet);
   box-shadow: 0 18px 45px color-mix(in srgb,var(--color-ink) 16%,transparent);
 }
 
@@ -210,7 +210,7 @@
   padding: 0 9px;
   border-radius: 9px;
   color: var(--color-ink-2);
-  background: var(--color-line);
+  background: var(--color-paper);
   font-size: 11px;
   font-weight: 700;
 }
@@ -242,7 +242,7 @@
 }
 
 .memo-tools-menu__item:hover {
-  background: var(--color-line);
+  background: var(--color-paper);
 }
 
 .memo-tools-menu__item > span:first-child {
@@ -272,7 +272,7 @@
 .memo-tools-menu__divider {
   height: 1px;
   margin: 3px 2px;
-  background: var(--color-shu-wash);
+  background: var(--color-line);
 }
 
 .memo-list-page .memo-list {
@@ -285,12 +285,12 @@
   padding: 11px 10px 11px 17px;
   border-color: var(--color-line);
   border-radius: 12px;
-  background: color-mix(in srgb,var(--color-ink) 55%,transparent);
+  background: color-mix(in srgb,var(--color-sheet) 58%,transparent);
 }
 
 .memo-list-page .memo-card:hover {
-  border-color: var(--color-shu);
-  background: var(--color-line);
+  border-color: var(--color-line-strong);
+  background: var(--color-sheet);
   transform: none;
 }
 
@@ -319,8 +319,8 @@
 }
 
 .memo-list-page .memo-card__preview-content {
-  color: var(--color-ink-2) !important;
-  font-size: 12px !important;
+  color: var(--color-ink-2);
+  font-size: 12px;
 }
 
 .memo-list-page .memo-card__meta {
@@ -339,7 +339,7 @@
 .memo-card__tag-text {
   overflow: hidden;
   max-width: 22ch;
-  color: var(--color-ink-3) !important;
+  color: var(--color-ink-3);
   font-weight: 700;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -369,9 +369,9 @@
   width: min(286px, calc(100vw - 40px));
   gap: 4px;
   padding: 9px;
-  border: 1px solid var(--color-shu);
+  border: 1px solid var(--color-line);
   border-radius: 13px;
-  background: var(--color-line);
+  background: var(--color-sheet);
   box-shadow: 0 16px 40px color-mix(in srgb,var(--color-ink) 16%,transparent);
 }
 
@@ -392,7 +392,7 @@
 }
 
 .memo-card-menu__item:hover:not(:disabled) {
-  background: var(--color-shu-wash);
+  background: var(--color-paper);
 }
 
 .memo-card-menu__item > span:first-child {
@@ -418,8 +418,8 @@
   gap: 6px;
   margin: 3px 0;
   padding: 8px 9px;
-  border-top: 1px solid var(--color-shu-wash);
-  border-bottom: 1px solid var(--color-shu-wash);
+  border-top: 1px solid var(--color-line);
+  border-bottom: 1px solid var(--color-line);
 }
 
 .memo-card-menu__section-label {
@@ -465,7 +465,7 @@
   gap: 9px;
   padding: 0 4px;
   border: 0;
-  border-bottom: 1px solid var(--color-shu);
+  border-bottom: 1px solid var(--color-line);
   color: var(--color-ink);
   background: transparent;
   text-align: left;
@@ -579,7 +579,7 @@
 
   .memo-list-page .memo-card__preview,
   .memo-list-page .memo-card__preview-content {
-    font-size: 11px !important;
+    font-size: 11px;
   }
 
   .memo-card-menu__panel {

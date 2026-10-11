@@ -75,6 +75,16 @@ kakidasは、考えを「単語」「文」「段落」の粒度で、整える�
 - 配色・書体は `src/styles-tokens.css` と `src/styles-shitate.css` に集約。データ形式およびクラウドのテーブルは不変。
 - 最終的なビルド・29項目の本番確認・PRマージ結果は `docs/shitate/IMPLEMENTATION_STATUS.md` を参照。検証未了のものは出荷済み扱いしない。
 
+## v0.6.1「囲わずに、研ぐ」見た目の型と受け入れ確認
+
+- v0.6.0の書き口一本化・余白・清書・IndexedDB/Supabaseデータ形式は維持。画面を「紙・墨・朱」の3要素で整理し、罫線や箱を減らして余白と文字の階層で読ませる。
+- CSSの入り口は `src/main.tsx` → `src/styles-index.css`。既存CSSは `@layer legacy` にまとめ、追加のデザイン規則はすべて `src/styles-togu.css` の `@layer togu` に集約する。既存CSSには色の役割の再対応づけと12箇所の `!important` 除去以外の意匠変更を加えない。
+- 色の型・文字階層・空白・紙面の幅などは `docs/togu/PLAN.md` 第5章に記載。トークンを変える場合はCSS内の星アイコン・紙目・かすれのSVGデータURIの直接指定色も同期する。
+- PCの行操作は日時表示行の右側にホバー／キーボードフォーカス時のみ現れ、921px未満のスマホは従来どおり「この項目の操作」の下部シートに一本化する。「余白」はPCで右側の便箋として開く。
+- 行を置く動きは `src/lib/viewTransition.ts` の `waitForCreatedEntry` で16ms間隔のタイマーを利用する。View Transitionの更新中に `requestAnimationFrame` を待つと描画が停止するため、元に戻さない。朱色の新規行マークは遷移先の画面を撮る前に付与する。
+- 検証は `docs/togu/qa.mjs` の新規30項目と、`docs/shitate/qa.mjs` の既存29項目。GitHub Actionsの `verify-shitate.yml` でP1〜P3別にプレビューとVercel本番を確認する。PC 1366×633・スマホ375×667の撮影は `docs/togu/proto/shots.mjs` を使う。
+- 利用していなかった `styles-mobile-word-compact.css`、`styles-mobile-word-single-row.css`、`styles-cloud-upload-header.css` は削除した。
+
 ## 2. 技術構成と起動方法
 
 | 項目 | 内容 |
@@ -184,7 +194,6 @@ src/pages/MemoListPage.tsx
 src/pages/TagManagerPage.tsx
 src/repositories/cloudMemoRepository.ts
 src/repositories/memoRepository.ts
-src/styles-mobile-word-compact.css
 src/styles-paragraph-heading.css
 src/styles.css
 src/types/memo.ts

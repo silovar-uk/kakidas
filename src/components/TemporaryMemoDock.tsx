@@ -110,7 +110,7 @@ export function TemporaryMemoDock() {
       setSaveError(
         error instanceof Error
           ? error.message
-          : "一時メモを保存できませんでした。",
+          : "余白を保存できませんでした。",
       );
       throw error;
     } finally {
@@ -148,7 +148,7 @@ export function TemporaryMemoDock() {
         setSaveError(
           error instanceof Error
             ? error.message
-            : "一時メモを読み込めませんでした。",
+            : "余白を読み込めませんでした。",
         );
       })
       .finally(() => {
@@ -275,7 +275,7 @@ export function TemporaryMemoDock() {
     if (!memoId || isSaving) return;
     if (
       !window.confirm(
-        "このメモの一時メモをすべて消しますか？\nこの操作は元に戻せません。",
+        "このメモの余白をすべて消しますか？\nこの操作は元に戻せません。",
       )
     ) {
       return;
@@ -296,7 +296,7 @@ export function TemporaryMemoDock() {
       setSaveError(
         error instanceof Error
           ? error.message
-          : "一時メモをクリアできませんでした。",
+          : "余白を消せませんでした。",
       );
     } finally {
       setIsSaving(false);
@@ -328,7 +328,7 @@ export function TemporaryMemoDock() {
             type="button"
             className="temporary-memo-backdrop"
             onClick={() => closePanel()}
-            aria-label="一時メモを保存して閉じる"
+            aria-label="余白を閉じる"
           />
           <section
             className="temporary-memo-panel"
@@ -384,7 +384,7 @@ export function TemporaryMemoDock() {
                 onClick={() => void clearTemporaryMemo()}
                 disabled={!hasContent || isSaving}
               >
-                一時メモをクリア
+                余白を消す
               </button>
             </footer>
             {saveError ? (

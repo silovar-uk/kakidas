@@ -87,7 +87,7 @@
     left: 7px;
     width: 6px;
     height: 6px;
-    box-shadow: 0 0 0 2px color-mix(in srgb,var(--color-ink) 16%,transparent);
+    box-shadow: 0 0 0 2px color-mix(in srgb,var(--color-shu) 10%,transparent);
   }
 
   .temporary-memo-panel {
@@ -190,7 +190,7 @@
     left: 6px;
     width: 5px;
     height: 5px;
-    box-shadow: 0 0 0 2px color-mix(in srgb,var(--color-ink) 16%,transparent);
+    box-shadow: 0 0 0 2px color-mix(in srgb,var(--color-shu) 10%,transparent);
   }
 
   .temporary-memo-panel {
@@ -254,7 +254,7 @@
     padding: 0 6px;
     border-color: transparent;
     border-radius: 7px;
-    background: color-mix(in srgb,var(--color-ink) 16%,transparent);
+    background: color-mix(in srgb,var(--color-sheet) 34%,transparent);
     font-size: 10px;
   }
 
@@ -300,7 +300,7 @@
   .temporary-memo-panel__clear:hover:not(:disabled),
   .temporary-memo-panel__clear:focus-visible:not(:disabled) {
     border-color: color-mix(in srgb,var(--color-ink) 16%,transparent);
-    background: color-mix(in srgb,var(--color-ink) 55%,transparent);
+    background: color-mix(in srgb,var(--color-sheet) 70%,transparent);
   }
 
   .temporary-memo-panel__error {

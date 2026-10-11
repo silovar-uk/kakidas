@@ -3,7 +3,7 @@
   border-color: var(--color-danger);
   color: var(--color-sheet);
   background: var(--color-danger);
-  box-shadow: 0 4px 10px color-mix(in srgb,var(--color-ink) 16%,transparent);
+  box-shadow: 0 4px 10px color-mix(in srgb,var(--color-shu) 16%,transparent);
 }
 
 .completed-entries-delete:hover:not(:disabled) {

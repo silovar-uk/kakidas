@@ -1,0 +1,21 @@
+/* 旧スタイルをlegacy層に、新しい仕上げをtogu層に集約する。 */
+@layer legacy, togu;
+@import "./styles-tokens.css" layer(legacy);
+@import "./styles.css" layer(legacy);
+@import "./styles-paragraph-heading.css" layer(legacy);
+@import "./styles-keyboard-shortcuts.css" layer(legacy);
+@import "./styles-paragraph-title-tag.css" layer(legacy);
+@import "./styles-entry-tag-group-drag.css" layer(legacy);
+@import "./styles-mobile-interaction-motion.css" layer(legacy);
+@import "./styles-temporary-memo.css" layer(legacy);
+@import "./styles-temporary-memo-mobile-refine.css" layer(legacy);
+@import "./styles-temporary-memo-instant.css" layer(legacy);
+@import "./styles-memo-tag-prompt.css" layer(legacy);
+@import "./styles-entry-structure-actions.css" layer(legacy);
+@import "./styles-completed-entry-danger.css" layer(legacy);
+@import "./styles-memo-list-quiet.css" layer(legacy);
+@import "./styles-canonical-host.css" layer(legacy);
+@import "./styles-reference-url.css" layer(legacy);
+@import "./styles-workspace-fold.css" layer(legacy);
+@import "./styles-shitate.css" layer(legacy);
+@import "./styles-togu.css";

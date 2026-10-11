@@ -148,7 +148,7 @@
   height: 18px;
   place-items: center;
   margin-left: 1px;
-  border-left: 1px solid var(--entry-tag-border, var(--color-shu));
+  border-left: 1px solid var(--entry-tag-border, var(--color-line));
   padding-left: 4px;
   color: color-mix(in srgb, currentColor 72%, transparent);
   font-size: 13px;

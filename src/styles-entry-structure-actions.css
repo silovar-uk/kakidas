@@ -24,9 +24,9 @@
 /* コピーと粒度移動は補助操作。形は残し、色の主張だけを一段弱める。 */
 .structure-action--copy,
 .structure-action--kind {
-  border-color: var(--color-shu);
+  border-color: var(--color-line);
   color: var(--color-ink-2);
-  background: var(--color-line);
+  background: var(--color-paper);
 }
 
 .structure-action--copy:hover:not(:disabled),
