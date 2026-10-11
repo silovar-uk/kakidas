@@ -40,6 +40,19 @@ jobs:
           done
           QA_TARGET=app QA_PHASES=${{ matrix.phase }} BASE_URL=http://127.0.0.1:4173/ node docs/shitate/qa.mjs
           QA_PHASES=${{ matrix.phase }} BASE_URL=http://127.0.0.1:4173/ node docs/togu/qa.mjs
+      - name: PC・スマホの本番前画面を撮影
+        if: matrix.phase == 'P3'
+        timeout-minutes: 15
+        run: |
+          mkdir -p /tmp/togu-shots
+          OUT=/tmp/togu-shots BASE_URL=http://127.0.0.1:4173/ node docs/togu/proto/shots.mjs
+      - name: 画面検証写真・測定記録を保存
+        if: matrix.phase == 'P3' && always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: togu-v0.6.1-shots
+          path: /tmp/togu-shots/
+          if-no-files-found: warn
 
   production:
     name: 本番受け入れ確認 ${{ matrix.phase }}
