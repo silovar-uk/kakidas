@@ -1,7 +1,7 @@
 name: 仕立て直しの検証
 on:
   push:
-    branches: [shitate-p1-p3-review-20261010]
+    branches: [shitate-p1-p3-review-20261010, main]
   pull_request:
     branches: [main]
 permissions:
@@ -39,3 +39,53 @@ jobs:
             sleep 1
           done
           QA_TARGET=app QA_PHASES=${{ matrix.phase }} BASE_URL=http://127.0.0.1:4173/ node docs/shitate/qa.mjs
+
+  production:
+    name: 本番受け入れ確認 ${{ matrix.phase }}
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        phase: [P1, P2, P3]
+    steps:
+      - name: ソース取得
+        uses: actions/checkout@v5
+      - name: Node.js 22
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - name: 依存関係を復元
+        run: npm ci
+      - name: Playwrightを用意
+        run: |
+          npm install --no-save --package-lock=false playwright
+          npx playwright install --with-deps chromium
+      - name: Vercel本番デプロイを待つ
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STATUS_URL: https://api.github.com/repos/${{ github.repository }}/commits/${{ github.sha }}/status
+        run: |
+          for i in $(seq 1 60); do
+            if curl --silent --show-error --fail --retry 2 \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              -H "Accept: application/vnd.github+json" "$STATUS_URL" \
+              | jq -e --arg ctx "Vercel – kakidas-3gqw" \
+              '.statuses | any(.context == $ctx and .state == "success")' > /dev/null; then
+              echo "対象コミットのVercelステータスがsuccess"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "::error::対象コミットのVercel本番反映が確認できない"
+          exit 1
+      - name: 本番29項目の受け入れ確認
+        timeout-minutes: 15
+        env:
+          QA_TARGET: app
+          QA_PHASES: ${{ matrix.phase }}
+          BASE_URL: https://kakidas-3gqw.vercel.app/
+        run: node docs/shitate/qa.mjs
