@@ -25,7 +25,9 @@ jobs:
           echo "ff35268d2d104553818bcf20bab53f8c737118541ac5d3592dde0ecadd092e75  /tmp/kakidas-v0.6.1.patch" | sha256sum --check
           git apply --check /tmp/kakidas-v0.6.1.patch
           git apply /tmp/kakidas-v0.6.1.patch
-          rm .github/workflows/apply-togu-once.yml docs/togu/.bootstrap.patch.xz.b64
+          # ActionsのGITHUB_TOKENはCIファイル変更をpushできないため後段へ分離する。
+          git restore --source=HEAD --worktree .github/workflows/verify-shitate.yml
+          rm docs/togu/.bootstrap.patch.xz.b64
           git add -A
           git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'feat: kakidas v0.6.1 囲わずに研ぐ画面仕上げと検証'
           git push origin HEAD:togu-v0.6.1
