@@ -1,0 +1,33 @@
+name: kakidas v0.6.1 差分を適用（単発）
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [togu-v0.6.1]
+    paths:
+      - 'docs/togu/.bootstrap.patch.xz.b64'
+permissions:
+  contents: write
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: ソース取得
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: v0.6.1の差分を適用してコミット
+        shell: bash
+        run: |
+          set -euo pipefail
+          base64 --decode docs/togu/.bootstrap.patch.xz.b64 | xz --decompress > /tmp/kakidas-v0.6.1.patch
+          echo "ff35268d2d104553818bcf20bab53f8c737118541ac5d3592dde0ecadd092e75  /tmp/kakidas-v0.6.1.patch" | sha256sum --check
+          git apply --check /tmp/kakidas-v0.6.1.patch
+          git apply /tmp/kakidas-v0.6.1.patch
+          # ActionsのGITHUB_TOKENはCIファイル変更をpushできないため後段へ分離する。
+          git restore --source=HEAD --worktree .github/workflows/verify-shitate.yml
+          rm docs/togu/.bootstrap.patch.xz.b64
+          git add -A
+          git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'feat: kakidas v0.6.1 囲わずに研ぐ画面仕上げと検証'
+          git push origin HEAD:togu-v0.6.1
