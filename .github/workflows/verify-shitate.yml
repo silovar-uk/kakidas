@@ -39,6 +39,7 @@ jobs:
             sleep 1
           done
           QA_TARGET=app QA_PHASES=${{ matrix.phase }} BASE_URL=http://127.0.0.1:4173/ node docs/shitate/qa.mjs
+          QA_PHASES=${{ matrix.phase }} BASE_URL=http://127.0.0.1:4173/ node docs/togu/qa.mjs
 
   production:
     name: 本番受け入れ確認 ${{ matrix.phase }}
@@ -89,3 +90,9 @@ jobs:
           QA_PHASES: ${{ matrix.phase }}
           BASE_URL: https://kakidas-3gqw.vercel.app/
         run: node docs/shitate/qa.mjs
+      - name: 本番30項目の受け入れ確認
+        timeout-minutes: 15
+        env:
+          QA_PHASES: ${{ matrix.phase }}
+          BASE_URL: https://kakidas-3gqw.vercel.app/
+        run: node docs/togu/qa.mjs
