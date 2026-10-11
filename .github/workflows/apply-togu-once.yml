@@ -1,5 +1,7 @@
 name: kakidas v0.6.1 差分を適用（単発）
 on:
+  pull_request:
+    branches: [main]
   push:
     branches: [togu-v0.6.1]
     paths:
