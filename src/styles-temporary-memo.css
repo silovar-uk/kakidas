@@ -93,7 +93,7 @@
   padding: 0;
   border: 0;
   background: color-mix(in srgb,var(--color-ink) 16%,transparent);
-  backdrop-filter: blur(1px);
+  backdrop-filter: none;
   animation: temporary-memo-backdrop-in 260ms ease both;
 }
 
@@ -370,7 +370,7 @@
 
   .temporary-memo-backdrop {
     background: color-mix(in srgb,var(--color-ink) 16%,transparent);
-    backdrop-filter: blur(1.5px);
+    backdrop-filter: none;
   }
 
   .temporary-memo-panel {
