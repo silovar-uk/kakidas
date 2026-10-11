@@ -948,7 +948,7 @@ export function MemoListPage() {
                 type="search"
                 value={searchQuery}
                 onChange={(event) => setSearchQuery(event.target.value)}
-                placeholder="タイトル・内容・タグを検索"
+                placeholder="題・本文・タグで探す"
                 aria-label="メモを検索"
               />
               {searchQuery ? (

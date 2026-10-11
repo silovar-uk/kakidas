@@ -158,10 +158,10 @@
   gap: 6px;
   margin-top: 8px;
   padding: 8px 10px 10px;
-  border: 1px solid var(--color-shu-wash);
+  border: 1px solid var(--color-line);
   border-left: 3px solid var(--color-shu);
   border-radius: 11px;
-  background: var(--color-shu-wash);
+  background: var(--color-paper);
   transition:
     border-color 140ms ease,
     background-color 140ms ease,
@@ -171,8 +171,8 @@
 .entry-composer__reference-note:focus-within {
   border-color: var(--color-shu);
   border-left-color: var(--color-shu);
-  background: var(--color-shu-wash);
-  box-shadow: 0 0 0 3px color-mix(in srgb,var(--color-ink) 16%,transparent);
+  background: var(--color-sheet);
+  box-shadow: 0 0 0 3px color-mix(in srgb,var(--color-shu) 10%,transparent);
 }
 
 .entry-composer__reference-note-label {
@@ -206,7 +206,7 @@
   border: 1px solid var(--color-shu);
   border-radius: 9px;
   padding: 9px 11px;
-  background: var(--color-line);
+  background: color-mix(in srgb,var(--color-sheet) 78%,transparent);
   color: inherit;
   font: inherit;
   line-height: 1.5;
@@ -217,19 +217,19 @@
 }
 
 .entry-composer__reference-note textarea::placeholder {
-  color: var(--color-shu);
+  color: var(--color-ink-3);
 }
 
 .entry-composer__reference-note textarea:hover:not(:disabled) {
   border-color: var(--color-shu);
-  background: var(--color-line);
+  background: var(--color-sheet);
 }
 
 .entry-composer__reference-note textarea:focus {
   border-color: var(--color-shu);
   outline: 2px solid color-mix(in srgb,var(--color-ink) 16%,transparent);
   outline-offset: 1px;
-  background: var(--color-line);
+  background: var(--color-sheet);
 }
 
 .entry-composer__reference-note textarea:disabled {
@@ -356,7 +356,7 @@
 .entry-item--reference-url .entry-item__reference-edit-url:hover,
 .entry-item--reference-url .entry-item__reference-edit-url:focus-visible {
   color: var(--color-shu-ink);
-  background: var(--color-shu-wash);
+  background: var(--color-paper);
   opacity: 1;
 }
 
@@ -408,7 +408,7 @@
   gap: 2px;
   padding: 2px;
   border-radius: 8px;
-  background: var(--color-line);
+  background: color-mix(in srgb,var(--color-sheet) 94%,transparent);
   box-shadow: 0 1px 5px color-mix(in srgb,var(--color-ink) 6%,transparent);
   opacity: 0;
   pointer-events: none;

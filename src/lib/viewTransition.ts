@@ -28,12 +28,13 @@ export async function withViewTransition(update:()=>void|Promise<unknown>):Promi
   }
 }
 
-/** IndexedDB保存後の描画を少しだけ待ち、写しと行の形をつなぐ。 */
+/** IndexedDB保存後の描画を少しだけ待ち、写しと行の形をつなぐ。
+ * 移り変わりの更新中は描画が止まり、requestAnimationFrameが来ないため、タイマーで待つ。 */
 export async function waitForCreatedEntry(id:string, limitMs=300): Promise<void>{
   if(typeof document==='undefined')return;
   const selector=`[data-entry-id="${CSS.escape(id)}"]`;
   const until=performance.now()+limitMs;
   while(!document.querySelector(selector)&&performance.now()<until){
-    await new Promise<void>(resolve=>window.requestAnimationFrame(()=>resolve()));
+    await new Promise<void>(resolve=>window.setTimeout(resolve,16));
   }
 }

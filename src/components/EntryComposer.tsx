@@ -524,17 +524,18 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
             note: submittedNote.trim(),
             link_url: normalizedLink,
           }, draftId, kind, createdId);
-          if (createdId) await waitForCreatedEntry(createdId, 300);
+          if (createdId) {
+            await waitForCreatedEntry(createdId, 300);
+            // 遷移先を撮る前に朱を付け、着地してから朱に切り替わるちらつきを防ぐ。
+            const row = document.querySelector<HTMLElement>(`[data-entry-id="${CSS.escape(createdId)}"]`);
+            if (row) {
+              row.classList.add("entry-item--fresh");
+              window.setTimeout(() => row.classList.remove("entry-item--fresh"), 1800);
+            }
+          }
         };
         if (isDesk) await withViewTransition(create);
         else await create();
-        if (createdId) {
-          const row = document.querySelector<HTMLElement>(`[data-entry-id="${CSS.escape(createdId)}"]`);
-          if (row) {
-            row.classList.add("entry-item--fresh");
-            window.setTimeout(() => row.classList.remove("entry-item--fresh"), 1200);
-          }
-        }
         onPlaced?.(kind);
         if (isDesk) setChosenKind(null);
         setReferenceNotice(isReferenceUrl ? "保存しました。" : null);

@@ -1,0 +1,35 @@
+本番(v0.6.0、f67abe5)に docs/togu/qa.mjs を流した結果(2026-10-11、PC 1366×633・スマホ375×667、新しいブラウザー環境)
+
+受け入れ確認「囲わずに、研ぐ」 対象: https://kakidas-3gqw.vercel.app/
+不合格  P1-1  置いた直後も画面が止まらない(移り変わりの待ちが400ms以内)  …描画が800ms以上止まった
+不合格  P1-2  新しい行の印は、いま置いた行に付く  …印が付いた行: []
+不合格  P1-3  濃い灰色の面がない(一覧・帯・余白・メニュー)  …編集:button.memo-tag-chip, 余白:button.memo-tag-chip, 余白:button.temporary-memo-panel__close, 余白:button.temporary-memo-panel__clear, 一覧:li.memo-card
+不合格  P1-4  文字のコントラスト比は4.5以上(PC・スマホ・一覧)  …26か所: PC time.entry-item__created-at 「作成 10/11 19:24」 1.88 / PC time.entry-item__created-at 「作成 10/11 19:24」 1.88 / PC time.entry-item__created-at 「作成 10/11 19:25」 2.66 / PC time.entry-item__created-at 「作成 10/11 19:25」 2.66 / PC time.entry-item__created-at 「作成 10/11 19:25」 2.66
+不合格  P1-5  文字は12px以上(PC・スマホの書く画面と一覧)  …PC: button.memo-tag-chip 「#企画」 11px / span.save-status 「保存済み」 11px / span 「気持ち」 11px / span 「リンク」 11px / span 「タグ」 11px
+不合格  P1-6  破線・点線の枠を使わない  …PC: button.entry-composer__meta-trigger 「気持ち」:Top, button.entry-composer__meta-trigger 「気持ち」:Right, button.entry-composer__meta-trigger 「気持ち」:Bottom, button.entry-composer__meta-trigger 「気持ち」:Left, button.entry-composer__meta-trigger 「リンク」:Top
+不合格  P1-7  何も触れていないとき、朱の枠線はない  …PCで21辺: button.editor-header__seisho 「清書」:Top, button.editor-header__seisho 「清書」:Right, button.editor-header__seisho 「清書」:Bottom, button.editor-header__seisho 「清書」:Left, button 「文」:Top
+不合格  P1-8  スマホの「この項目の操作」は、ブラウザー既定のボタンが残らない  …既定のまま・40px未満: ×、0、1、2、3、4、5、気持ち・備考を書く、リンクを付ける、タグを変える
+不合格  P1-9  清書の落款は、2文字とも印の枠の中に収まる  …字の位置 [[1030,855],[999,855]] / 枠 {"l":1019,"t":853.3125,"r":1063,"b":897.3125}
+不合格  P1-10  余白の呼び名がそろい、スマホでキー操作の案内を出さない  …PCの余白に「一時メモ」が残っている
+不合格  P1-11  一覧の検索欄の案内が切れず、「すべて・タグ別」が折り返さない(PC・スマホ)  …スマホ: 「タイトル・内容・タグを検索」に169px要るが136px
+不合格  P2-1  本文の背骨がそろう(題・書き口・列見出し・行の左端のずれ2px以内)  …題82と書き口33 / 書き口33と最初の列見出し26 / wordの見出し26と行16 / sentenceの見出し492と行482 / paragraphの見出し936と行926
+不合格  P2-2  スマホの本文は画面の左端から16px、右は操作のぶんだけ空ける  …本文の左端が0px
+不合格  P2-3  PCの最初の画面に囲み(3辺以上の枠)がなく、行の罫を除く線は12辺まで  …囲み9個: button.memo-tag-chip 「#企画」, button.editor-header__seisho 「清書」, button.editor-header__margin 「余白」, button.memo-actions__trigger 「」, section.entry-composer 「参考URL文段落置く気持ちリ」
+不合格  P2-4  PCの最初の画面の文字は大きさ6段・太さ2種まで  …大きさ9段: 0, 9, 10, 11, 12, 13, 14, 15, 16
+不合格  P2-5  行の道具は本文を隠さず、触れても行の高さが変わらない(PC)  …行の道具が本文の字に重なる
+不合格  P2-6  スマホの行の操作は枠なしで、44px四方の押せる大きさ  …操作ボタンに枠がある
+不合格  P2-7  書き口は2段(書く/置き先と気持ち・リンク・タグ)で、高さ112px以内(PC)  …置き先と気持ち・リンク・タグが別の段(79pxずれ)
+不合格  P2-8  列の間は縦線でなく余白(24px以上)  …列に縦線がある
+不合格  P2-9  メニューの項目名は、印(✓)の有無にかかわらず左端がそろう  …左端が1073・1090pxに分かれる
+不合格  P2-10  消す操作は赤で、ほかと罫で分ける(列の操作)  …「文をすべて削除」の色がrgb(35, 33, 29)
+不合格  P2-11  余白はページの右に開き、メモが透けて見える(PC)  …余白の左端が20px
+不合格  P2-12  一覧のカードは紙の色で、題がはっきり読める  …カードの明るさ0.19、題のコントラスト比3.6
+不合格  P3-1  机に紙の目を敷き、強制配色では消す  …机の背景がradial-gradient(circle at right top, col
+不合格  P3-2  書き口に触れると墨の線が走り、離れると消える  …線の伸び 1 → 1
+不合格  P3-3  「置く」は書くまで沈み、書くと朱が灯る  …空のときの地がrgb(189, 86, 47)
+不合格  P3-4  置いた字は朱から墨へ乾く(動きを減らす設定では最初から墨)  …置いた直後の字が朱でない(35,33,29)
+不合格  P3-5  保存の表示に状態(wet/dry)があり、乾いた後は墨の淡色  …data-stateがundefined
+不合格  P3-6  落款は紙に押し込まれる(重ね・かすれ・押す動き。動きを減らす設定では押さない)  …落款が紙に重なっていない
+不合格  P3-7  清書は版面で組む(要点はぶら下げ、本文は一字下げ)  …要点の2行目が16pxずれる(ぶら下げになっていない)
+
+0/30 合格

@@ -15,10 +15,10 @@
   width: 100%;
   min-width: 0;
   padding: 9px 12px;
-  border: 1px solid var(--color-shu);
+  border: 1px solid var(--color-line-strong);
   border-radius: 9px;
   color: var(--color-shu-ink);
-  background: var(--color-line);
+  background: var(--color-sheet);
   font: inherit;
   font-size: 14px;
   font-weight: 780;
@@ -36,7 +36,7 @@
 .entry-item__paragraph-heading-input:focus {
   border-color: var(--color-shu);
   outline: none;
-  box-shadow: 0 0 0 3px color-mix(in srgb,var(--color-ink) 16%,transparent);
+  box-shadow: 0 0 0 3px color-mix(in srgb,var(--color-shu) 14%,transparent);
 }
 
 /*
@@ -106,7 +106,7 @@
   border: 1px solid var(--color-shu);
   border-radius: 6px;
   color: var(--color-shu-ink);
-  background: var(--color-shu-wash);
+  background: var(--color-line);
   font-size: 10px;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
@@ -131,7 +131,7 @@
 .entry-item__heading[data-paragraph-heading-number]:focus-visible::before {
   border-color: var(--color-shu);
   color: var(--color-shu-ink);
-  background: var(--color-shu-wash);
+  background: var(--color-line);
 }
 
 .entry-item__heading[data-paragraph-heading-number]:hover:not(:disabled)::after,
@@ -193,10 +193,10 @@
   width: 24px;
   height: 18px;
   place-items: center;
-  border: 1px solid var(--color-shu);
+  border: 1px solid var(--color-line-strong);
   border-radius: 5px;
   color: var(--color-shu-ink);
-  background: var(--color-shu-wash);
+  background: var(--color-paper);
   font-size: 9px;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
@@ -232,10 +232,10 @@
 .mobile-paragraph-editor__title-field input {
   width: 100%;
   padding: 11px 13px;
-  border: 1px solid var(--color-shu);
+  border: 1px solid var(--color-line-strong);
   border-radius: 10px;
   color: var(--color-shu-ink);
-  background: var(--color-line);
+  background: var(--color-sheet);
   font: inherit;
   font-size: 16px;
   font-weight: 780;
@@ -245,11 +245,11 @@
 .mobile-paragraph-editor__title-field input:focus {
   border-color: var(--color-shu);
   outline: none;
-  box-shadow: 0 0 0 3px color-mix(in srgb,var(--color-ink) 16%,transparent);
+  box-shadow: 0 0 0 3px color-mix(in srgb,var(--color-shu) 14%,transparent);
 }
 
 .entry-item--completed .entry-item__heading {
-  color: var(--color-shu);
+  color: var(--color-ink-2);
 }
 
 .entry-item--completed .entry-item__heading::before {
@@ -257,9 +257,9 @@
 }
 
 .entry-item--completed .entry-item__heading[data-paragraph-heading-number]::before {
-  border-color: var(--color-shu);
-  color: var(--color-shu);
-  background: var(--color-shu-wash);
+  border-color: var(--color-line-strong);
+  color: var(--color-ink-2);
+  background: var(--color-paper);
 }
 
 .entry-item--completed .entry-item__heading[data-paragraph-heading-number]::after {

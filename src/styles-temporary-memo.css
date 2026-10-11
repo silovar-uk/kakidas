@@ -64,7 +64,7 @@
   height: 7px;
   border-radius: 999px;
   background: var(--color-shu);
-  box-shadow: 0 0 0 3px color-mix(in srgb,var(--color-ink) 16%,transparent);
+  box-shadow: 0 0 0 3px color-mix(in srgb,var(--color-shu) 12%,transparent);
 }
 
 .temporary-memo-trigger--filled {
@@ -74,7 +74,7 @@
 .temporary-memo-trigger--error {
   border-color: var(--color-danger);
   color: var(--color-danger);
-  background: var(--color-shu-wash);
+  background: var(--color-paper);
 }
 
 .temporary-memo-layer {
@@ -110,7 +110,7 @@
   padding: 13px 15px 14px;
   border: 1px solid var(--color-ink-2);
   border-radius: 18px;
-  color: var(--color-shu-ink);
+  color: var(--color-ink);
   background:
     linear-gradient(180deg, var(--color-line), var(--color-line));
   box-shadow:
@@ -183,7 +183,7 @@
   border: 1px solid color-mix(in srgb,var(--color-ink) 16%,transparent);
   border-radius: 9px;
   color: var(--color-ink-2);
-  background: color-mix(in srgb,var(--color-ink) 55%,transparent);
+  background: color-mix(in srgb,var(--color-sheet) 62%,transparent);
   font: inherit;
   font-size: 11px;
   font-weight: 800;
@@ -192,7 +192,7 @@
 .temporary-memo-panel__close:hover,
 .temporary-memo-panel__close:focus-visible {
   border-color: var(--color-ink-2);
-  background: var(--color-line);
+  background: color-mix(in srgb,var(--color-sheet) 92%,transparent);
   outline: none;
 }
 
@@ -283,7 +283,7 @@
   border: 1px solid color-mix(in srgb,var(--color-ink) 16%,transparent);
   border-radius: 9px;
   color: var(--color-danger);
-  background: color-mix(in srgb,var(--color-ink) 55%,transparent);
+  background: color-mix(in srgb,var(--color-sheet) 50%,transparent);
   font: inherit;
   font-size: 10px;
   font-weight: 760;
@@ -292,7 +292,7 @@
 .temporary-memo-panel__clear:hover:not(:disabled),
 .temporary-memo-panel__clear:focus-visible:not(:disabled) {
   border-color: var(--color-shu);
-  background: var(--color-shu-wash);
+  background: var(--color-paper);
   outline: none;
 }
 
@@ -305,7 +305,7 @@
   padding: 7px 8px;
   border-radius: 8px;
   color: var(--color-danger);
-  background: var(--color-shu-wash);
+  background: color-mix(in srgb,var(--color-line) 78%,transparent);
   font-size: 10px;
   line-height: 1.45;
 }

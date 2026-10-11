@@ -1,4 +1,5 @@
 import {SeishoView} from "../components/SeishoView";
+import {BackIcon} from "../components/icons";
 import {withViewTransition} from "../lib/viewTransition";
 import {EntryComposer,type EntryComposerHandle} from "../components/EntryComposer";
 import {MemoActionsMenu} from "../components/MemoActionsMenu";
@@ -982,14 +983,14 @@ export function MemoEditorPage() {
       }`}
     >
       <header className="editor-header editor-header--shitate">
-        <Link to="/" className="back-link" onClick={e=>{e.preventDefault();void handleReturnToMemoList()}}>戻る</Link>
+        <Link to="/" className="back-link" aria-label="メモ一覧へ戻る" title="メモ一覧へ" onClick={e=>{e.preventDefault();void handleReturnToMemoList()}}><BackIcon /></Link>
         <div className="editor-header__title">
           <input ref={titleInputRef} className="memo-title-input" aria-label="メモのタイトル" value={title}
             onChange={e=>{latestTitleRef.current=e.target.value;setTitle(e.target.value)}}
             onBlur={()=>void saveTitle(title)} />
           <MemoTagControl tag={memo.tag} suggestions={tagSuggestions} disabled={isSaving} onSave={handleSaveTag}/>
         </div>
-        <span className="save-status" aria-live="polite">{isSaving?'保存中…':'保存済み'}</span>
+        <span className="save-status" aria-live="polite" data-state={isSaving?"wet":"dry"}>{isSaving?'保存中…':'保存済み'}</span>
         <button type="button" className="editor-header__seisho" aria-label="清書にする" onClick={()=>toggleSeisho(!isSeisho)}>清書</button>
         <button type="button" className="editor-header__margin" aria-label="余白を開く" onClick={()=>window.dispatchEvent(new Event('kakidas:open-margin'))}>余白</button>
         <MemoActionsMenu cloudEnabled={Boolean(user)}

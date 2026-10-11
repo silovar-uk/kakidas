@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { lockBodyScroll } from "../lib/bodyScrollLock";
+import {NoteIcon,LinkIcon,TagIcon} from "./icons";
 import {
   type EntryKind,
   type EntryUpdate,
@@ -184,9 +185,9 @@ export function MobileEntryActionSheet({
           </button>
         ) : null}
 
-        <button role="menuitem" type="button" onClick={()=>{onRequestEdit(entry.id,"note");close()}}>気持ち・備考を書く</button>
-        <button role="menuitem" type="button" onClick={()=>{onRequestEdit(entry.id,"link");close()}}>{entry.link_url.trim()?"リンクを編集":"リンクを付ける"}</button>
-        <button role="menuitem" type="button" onClick={()=>{onRequestEdit(entry.id,"tag");close()}}>タグを変える</button>
+        <button role="menuitem" type="button" onClick={()=>{onRequestEdit(entry.id,"note");close()}}><NoteIcon />気持ち・備考を書く</button>
+        <button role="menuitem" type="button" onClick={()=>{onRequestEdit(entry.id,"link");close()}}><LinkIcon />{entry.link_url.trim()?"リンクを編集":"リンクを付ける"}</button>
+        <button role="menuitem" type="button" onClick={()=>{onRequestEdit(entry.id,"tag");close()}}><TagIcon />タグを変える</button>
         <button
           type="button"
           className="mobile-action-sheet__copy"
