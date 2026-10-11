@@ -1,0 +1,158 @@
+/* 書く内容を主役にする。操作群は大きさを変えず前面に重ねる。 */
+:root,body,html {font-family:var(--font-sans);color:var(--color-ink);}
+.memo-title-input,.entry-composer__paragraph-title,h1,h2,h3 {font-feature-settings:"palt";}
+.entry-item {position:relative;}
+.entry-item__quick-actions {transition:opacity .15s var(--ease);}
+@media (hover:hover) and (pointer:fine) and (min-width:921px){
+ .entry-item__quick-actions {opacity:0;pointer-events:none;position:absolute;right:4px;top:4px;z-index:1;background:linear-gradient(90deg,transparent,var(--color-sheet) 14%);}
+ .entry-item:hover .entry-item__quick-actions,.entry-item:focus-within .entry-item__quick-actions,.entry-item--editing .entry-item__quick-actions,.entry-item__quick-actions:has([aria-expanded="true"]){opacity:1;pointer-events:auto;}
+}
+@media (max-width:920px){
+ .entry-item__quick-actions>:not(.entry-item__structure-button){display:none;}
+ .entry-item__quick-actions .entry-item__structure-button {min-width:40px;min-height:40px;}
+}
+@media (hover:none){.temporary-memo-trigger__shortcut,.temporary-memo-shortcut{display:none;}}
+
+/* 一本の帯。狭い画面では題だけが伸縮する */
+.editor-page.app-shell {width:min(1460px,calc(100% - 32px));padding-top:12px;background:var(--color-paper)}
+.editor-header--shitate {height:58px;min-height:58px;display:flex;align-items:center;gap:12px;padding:4px 8px;border-bottom:1px solid var(--color-line);background:var(--color-sheet);position:relative;z-index:var(--z-sticky)}
+.editor-header--shitate .back-link {white-space:nowrap;text-decoration:none;font-size:var(--text-s);color:var(--color-ink-2);padding:8px}
+.editor-header__title {display:flex;align-items:center;gap:8px;flex:1;min-width:0;overflow:hidden}
+.editor-header__title .memo-title-input {width:100%;flex:1;min-width:0;margin:0;border:0;background:transparent;box-shadow:none;font-size:var(--text-xl);font-weight:650;color:var(--color-ink);padding:4px}
+.editor-header__title .memo-tag-control {flex-shrink:0}
+.editor-header--shitate .save-status {flex-shrink:0;font-size:11px;color:var(--color-ink-3)}
+.editor-header__seisho,.editor-header__margin,.memo-actions__trigger {border:1px solid var(--color-line);border-radius:var(--radius-pill);background:var(--color-sheet);color:var(--color-ink-2);padding:7px 12px;white-space:nowrap;font-size:var(--text-s)}
+.editor-header__seisho {color:var(--color-shu-ink);border-color:var(--color-shu)}
+.memo-actions {position:relative;flex-shrink:0}
+.memo-actions__trigger {display:flex;align-items:center;justify-content:center;width:40px;height:40px;padding:8px;position:relative}
+.memo-actions__trigger svg {height:20px;width:20px;stroke:currentColor;stroke-width:1.7}
+.memo-actions__alert {position:absolute;top:4px;right:4px;width:6px;height:6px;border-radius:100%;background:var(--color-shu)}
+.memo-actions__panel {position:absolute;top:calc(100% + 8px);right:0;width:290px;max-height:min(75vh,680px);overflow:auto;display:flex;flex-direction:column;padding:10px;border:1px solid var(--color-line);border-radius:var(--radius-m);background:var(--color-sheet);box-shadow:var(--shadow-2);z-index:var(--z-popover)}
+.memo-actions__panel button,.entry-column__menu button {display:flex;align-items:center;gap:8px;border:0;background:transparent;text-align:left;font-size:13px;min-height:32px;color:var(--color-ink);border-radius:var(--radius-s);padding:7px 10px}
+.memo-actions__panel button:hover,.entry-column__menu button:hover {background:var(--color-paper)}
+.memo-actions__panel button:disabled {color:var(--color-ink-3);opacity:.65;cursor:not-allowed}
+.memo-actions__panel [aria-checked="true"]:before {content:'✓';color:var(--color-shu)}
+.memo-actions__caption {color:var(--color-ink-3);font-size:11px;margin:10px 4px 4px;padding-top:4px;border-top:1px solid var(--color-line)}
+.memo-actions__caption:first-child {border-top:0;margin-top:0}
+.memo-actions__panel button.memo-actions__danger {color:var(--color-danger)}
+.memo-actions__backdrop {display:none}
+/* 書き口はタイトルの下。本文は常に同一のtextareaを使う */
+.entry-composer--desk {position:relative;max-width:none;margin:6px 0 8px;padding:8px 12px;border:1px solid var(--color-line);border-radius:var(--radius-m);background:var(--color-sheet);box-shadow:var(--shadow-1)}
+.entry-composer--desk > .entry-composer {border:0;box-shadow:none;margin:0;padding:0;background:transparent}
+.entry-composer--desk .entry-composer__destinations {display:flex;gap:6px;align-items:center;margin:0 0 6px}
+.entry-composer__destinations button {border:1px solid transparent;background:transparent;color:var(--color-ink-3);padding:4px 9px;border-radius:var(--radius-pill);font-size:12px;min-height:26px}
+.entry-composer__destinations button[aria-checked="true"] {background:var(--color-shu-wash);border-color:var(--color-shu);color:var(--color-shu-ink)}
+.entry-composer--desk .entry-composer__control-row {display:flex;align-items:flex-end;gap:8px;min-height:42px;margin:0}
+.entry-composer__desk-fields {flex:1;min-width:0}
+.entry-composer__desk-heading {display:grid;grid-template-rows:0fr;transition:grid-template-rows .2s var(--ease);overflow:hidden}
+.entry-composer__desk-heading input {min-height:0;height:0;opacity:0;border:0;padding:0;pointer-events:none}
+.entry-composer__desk-heading--open {grid-template-rows:1fr}
+.entry-composer__desk-heading--open input {height:34px;opacity:1;pointer-events:auto;padding:5px 8px;border-bottom:1px solid var(--color-line);background:var(--color-sheet);font-size:16px}
+.entry-composer--desk .entry-composer__textarea {width:100%;resize:none;display:block;min-height:42px;max-height:240px;font:inherit;font-size:16px;line-height:1.55;padding:8px 6px;border:0;background:transparent;color:var(--color-ink);box-shadow:none;outline-offset:0}
+.entry-composer--desk .entry-composer__submit {flex-shrink:0;background:var(--color-shu);color:var(--color-sheet);border:0;border-radius:var(--radius-s);padding:8px 18px;min-height:40px;font-size:14px}
+.entry-composer--desk .entry-composer__submit:disabled {opacity:.45}
+.entry-composer--desk .entry-composer__meta-row {margin-top:3px;padding:0;min-height:0}
+.entry-composer--desk .entry-composer__meta-trigger {padding:3px 6px;min-height:28px}
+.entry-composer--desk .entry-composer__meta-trigger svg {width:16px;height:16px}
+.entry-composer--desk .entry-composer__reference-note {display:flex;gap:8px;align-items:center;margin-top:4px}
+.entry-composer--desk .entry-composer__reference-note textarea {min-height:34px;max-height:70px;font-size:16px}
+.entry-column__header {min-height:42px;padding:6px 10px;border-bottom:1px solid var(--color-line)}
+.entry-column__header h2 {font-size:15px}
+.entry-column__header-actions {gap:6px}
+.entry-column__more {width:30px;height:30px;display:grid;place-items:center;border:0;background:transparent;color:var(--color-ink-2)}
+.entry-column__more svg {width:18px;height:18px}
+.entry-column__menu {position:absolute;right:0;top:calc(100% + 3px);min-width:180px;display:flex;flex-direction:column;padding:5px;box-shadow:var(--shadow-2);z-index:var(--z-popover);background:var(--color-sheet)}
+.entry-column__header-menu {position:relative}
+.entry-column__menu button {width:100%}
+.entry-column__menu button svg {width:16px;height:16px}
+.entry-column__menu [aria-checked="true"]:before {content:'✓';color:var(--color-shu)}
+.entry-item__satisfaction-mark {position:absolute;right:8px;bottom:5px;color:var(--color-ink-3);font-size:10px;line-height:1}
+.entry-item--satisfaction-1 {background:var(--sat-1)}
+.entry-item--satisfaction-2 {background:var(--sat-2)}
+.entry-item--satisfaction-3 {background:var(--sat-3)}
+.entry-item--satisfaction-4 {background:var(--sat-4)}
+.entry-item--satisfaction-5 {background:var(--sat-5)}
+.temporary-memo-panel {background:repeating-linear-gradient(to bottom,var(--color-sheet) 0,var(--color-sheet) 31px,var(--color-line) 32px);border:1px solid var(--color-line);box-shadow:var(--shadow-2);border-radius:var(--radius-m)}
+.temporary-memo-panel::after {display:none}
+.temporary-memo-panel__textarea {background:transparent;font-size:16px}
+.temporary-memo-panel__eyebrow {color:var(--color-ink-3)}
+/* 清書は編集のUIと全く別の紙面 */
+.seisho-view {padding:12px 0 30px}
+.seisho-tools {display:flex;justify-content:flex-end;gap:8px;margin:4px auto 12px;max-width:880px}
+.seisho-tools button {border:1px solid var(--color-line);background:var(--color-sheet);color:var(--color-ink-2);padding:9px 12px;border-radius:var(--radius-s);font-size:13px}
+.seisho-paper {position:relative;max-width:880px;min-height:600px;padding:54px 78px 92px;margin:0 auto;background:var(--color-sheet);color:var(--color-ink);box-shadow:var(--shadow-2);font-family:var(--font-serif)}
+.seisho-paper__date {color:var(--color-ink-3);font-size:12px;letter-spacing:.08em}
+.seisho-paper h1 {font-size:32px;font-weight:600;line-height:1.5;margin:18px 0 38px}
+.seisho-paper h2 {font:600 12px var(--font-sans);color:var(--color-shu-ink);letter-spacing:.25em;margin:32px 0 13px}
+.seisho-paper h3 {font-size:17px;margin:0 0 6px}
+.seisho-paper p {white-space:pre-wrap;line-height:1.9;margin:0 0 18px}
+.seisho__list {padding:0;margin:0;list-style:none;line-height:1.9}
+.seisho__list li:before {content:'・';color:var(--color-ink-3)}
+.seisho-references {margin:0;padding:0;list-style:none}
+.seisho-references li {padding:5px 0 14px;line-height:1.6}
+.seisho-references a {color:var(--color-ink);text-decoration:underline;text-decoration-color:var(--color-line-strong)}
+.seisho-references small {display:block;color:var(--color-ink-3);font:12px var(--font-sans)}
+.seisho-stamp {position:absolute;right:60px;bottom:46px;display:grid;place-items:center;writing-mode:vertical-rl;width:44px;height:44px;border:2px solid var(--color-shu);color:var(--color-shu);font:600 22px var(--font-serif);letter-spacing:0}
+.seisho-note {max-width:880px;margin:14px auto;text-align:right;color:var(--color-ink-3);font-size:12px}
+@media (prefers-reduced-motion:no-preference){.seisho-stamp {animation:seisho-stamp .5s .35s both}@keyframes seisho-stamp{0%{opacity:0;transform:scale(1.6)}70%{opacity:1;transform:scale(.92)}100%{transform:scale(1)}}}
+@media (max-width:920px){
+ .editor-page.app-shell {width:100%;padding:0}
+ .editor-header--shitate {gap:5px;padding:4px 8px;height:56px;min-height:56px}
+ .editor-header__title .memo-title-input {font-size:16px}
+ .editor-header__title .memo-tag-control {display:none}
+ .editor-header--shitate .save-status {display:none}
+ .editor-header__seisho,.editor-header__margin {padding:6px 7px;font-size:12px}
+ .editor-header--shitate .back-link {padding:4px;font-size:12px}
+ .editor-tabs {margin:0;min-height:39px}
+ .entry-composer--desk {margin:0 8px 6px;padding:6px 8px}
+ .entry-composer--desk .entry-composer__meta-controls {gap:3px}
+ .entry-composer--desk .entry-composer__control-row {min-height:36px}
+ .entry-composer--desk .entry-composer__textarea {min-height:38px}
+ .entry-item__quick-actions .entry-item__structure-button {display:grid;place-items:center;opacity:1;visibility:visible}
+ .entry-item__inline-actions,.entry-item__desktop-inline-actions,.entry-item__tag-chip .entry-tag-control {display:none}
+ .entry-item__quick-actions>:not(.entry-item__structure-button) {display:none}
+ .entry-item__quick-actions {display:flex;position:absolute;right:2px;top:2px;width:44px;min-width:0;opacity:1;pointer-events:auto;background:transparent;padding:0;margin:0}
+ .entry-item__structure-button {width:40px;height:40px;min-width:40px;min-height:40px}
+ .mobile-action-sheet__satisfaction {display:flex;gap:6px;justify-content:space-between;margin-bottom:8px}
+ .mobile-action-sheet__satisfaction button {min-width:35px;min-height:35px;border:1px solid var(--color-line);border-radius:var(--radius-s);background:var(--color-sheet);color:var(--color-ink-2)}
+ .mobile-action-sheet__satisfaction button[aria-pressed="true"] {background:var(--color-shu-wash);border-color:var(--color-shu)}
+ .memo-actions__backdrop {display:block;position:fixed;inset:0;background:color-mix(in srgb,var(--color-ink) 16%,transparent);z-index:var(--z-sheet)}
+ .memo-actions__panel {position:fixed;inset:auto 0 0;width:100%;max-height:min(76dvh,650px);border-radius:var(--radius-m) var(--radius-m) 0 0;z-index:calc(var(--z-sheet) + 1);padding:16px}
+ .seisho-paper {min-height:70vh;padding:32px 25px 80px;box-shadow:none}
+ .seisho-paper h1 {font-size:25px}
+ .seisho-stamp {right:20px;bottom:23px}
+ .seisho-tools {justify-content:center;padding:0 8px}
+ .seisho-note {padding:0 18px}
+}
+@media print {body,html,.editor-page.app-shell {padding:0;margin:0;background:var(--color-sheet)}
+ .editor-header--shitate,.seisho-tools,.seisho-note,.notice-toast,.temporary-memo-layer,.memo-actions__panel {display:none}
+ .seisho-view {padding:0}.seisho-paper {max-width:none;min-height:0;margin:0;padding:0;box-shadow:none;border:0}
+ .seisho-stamp {right:0;bottom:0}}
+
+/* 置いた文字の写しはレイアウトに参加させない。新しい行の朱線だけが残る。 */
+.entry-composer__desk-fields {position:relative}
+.entry-composer__copy-flight {position:absolute;top:0;left:6px;right:6px;padding:8px 0;pointer-events:none;
+ background:var(--color-sheet);color:var(--color-ink);white-space:pre-wrap;line-height:1.55;font-size:16px}
+.entry-item--fresh::before {content:"";position:absolute;left:0;top:0;bottom:0;width:2px;background:var(--color-shu);
+ animation:kakidas-fresh-line 1.2s var(--ease) forwards;pointer-events:none}
+@keyframes kakidas-fresh-line {0%{opacity:1;transform:scaleY(1)}100%{opacity:0;transform:scaleY(.8)}}
+@media(prefers-reduced-motion:reduce){.entry-item--fresh::before{animation:none;opacity:0}}
+
+/* PCは3列が同時に見えるため、スマホ専用の棚タブを重ねない。 */
+@media (min-width:921px) {
+ .editor-tabs {display:none;}
+ .editor-page.app-shell {padding-top:0;}
+ .entry-composer--desk {padding:6px 10px;margin:2px 0 4px;}
+ .entry-item__quick-actions:focus-within,
+ .entry-item:focus-within > .entry-item__row .entry-item__quick-actions,
+ .entry-item:focus-within .entry-item__quick-actions {opacity:1 !important;pointer-events:auto !important;}
+}
+
+/* 二重の余白を解消した書き口と、コンパクトな列見出し。 */
+.editor-grid .entry-list {margin-top:8px;}
+.editor-grid .entry-column__header {min-height:36px;padding-top:2px;padding-bottom:2px;}
+@media (min-width:921px) {
+ .entry-column__collapse-toggle {opacity:0;pointer-events:none;transition:opacity .12s;}
+ .entry-column__header:hover .entry-column__collapse-toggle,
+ .entry-column__header:focus-within .entry-column__collapse-toggle {opacity:1;pointer-events:auto;}
+}

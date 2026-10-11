@@ -103,7 +103,7 @@ export interface MemoRepository {
   discardUntitledEmptyMemo(memoId: string): Promise<boolean>;
 
   createEntry(
-    input: Omit<EntryInsert, "id" | "created_at" | "updated_at">,
+    input: Omit<EntryInsert, "created_at" | "updated_at">,
     position?: EntryInsertPosition,
     draftId?: string,
   ): Promise<EntryRow>;
@@ -743,7 +743,7 @@ class IndexedDbMemoRepository implements MemoRepository {
   }
 
   async createEntry(
-    input: Omit<EntryInsert, "id" | "created_at" | "updated_at">,
+    input: Omit<EntryInsert, "created_at" | "updated_at">,
     position: EntryInsertPosition = "bottom",
     draftId?: string,
   ): Promise<EntryRow> {
@@ -809,7 +809,7 @@ class IndexedDbMemoRepository implements MemoRepository {
     );
 
     const entry: EntryRow = {
-      id: createId(),
+      id: input.id ?? createId(),
       memo_id: input.memo_id,
       user_id: input.user_id ?? memo.user_id,
       kind: input.kind,

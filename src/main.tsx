@@ -3,15 +3,13 @@ import { createRoot } from "react-dom/client";
 import App from "./App";
 import { resetBodyScrollLock } from "./lib/bodyScrollLock";
 import { closeDatabaseConnection } from "./lib/db";
+import "./styles-tokens.css";
 import "./styles.css";
-import "./styles-mobile-word-compact.css";
 import "./styles-paragraph-heading.css";
 import "./styles-keyboard-shortcuts.css";
 import "./styles-paragraph-title-tag.css";
 import "./styles-entry-tag-group-drag.css";
-import "./styles-cloud-upload-header.css";
 import "./styles-mobile-interaction-motion.css";
-import "./styles-mobile-word-single-row.css";
 import "./styles-temporary-memo.css";
 import "./styles-temporary-memo-mobile-refine.css";
 import "./styles-temporary-memo-instant.css";
@@ -22,6 +20,7 @@ import "./styles-memo-list-quiet.css";
 import "./styles-canonical-host.css";
 import "./styles-reference-url.css";
 import "./styles-workspace-fold.css";
+import "./styles-shitate.css";
 
 // 以前のオーバーレイが残したスクロール停止を、起動時に必ず初期化する。
 resetBodyScrollLock();

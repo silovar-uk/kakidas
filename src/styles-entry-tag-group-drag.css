@@ -89,7 +89,7 @@
   padding: 0;
   border: 0;
   border-radius: 8px;
-  color: #99948d;
+  color: var(--color-ink-3);
   background: transparent;
   font-size: 0;
   line-height: 1;
@@ -115,8 +115,8 @@
 
 .entry-tag-group-drag-handle:hover,
 .entry-tag-group-drag-handle:focus-visible {
-  color: #596979;
-  background: rgba(95, 111, 127, 0.09);
+  color: var(--color-ink-2);
+  background: color-mix(in srgb,var(--color-ink) 6%,transparent);
 }
 
 .entry-tag-group-drag-handle:active {
@@ -148,7 +148,7 @@
   height: 18px;
   place-items: center;
   margin-left: 1px;
-  border-left: 1px solid var(--entry-tag-border, #d8d0c5);
+  border-left: 1px solid var(--entry-tag-border, var(--color-shu));
   padding-left: 4px;
   color: color-mix(in srgb, currentColor 72%, transparent);
   font-size: 13px;
@@ -178,12 +178,12 @@
   z-index: 8;
   opacity: 0.72;
   transform: scale(0.992);
-  box-shadow: 0 10px 24px rgba(46, 56, 66, 0.14);
+  box-shadow: 0 10px 24px color-mix(in srgb,var(--color-ink) 16%,transparent);
 }
 
 .entry-list__tag-group--dragging .entry-tag-group-drag-handle {
-  color: #314a64;
-  background: rgba(95, 111, 127, 0.14);
+  color: var(--color-ink-2);
+  background: color-mix(in srgb,var(--color-ink) 16%,transparent);
   cursor: grabbing;
 }
 

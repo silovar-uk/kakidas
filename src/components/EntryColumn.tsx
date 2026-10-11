@@ -1,3 +1,5 @@
+import { fetchReferenceTitle } from "../lib/referenceTitle";
+import { MoreIcon, CopyIcon } from "./icons";
 import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
   EntryComposer,
@@ -133,10 +135,7 @@ export function EntryColumn({
   showEntryNumbers,
   compactView = false,
   tagSuggestions,
-  autoFocusComposer = false,
-  autoFocusKey,
   addAtBottom = false,
-  onAutoFocusHandled,
   disabled = false,
   onCreate,
   onUpdate,
@@ -153,10 +152,23 @@ export function EntryColumn({
   onRenameTag,
 }: EntryColumnProps) {
   const [structureEntryId, setStructureEntryId] = useState<string | null>(null);
-  const [mobileActionEntryId, setMobileActionEntryId] = useState<string | null>(
-    null,
-  );
+  const [mobileActionEntryId, setMobileActionEntryId] = useState<string | null>(null);
+  const [editRequest,setEditRequest]=useState<{entryId:string;target:"note"|"link"|"tag"}|null>(null);
   const [isHeaderMenuOpen, setIsHeaderMenuOpen] = useState(false);
+  useEffect(() => {
+    if (!isHeaderMenuOpen) return;
+    const onEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      setIsHeaderMenuOpen(false);
+      window.requestAnimationFrame(() => document.querySelector<HTMLButtonElement>(
+        `.entry-column--${kind} .entry-column__more`
+      )?.focus({ preventScroll: true }));
+    };
+    window.addEventListener("keydown", onEscape);
+    return () => window.removeEventListener("keydown", onEscape);
+  }, [isHeaderMenuOpen, kind]);
+
   const [isCompletedCollapsed, setIsCompletedCollapsed] = useState(false);
   const [isDeletingAll, setIsDeletingAll] = useState(false);
   const [pendingUndo, setPendingUndo] = useState<PendingUndo | null>(null);
@@ -184,11 +196,9 @@ export function EntryColumn({
   const lockedOpenEntryOrderRef = useRef<Map<string, number>>(new Map());
   const lockedTagGroupOrderRef = useRef<Map<string, number>>(new Map());
 
-  const composerRef = useRef<EntryComposerHandle | null>(null);
   const tagGroupComposerRef = useRef<EntryComposerHandle | null>(null);
   const tagRenameInputRef = useRef<HTMLInputElement | null>(null);
   const undoTimerRef = useRef<number | null>(null);
-  const didAutoFocusRef = useRef(false);
   const isHierarchical = supportsHierarchy(kind);
 
   const mobileActionEntry = mobileActionEntryId
@@ -393,9 +403,6 @@ export function EntryColumn({
     }
   }, [entries, mobileActionEntryId, structureEntryId]);
 
-  useEffect(() => {
-    didAutoFocusRef.current = false;
-  }, [autoFocusKey]);
 
   useEffect(() => {
     writeEntryListDisplayMode(kind, displayMode);
@@ -404,6 +411,12 @@ export function EntryColumn({
   useEffect(() => {
     writeEntryTagOrderLocked(kind, isTagOrderLocked);
   }, [isTagOrderLocked, kind]);
+  useEffect(()=>{
+    const handler=(e:Event)=>{if((e.target as HTMLElement)?.closest(`.entry-column--${kind}`))toggleTagOrderLock();};
+    document.addEventListener('kakidas:order-lock',handler);
+    return()=>document.removeEventListener('kakidas:order-lock',handler);
+  },[kind,isTagOrderLocked]);
+
 
   useEffect(() => {
     if (!isTagGrouped || !isTagOrderLocked) {
@@ -441,21 +454,6 @@ export function EntryColumn({
     return () => window.cancelAnimationFrame(frame);
   }, [tagRenameState?.stateKey]);
 
-  useEffect(() => {
-    if (!autoFocusComposer || !isActiveOnMobile || didAutoFocusRef.current) {
-      return;
-    }
-
-    didAutoFocusRef.current = true;
-
-    const frame = window.requestAnimationFrame(() => {
-      composerRef.current?.focus({ scroll: false, delay: 0 });
-      onAutoFocusHandled?.();
-    });
-
-    return () => window.cancelAnimationFrame(frame);
-  }, [autoFocusComposer, isActiveOnMobile, onAutoFocusHandled]);
-
   const openStructureActions = (entryId: string) => {
     if (isMobileViewport()) {
       setMobileActionEntryId(entryId);
@@ -467,29 +465,8 @@ export function EntryColumn({
   };
 
   const enrichReferenceTitle = async (entryId: string, url: string) => {
-    try {
-      const response = await fetch(
-        `/api/link-preview?url=${encodeURIComponent(url)}`,
-        {
-          headers: { Accept: "application/json" },
-        },
-      );
-
-      if (!response.ok) return;
-
-      const payload = await response.json() as {
-        title?: unknown;
-      };
-      const title = typeof payload.title === "string"
-        ? payload.title.replace(/\s+/gu, " ").trim()
-        : "";
-
-      if (!title) return;
-
-      await onUpdate(entryId, { content: title });
-    } catch {
-      // 外部サイト側の失敗で、保存済みURLまで失敗扱いにしない。
-    }
+    const title = await fetchReferenceTitle(url);
+    if (title) await onUpdate(entryId,{content:title});
   };
 
   const handleUpdateEntry = async (
@@ -755,6 +732,8 @@ export function EntryColumn({
       tagSuggestions={tagSuggestions}
       tagPresentation={tagPresentation}
       disabled={disabled || isDeletingAll}
+      editRequest={editRequest?.entryId===entry.id?editRequest.target:null}
+      onEditRequestHandled={()=>setEditRequest(null)}
       onOpenStructure={openStructureActions}
       onMoveToKind={requestMoveToKind}
       onCopy={requestCopyEntry}
@@ -1091,6 +1070,8 @@ export function EntryColumn({
         isCollapsed ? "entry-column--collapsed" : ""
       }`}
       aria-labelledby={`${kind}-heading`}
+      data-display-mode={displayMode}
+      data-order-locked={isTagOrderLocked}
     >
       <button
         type="button"
@@ -1130,105 +1111,24 @@ export function EntryColumn({
           >
             {openEntries.length}
           </span>
-          <div className="entry-column__view-controls" aria-label={`${ENTRY_KIND_LABEL[kind]}の表示設定`}>
-            <label className="entry-column__display-mode">
-              <span>表示</span>
-              <select
-                value={displayMode}
-                onChange={(event) =>
-                  changeDisplayMode(event.target.value as EntryListDisplayMode)
-                }
-                aria-label={`${ENTRY_KIND_LABEL[kind]}の表示方法`}
-              >
-                {(Object.keys(ENTRY_LIST_DISPLAY_MODE_LABEL) as EntryListDisplayMode[]).map((mode) => (
-                  <option key={mode} value={mode}>
-                    {ENTRY_LIST_DISPLAY_MODE_LABEL[mode]}
-                  </option>
-                ))}
-              </select>
-            </label>
-            {isTagGrouped ? (
-              <button
-                type="button"
-                className={`entry-column__order-lock ${isTagOrderLocked ? "entry-column__order-lock--active" : ""}`}
-                onClick={toggleTagOrderLock}
-                aria-pressed={isTagOrderLocked}
-                aria-label={`${ENTRY_KIND_LABEL[kind]}の順番固定を${isTagOrderLocked ? "オフ" : "オン"}にする`}
-                title={isTagOrderLocked
-                  ? "順番固定：未完了の並びを保つ（完了は最後へ集約）"
-                  : "順番固定オフ：現在の並び順に従う"}
-              >
-                <span className="entry-column__order-lock-label entry-column__order-lock-label--full">順番固定</span>
-                <span className="entry-column__order-lock-label entry-column__order-lock-label--compact">固定</span>
-                <span className="entry-column__order-lock-value">{isTagOrderLocked ? "ON" : "OFF"}</span>
-              </button>
-            ) : null}
+          <div className="entry-column__header-menu">
+            <button type="button" className="entry-column__more" aria-label={`${ENTRY_KIND_LABEL[kind]}の操作`}
+              aria-expanded={isHeaderMenuOpen} onClick={() => setIsHeaderMenuOpen(o => !o)}><MoreIcon /></button>
+            {isHeaderMenuOpen ? <div className="entry-column__menu" role="menu">
+              <button role="menuitemcheckbox" aria-checked={isTagGrouped} onClick={() => {changeDisplayMode(isTagGrouped ? "plain" : "tag_grouped");setIsHeaderMenuOpen(false)}}>タグでまとめる</button>
+              {isTagGrouped ? <button role="menuitemcheckbox" aria-checked={isTagOrderLocked} onClick={() => {toggleTagOrderLock();setIsHeaderMenuOpen(false)}}>順番固定</button> : null}
+              <button role="menuitem" onClick={() => {void handleCopy();setIsHeaderMenuOpen(false)}}><CopyIcon />{ENTRY_KIND_LABEL[kind]}をコピー</button>
+              <button role="menuitem" onClick={() => {onToggleCollapsed?.();setIsHeaderMenuOpen(false)}}>畳む</button>
+              <button role="menuitem" onClick={() => {void handleDeleteAll();setIsHeaderMenuOpen(false)}}>{ENTRY_KIND_LABEL[kind]}をすべて削除</button>
+            </div> : null}
           </div>
-          {!compactView ? (
-            <>
-              <button
-                type="button"
-                className="entry-column__copy"
-                onClick={() => void handleCopy()}
-                disabled={
-                  disabled ||
-                  isDeletingAll ||
-                  isCopying ||
-                  copyableEntryCount === 0
-                }
-                aria-label={`${ENTRY_KIND_LABEL[kind]}をコピー`}
-                title={copyIncludesCompleted ? "完了済みを含めてコピー" : "完了済みを除いてコピー"}
-              >
-                {isCopying ? "…" : "⧉"}
-              </button>
-              <div className="entry-column__header-menu">
-                <button
-                  type="button"
-                  className="entry-column__more"
-                  onClick={() => setIsHeaderMenuOpen((open) => !open)}
-                  disabled={disabled || isDeletingAll || entries.length === 0}
-                  aria-label={`${ENTRY_KIND_LABEL[kind]}の整理メニュー`}
-                  aria-expanded={isHeaderMenuOpen}
-                  title="整理"
-                >
-                  ⋯
-                </button>
-                {isHeaderMenuOpen ? (
-                  <div className="entry-column__menu" role="menu">
-                    <button
-                      type="button"
-                      role="menuitem"
-                      className="entry-column__menu-delete"
-                      onClick={() => void handleDeleteAll()}
-                      disabled={disabled || isDeletingAll || entries.length === 0}
-                    >
-                      すべて削除
-                    </button>
-                  </div>
-                ) : null}
-              </div>
-            </>
-          ) : null}
         </div>
       </div>
-
-      {!compactView ? (
-        <EntryComposer
-          ref={composerRef}
-          memoId={memoId}
-          memoUpdatedAt={memoUpdatedAt}
-          kind={kind}
-          disabled={disabled || isDeletingAll}
-          tagSuggestions={tagSuggestions}
-          existingReferenceUrls={existingReferenceUrls}
-          onSubmit={handleCreate}
-        />
-      ) : null}
 
       <div className="entry-list" aria-live="polite">
         {primaryEntries.length === 0 ? (
           <p className="entry-list__empty">
-            {kind === "word" ? "参考URLはまだありません。" : "まだありません。"}
+            {kind === "word" ? "書き口にURLを貼ると、ここに並びます。" : "まだありません。書き口から置けます。"}
           </p>
         ) : compactView ? (
           isTagGrouped
@@ -1285,6 +1185,8 @@ export function EntryColumn({
           disabled={disabled || isDeletingAll}
           onClose={() => setMobileActionEntryId(null)}
           onToggleCompleted={toggleCompleted}
+          onUpdate={handleUpdateEntry}
+          onRequestEdit={(entryId,target)=>setEditRequest({entryId,target})}
           onMoveToKind={requestMoveToKind}
           onCopy={requestCopyEntry}
           onCreateMemoFromEntry={requestCreateMemoFromEntry}

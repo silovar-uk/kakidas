@@ -1,18 +1,18 @@
 /* タグ付きメモを主役にし、未設定の入口は控えめな補助操作へ戻す。 */
 .memo-tag-chip,
 .memo-card__tag {
-  border-color: #6f588b;
-  color: #fff !important;
-  background: #725b91;
-  box-shadow: 0 3px 8px rgba(77, 57, 103, 0.18);
+  border-color: var(--color-ink-2);
+  color: var(--color-sheet) !important;
+  background: var(--color-ink-2);
+  box-shadow: 0 3px 8px color-mix(in srgb,var(--color-ink) 16%,transparent);
 }
 
 .memo-tag-chip--editable:hover:not(:disabled),
 .memo-tag-chip--editable:focus-visible:not(:disabled) {
-  border-color: #57416f;
-  color: #fff;
-  background: #5f487b;
-  box-shadow: 0 4px 10px rgba(77, 57, 103, 0.24);
+  border-color: var(--color-ink-2);
+  color: var(--color-sheet);
+  background: var(--color-ink-2);
+  box-shadow: 0 4px 10px color-mix(in srgb,var(--color-ink) 16%,transparent);
   outline: none;
 }
 
@@ -21,9 +21,9 @@
 }
 
 .memo-tag-control__add {
-  border: 1px dashed #cec6bc;
-  color: #756d64;
-  background: rgba(247, 244, 239, 0.82);
+  border: 1px dashed var(--color-shu);
+  color: var(--color-ink-2);
+  background: var(--color-shu-wash);
   box-shadow: none;
   font-weight: 720;
   transition:
@@ -34,24 +34,24 @@
 
 .memo-tag-control__add:hover:not(:disabled),
 .memo-tag-control__add:focus-visible:not(:disabled) {
-  border-color: #b99a86;
-  color: #7e4932;
-  background: #fff5ee;
+  border-color: var(--color-shu);
+  color: var(--color-shu-ink);
+  background: var(--color-shu-wash);
   box-shadow: none;
   outline: none;
   transform: none;
 }
 
 .memo-tag-control__add:active:not(:disabled) {
-  color: #6e3d28;
-  background: #f9e9df;
+  color: var(--color-shu-ink);
+  background: var(--color-shu-wash);
   transform: none;
 }
 
 .memo-tag-control__add:disabled {
-  border-color: #ded8d1;
-  color: #aaa29a;
-  background: #f2efeb;
+  border-color: var(--color-shu);
+  color: var(--color-ink-3);
+  background: var(--color-shu-wash);
   box-shadow: none;
 }
 

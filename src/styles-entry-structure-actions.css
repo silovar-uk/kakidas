@@ -24,30 +24,30 @@
 /* コピーと粒度移動は補助操作。形は残し、色の主張だけを一段弱める。 */
 .structure-action--copy,
 .structure-action--kind {
-  border-color: #d8d4cd;
-  color: #66625c;
-  background: #f7f6f2;
+  border-color: var(--color-shu);
+  color: var(--color-ink-2);
+  background: var(--color-line);
 }
 
 .structure-action--copy:hover:not(:disabled),
 .structure-action--kind:hover:not(:disabled) {
-  border-color: #bbb6ad;
-  color: #494640;
-  background: #efede7;
+  border-color: var(--color-ink-3);
+  color: var(--color-ink);
+  background: var(--color-line);
 }
 
 /* 新しいメモにする操作は、寸法をそろえた上で主操作の色を維持する。 */
 .structure-action--derive:hover:not(:disabled) {
-  border-color: #b99148;
-  color: #654713;
-  background: #fff1cc;
+  border-color: var(--color-shu);
+  color: var(--color-shu-ink);
+  background: var(--color-line);
 }
 
 /* 削除は危険操作として既存の赤系を維持する。 */
 .structure-action--danger {
-  border-color: #efc9c3;
-  color: #a54b44;
-  background: #fff0ee;
+  border-color: var(--color-danger-wash);
+  color: var(--color-danger);
+  background: var(--color-danger-wash);
 }
 
 @media (max-width: 920px) {

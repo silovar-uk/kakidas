@@ -94,15 +94,13 @@ function writeStoredOrder(memoScope: string, kind: EntryKind, order: string[]) {
 }
 
 function isOrderLocked(column: HTMLElement): boolean {
-  return column
-    .querySelector<HTMLButtonElement>(".entry-column__order-lock")
-    ?.getAttribute("aria-pressed") === "true";
+  return column.dataset.orderLocked === "true";
 }
 
 function enableOrderLock(column: HTMLElement) {
-  const button = column.querySelector<HTMLButtonElement>(".entry-column__order-lock");
-  if (button?.getAttribute("aria-pressed") === "false") {
-    button.click();
+  if (!isOrderLocked(column)) {
+    // 列の見出しからボタンを外しても、ドラッグの順番固定は列へ依頼する。
+    column.dispatchEvent(new CustomEvent("kakidas:order-lock", { bubbles: true }));
   }
 }
 

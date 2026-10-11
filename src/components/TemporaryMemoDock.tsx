@@ -56,7 +56,7 @@ export function TemporaryMemoDock() {
   const [availableHeight, setAvailableHeight] = useState<number | null>(null);
 
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
-  const triggerRef = useRef<HTMLButtonElement | null>(null);
+
   const latestContentRef = useRef("");
   const currentMemoIdRef = useRef<string | null>(memoId);
   const saveTimerRef = useRef<number | null>(null);
@@ -215,7 +215,7 @@ export function TemporaryMemoDock() {
 
       if (restoreFocus) {
         window.requestAnimationFrame(() => {
-          triggerRef.current?.focus({ preventScroll: true });
+          document.querySelector<HTMLButtonElement>('[aria-label="余白を開く"]')?.focus({preventScroll:true});
         });
       }
     },
@@ -258,16 +258,18 @@ export function TemporaryMemoDock() {
     return clearSaveTimer;
   }, [clearSaveTimer]);
 
-  const openPanel = () => {
-    if (!memoId || isLoading) return;
-    setIsOpen(true);
-
-    window.requestAnimationFrame(() => {
-      textareaRef.current?.focus({ preventScroll: true });
-      const length = textareaRef.current?.value.length ?? 0;
-      textareaRef.current?.setSelectionRange(length, length);
-    });
-  };
+  useEffect(()=>{
+    if(!memoId)return;
+    const open=()=>{setIsOpen(true);requestAnimationFrame(()=>textareaRef.current?.focus({preventScroll:true}))};
+    const shortcut=(event:KeyboardEvent)=>{
+      if(event.altKey&&!event.ctrlKey&&!event.metaKey&&event.key.toLowerCase()==='q'&&!event.isComposing){
+        event.preventDefault();setIsOpen(current=>!current);
+      }
+    };
+    window.addEventListener('kakidas:open-margin',open);
+    window.addEventListener('keydown',shortcut);
+    return()=>{window.removeEventListener('kakidas:open-margin',open);window.removeEventListener('keydown',shortcut)};
+  },[memoId]);
 
   const clearTemporaryMemo = async () => {
     if (!memoId || isSaving) return;
@@ -320,30 +322,7 @@ export function TemporaryMemoDock() {
 
   return createPortal(
     <>
-      {!isOpen ? (
-        <button
-          ref={triggerRef}
-          type="button"
-          className={`temporary-memo-trigger ${hasContent ? "temporary-memo-trigger--filled" : ""} ${saveError ? "temporary-memo-trigger--error" : ""}`}
-          onClick={openPanel}
-          disabled={isLoading}
-          aria-expanded="false"
-          aria-label={
-            hasContent ? "内容のある一時メモを開く" : "一時メモを開く"
-          }
-        >
-          <span className="temporary-memo-trigger__icon" aria-hidden="true">
-            ✎
-          </span>
-          <span>{isLoading ? "読込中…" : "一時メモ"}</span>
-          <span className="temporary-memo-trigger__shortcut" aria-hidden="true">
-            Alt＋Q
-          </span>
-          {hasContent ? (
-            <span className="temporary-memo-trigger__dot" aria-hidden="true" />
-          ) : null}
-        </button>
-      ) : (
+      {isOpen ? (
         <div className="temporary-memo-layer" style={panelStyle}>
           <button
             type="button"
@@ -360,8 +339,8 @@ export function TemporaryMemoDock() {
             <div className="temporary-memo-panel__grabber" aria-hidden="true" />
             <header className="temporary-memo-panel__header">
               <div>
-                <p className="temporary-memo-panel__eyebrow">QUICK NOTE</p>
-                <h2 id="temporary-memo-title">一時メモ</h2>
+                <p className="temporary-memo-panel__eyebrow">MARGIN</p>
+                <h2 id="temporary-memo-title">余白</h2>
                 <p className="temporary-memo-panel__memo-title">
                   {getCurrentMemoTitle()}
                 </p>
@@ -370,7 +349,7 @@ export function TemporaryMemoDock() {
                 type="button"
                 className="temporary-memo-panel__close"
                 onClick={() => closePanel()}
-                aria-label="保存して閉じる"
+                aria-label="余白を閉じる"
               >
                 閉じる
               </button>
@@ -387,7 +366,7 @@ export function TemporaryMemoDock() {
                 setSaveError(null);
               }}
               placeholder="まだ整理しなくていいことを、ここへ。"
-              aria-label="一時メモの内容"
+              aria-label="余白に書く"
             />
 
             <footer className="temporary-memo-panel__footer">
@@ -415,7 +394,7 @@ export function TemporaryMemoDock() {
             ) : null}
           </section>
         </div>
-      )}
+      ) : null}
     </>,
     document.body,
   );

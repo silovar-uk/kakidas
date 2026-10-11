@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { lockBodyScroll } from "../lib/bodyScrollLock";
 import {
   type EntryKind,
+  type EntryUpdate,
   type EntryTreeNode,
   ENTRY_KIND_LABEL,
   ENTRY_KIND_MOVE_TARGETS,
@@ -18,6 +19,8 @@ type MobileEntryActionSheetProps = {
   disabled?: boolean;
   onClose: () => void;
   onToggleCompleted: (entryId: string) => Promise<unknown> | unknown;
+  onUpdate: (entryId: string, patch: EntryUpdate) => Promise<unknown> | unknown;
+  onRequestEdit: (entryId:string, target:"note"|"link"|"tag")=>void;
   /** falseを返した場合は、確認を取り消したものとしてシートを閉じない。 */
   onMoveToKind: (
     entryId: string,
@@ -42,6 +45,8 @@ export function MobileEntryActionSheet({
   disabled = false,
   onClose,
   onToggleCompleted,
+  onUpdate,
+  onRequestEdit,
   onMoveToKind,
   onCopy,
   onCreateMemoFromEntry,
@@ -161,6 +166,10 @@ export function MobileEntryActionSheet({
           </button>
         </header>
 
+        <div role="group" aria-label="満足度" className="mobile-action-sheet__satisfaction">
+          {[0,1,2,3,4,5].map(value=><button key={value} type="button" aria-pressed={entry.satisfaction===value}
+            disabled={disabled||isWorking} onClick={()=>void run(()=>onUpdate(entry.id,{satisfaction:value}),{keepOpen:true})}>{value}</button>)}
+        </div>
         {!isReferenceUrl ? (
           <button
             type="button"
@@ -175,6 +184,9 @@ export function MobileEntryActionSheet({
           </button>
         ) : null}
 
+        <button role="menuitem" type="button" onClick={()=>{onRequestEdit(entry.id,"note");close()}}>気持ち・備考を書く</button>
+        <button role="menuitem" type="button" onClick={()=>{onRequestEdit(entry.id,"link");close()}}>{entry.link_url.trim()?"リンクを編集":"リンクを付ける"}</button>
+        <button role="menuitem" type="button" onClick={()=>{onRequestEdit(entry.id,"tag");close()}}>タグを変える</button>
         <button
           type="button"
           className="mobile-action-sheet__copy"

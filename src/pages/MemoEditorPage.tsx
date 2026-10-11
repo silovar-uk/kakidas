@@ -1,3 +1,10 @@
+import {SeishoView} from "../components/SeishoView";
+import {withViewTransition} from "../lib/viewTransition";
+import {EntryComposer,type EntryComposerHandle} from "../components/EntryComposer";
+import {MemoActionsMenu} from "../components/MemoActionsMenu";
+import {fetchReferenceTitle} from "../lib/referenceTitle";
+import {useCloudMemos} from "../hooks/useCloudMemos";
+import {type MemoSyncMetaRow,getLinkHostname} from "../types/memo";
 import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { resetBodyScrollLock } from "../lib/bodyScrollLock";
 import { copyToClipboard } from "../lib/clipboard";
@@ -8,14 +15,13 @@ import {
   writeEntrySortMode,
 } from "../lib/copyPreferences";
 import { formatMemoText } from "../lib/memoText";
-import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useAuth } from "../auth/AuthProvider";
 import { CloudAccountDialog } from "../components/CloudAccountDialog";
 import {
   CloudUploadDialog,
   type CloudUploadTarget,
 } from "../components/CloudUploadDialog";
-import { CloudStatusBadge } from "../components/CloudStatusBadge";
 import { EntryColumn } from "../components/EntryColumn";
 import { MemoTagControl } from "../components/MemoTagControl";
 import { NoticeToast } from "../components/NoticeToast";
@@ -33,8 +39,6 @@ import {
   type MemoWithEntries,
   ENTRY_KINDS,
   ENTRY_KIND_LABEL,
-  ENTRY_SORT_MODE_LABEL,
-  ENTRY_SORT_MODES,
   formatDefaultMemoTitle,
   getEntryTree,
 } from "../types/memo";
@@ -162,6 +166,9 @@ function readCompactEntryView(): boolean {
 export function MemoEditorPage() {
   const { memoId } = useParams();
   const navigate = useNavigate();
+  const [searchParams,setSearchParams]=useSearchParams();
+  const isSeisho=searchParams.get('view')==='seisho';
+  const paperRef=useRef<HTMLElement|null>(null);
   const location = useLocation();
   const { user } = useAuth();
   const initialNavigationState = location.state as EditorNavigationState | null;
@@ -208,6 +215,16 @@ export function MemoEditorPage() {
   const [activeKind, setActiveKind] = useState<EntryKind>(
     () => getNavigationKind(initialNavigationState),
   );
+  // 移動先の保存に成功した場合だけ、スマホの表示タブも切り替える。
+  const handleMoveEntryToKind = useCallback(
+    async (entryId: string, targetKind: EntryKind): Promise<void> => {
+      await moveEntryToKind(entryId, targetKind);
+      if (window.matchMedia("(max-width: 920px)").matches) {
+        setActiveKind(targetKind);
+      }
+    },
+    [moveEntryToKind],
+  );
   const noticeIdRef = useRef(0);
   const [notice, setNoticeState] = useState<{ id: number; message: string } | null>(null);
   const setNotice = useCallback((message: string | null) => {
@@ -224,7 +241,8 @@ export function MemoEditorPage() {
   const [isCloudDialogOpen, setIsCloudDialogOpen] = useState(false);
   const [isUploadDialogOpen, setIsUploadDialogOpen] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
-  const [isDisplayOptionsOpen, setIsDisplayOptionsOpen] = useState(false);
+  const deskRef = useRef<EntryComposerHandle>(null);
+  const {prepareImport,importSnapshot}=useCloudMemos(user?.id ?? null);
   const [showEntryTimestamps, setShowEntryTimestamps] = useState(
     readEntryTimestampVisibility,
   );
@@ -839,10 +857,79 @@ export function MemoEditorPage() {
     setIsUploadDialogOpen(true);
   };
 
-  const handleComposerAutoFocusHandled = useCallback(() => {
-    setShouldFocusNewMemoComposer(false);
-  }, []);
+  useEffect(()=>{
+    if(!memo||!shouldFocusNewMemoComposer)return;
+    const frame=requestAnimationFrame(()=>{
+      window.dispatchEvent(new CustomEvent('kakidas:choose-entry-kind',{detail:composerFocusKind}));
+      deskRef.current?.focus({scroll:false,delay:0});
+      setShouldFocusNewMemoComposer(false);
+    });
+    return()=>cancelAnimationFrame(frame);
+  },[memo?.id,shouldFocusNewMemoComposer,composerFocusKind]);
 
+
+  const handleCloudSync=async()=>{
+    if(!memo||!user)return;
+    let original:MemoSyncMetaRow|null=null;
+    let unlocked=false;
+    try{
+      const candidate=await prepareImport(memo.id);
+      if(!candidate.hasLocalMemo)throw new Error("端末のメモがありません。");
+      if(!window.confirm(`クラウド版「${candidate.snapshot.memo.title}」で端末側を上書きしますか？\n端末側だけの変更は元に戻せません。`))return;
+      original=await memoRepository.getSyncMeta(memo.id);
+      if(original.cloud_state==='changed_after_upload'||original.cloud_state==='conflict'){
+        await memoRepository.saveSyncMeta({...original,cloud_state:'uploaded',last_error:null});unlocked=true;
+      }
+      await importSnapshot(candidate.snapshot,'replace');window.location.reload();
+    }catch(error){
+      if(unlocked&&original)await memoRepository.saveSyncMeta(original).catch(()=>{});
+      setNotice(error instanceof Error?error.message:"クラウドに合わせられませんでした。");
+    }
+  };
+  const handleChat=()=>{
+    if(!memo)return;
+    const tab=window.open('about:blank','_blank');
+    if(!tab){setNotice('新しいタブの表示を許可してください。');return;}
+    tab.opener=null;
+    const prompt=formatMemoText({...memo,title:title.trim()||memo.title},{
+      includeEntryNumbers:showEntryNumbers,excludeCompleted:!includeCompletedInCopy,entrySortMode});
+    const url=new URL('https://chatgpt.com/');url.searchParams.set('prompt',prompt);
+    tab.location.replace(url.toString());
+  };
+  const handleDeskCreate=async(content:string,metadata:import('../types/memo').EntryCreateMetadata,draftId:string,kind:EntryKind='sentence',entryId?:string)=>{
+    const created=await createEntry(kind,content,metadata,null,addEntriesAtBottom?'bottom':'top',draftId,entryId);
+    // 保存成功直後にスマホの棚を切り替える。演出の完了は待たない。
+    if (window.matchMedia("(max-width: 920px)").matches) setActiveKind(kind);
+    if(kind==='word'&&metadata.link_url){
+      void fetchReferenceTitle(metadata.link_url).then(result=>{
+        if(result)return updateEntry(created.id,{content:result});
+      }).catch(()=>{});
+    }
+    return created;
+  };
+
+  const toggleSeisho=(next:boolean)=>{
+    void withViewTransition(()=>{
+      setSearchParams(previous=>{
+        const params=new URLSearchParams(previous);
+        if(next)params.set('view','seisho');else params.delete('view');
+        return params;
+      },{replace:false});
+    });
+  };
+  const copySeisho=()=>{
+    const article=paperRef.current;
+    if(!article)return;
+    const selection=window.getSelection();
+    const range=document.createRange();range.selectNodeContents(article);
+    selection?.removeAllRanges();selection?.addRange(range);
+    const copied=document.execCommand('copy');
+    selection?.removeAllRanges();
+    if(copied){setNotice('清書を書式つきでコピーしました。');return;}
+    if(!memo)return;
+    void copyToClipboard(formatMemoText(memo,{entrySortMode,excludeCompleted:!includeCompletedInCopy})).then(
+      ()=>setNotice('プレーンテキストでコピーしました。'),()=>setNotice('コピーに失敗しました。'));
+  };
 
   const handleUploadConfirm = async () => {
     if (!memo || !user) {
@@ -894,210 +981,45 @@ export function MemoEditorPage() {
         compactEntryView ? "editor-page--compact" : ""
       }`}
     >
-      <header className="editor-header">
-        <Link
-          to="/"
-          className="back-link"
-          onClick={(event) => {
-            event.preventDefault();
-            void handleReturnToMemoList();
-          }}
-        >
-          ← メモ一覧
-        </Link>
-
-        <div className="editor-header__right">
-          <CloudStatusBadge syncMeta={memo.sync_meta} />
-          <p className="save-status" aria-live="polite">
-            {isSaving ? "保存中…" : "保存済み"}
-          </p>
+      <header className="editor-header editor-header--shitate">
+        <Link to="/" className="back-link" onClick={e=>{e.preventDefault();void handleReturnToMemoList()}}>戻る</Link>
+        <div className="editor-header__title">
+          <input ref={titleInputRef} className="memo-title-input" aria-label="メモのタイトル" value={title}
+            onChange={e=>{latestTitleRef.current=e.target.value;setTitle(e.target.value)}}
+            onBlur={()=>void saveTitle(title)} />
+          <MemoTagControl tag={memo.tag} suggestions={tagSuggestions} disabled={isSaving} onSave={handleSaveTag}/>
         </div>
+        <span className="save-status" aria-live="polite">{isSaving?'保存中…':'保存済み'}</span>
+        <button type="button" className="editor-header__seisho" aria-label="清書にする" onClick={()=>toggleSeisho(!isSeisho)}>清書</button>
+        <button type="button" className="editor-header__margin" aria-label="余白を開く" onClick={()=>window.dispatchEvent(new Event('kakidas:open-margin'))}>余白</button>
+        <MemoActionsMenu cloudEnabled={Boolean(user)}
+          attention={memo.sync_meta?.cloud_state==='conflict'?'クラウドとの差分があります':null}
+          sortMode={entrySortMode} onSort={setEntrySortMode}
+          onCloudSave={openUpload} onCloudSync={()=>void handleCloudSync()}
+          onChat={handleChat} onCopy={()=>void handleCopyMemo()} onDownload={handleDownload}
+          onShortcuts={()=>window.dispatchEvent(new Event('kakidas:show-shortcuts'))}
+          onDeleteCompleted={()=>void handleDeleteCompleted()} onDeleteMemo={()=>void handleDeleteMemo()}
+          options={[
+            {label:'項目の日時を表示',value:showEntryTimestamps,onChange:setShowEntryTimestamps},
+            {label:'番号を表示',value:showEntryNumbers,onChange:setShowEntryNumbers},
+            {label:'本文だけ表示',value:compactEntryView,onChange:setCompactEntryView},
+            {label:'完了を非表示',value:hideCompletedEntries,onChange:setHideCompletedEntries},
+            {label:'新しい項目を一番下に追加',value:addEntriesAtBottom,onChange:setAddEntriesAtBottom},
+            {label:'コピーに完了を含める',value:includeCompletedInCopy,onChange:setIncludeCompletedInCopy},
+          ]}/>
       </header>
 
-      <section className="editor-title-row" aria-label="メモのタイトル">
-        <input
-          ref={titleInputRef}
-          className="memo-title-input"
-          value={title}
-          onChange={(event) => {
-            latestTitleRef.current = event.target.value;
-            setTitle(event.target.value);
-          }}
-          onBlur={() => void saveTitle(title)}
-          aria-label="メモのタイトル"
-        />
+      <NoticeToast
+        key={notice?.id}
+        message={notice?.message ?? null}
+        onDismiss={() => setNotice(null)}
+      />
 
-        <MemoTagControl
-          tag={memo.tag}
-          suggestions={tagSuggestions}
-          disabled={isSaving}
-          onSave={handleSaveTag}
-        />
 
-        <div className="editor-title-row__actions">
-          <label className="entry-sort-control entry-sort-control--editor">
-            <span>並び順</span>
-            <select
-              value={entrySortMode}
-              onChange={(event) =>
-                setEntrySortMode(event.target.value as EntrySortMode)
-              }
-              aria-label="項目の並び順"
-            >
-              {ENTRY_SORT_MODES.map((mode) => (
-                <option key={mode} value={mode}>
-                  {ENTRY_SORT_MODE_LABEL[mode]}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <button
-            type="button"
-            className="danger-button"
-            onClick={() => void handleDeleteMemo()}
-          >
-            削除
-          </button>
-        </div>
-      </section>
-
-      <section className="editor-utility-menu" aria-label="表示・整理">
-        <button
-          type="button"
-          className="editor-utility-menu__trigger"
-          onClick={() => setIsDisplayOptionsOpen((open) => !open)}
-          aria-expanded={isDisplayOptionsOpen}
-          aria-controls="editor-display-options-panel"
-        >
-          表示・整理 <span aria-hidden="true">{isDisplayOptionsOpen ? "⌃" : "⌄"}</span>
-        </button>
-
-        {isDisplayOptionsOpen ? (
-          <div
-            id="editor-display-options-panel"
-            className="editor-display-options"
-          >
-            <div className="editor-display-options__toggles">
-              <label className="timestamp-visibility-toggle">
-                <input
-                  type="checkbox"
-                  checked={showEntryTimestamps}
-                  onChange={(event) => setShowEntryTimestamps(event.target.checked)}
-                />
-                <span className="timestamp-visibility-toggle__track" aria-hidden="true">
-                  <span className="timestamp-visibility-toggle__thumb" />
-                </span>
-                <span>項目の日時を表示</span>
-              </label>
-
-              <label className="timestamp-visibility-toggle">
-                <input
-                  type="checkbox"
-                  checked={showEntryNumbers}
-                  onChange={(event) => setShowEntryNumbers(event.target.checked)}
-                />
-                <span className="timestamp-visibility-toggle__track" aria-hidden="true">
-                  <span className="timestamp-visibility-toggle__thumb" />
-                </span>
-                <span>番号を表示</span>
-              </label>
-
-              <label className="timestamp-visibility-toggle">
-                <input
-                  type="checkbox"
-                  checked={compactEntryView}
-                  onChange={(event) => setCompactEntryView(event.target.checked)}
-                />
-                <span className="timestamp-visibility-toggle__track" aria-hidden="true">
-                  <span className="timestamp-visibility-toggle__thumb" />
-                </span>
-                <span>本文だけ表示</span>
-              </label>
-
-              <label className="timestamp-visibility-toggle">
-                <input
-                  type="checkbox"
-                  checked={hideCompletedEntries}
-                  onChange={(event) => setHideCompletedEntries(event.target.checked)}
-                />
-                <span className="timestamp-visibility-toggle__track" aria-hidden="true">
-                  <span className="timestamp-visibility-toggle__thumb" />
-                </span>
-                <span>完了を非表示</span>
-              </label>
-
-              <label className="timestamp-visibility-toggle">
-                <input
-                  type="checkbox"
-                  checked={addEntriesAtBottom}
-                  onChange={(event) => setAddEntriesAtBottom(event.target.checked)}
-                />
-                <span className="timestamp-visibility-toggle__track" aria-hidden="true">
-                  <span className="timestamp-visibility-toggle__thumb" />
-                </span>
-                <span>新しい項目を一番下に追加</span>
-              </label>
-
-              <label className="timestamp-visibility-toggle">
-                <input
-                  type="checkbox"
-                  checked={includeCompletedInCopy}
-                  onChange={(event) => setIncludeCompletedInCopy(event.target.checked)}
-                />
-                <span className="timestamp-visibility-toggle__track" aria-hidden="true">
-                  <span className="timestamp-visibility-toggle__thumb" />
-                </span>
-                <span>コピーに完了を含める</span>
-              </label>
-
-              <button
-                type="button"
-                className="completed-entries-delete"
-                onClick={() => void handleDeleteCompleted()}
-                disabled={isSaving || completedEntryCount === 0}
-                title="完了済み項目をまとめて削除"
-              >
-                完了を削除{completedEntryCount > 0 ? `（${completedEntryCount}）` : ""}
-              </button>
-            </div>
-
-            <div className="editor-display-options__actions" aria-label="出力とクラウド">
-              <button
-                type="button"
-                className="cloud-upload-button"
-                onClick={openUpload}
-              >
-                <span aria-hidden="true">☁</span>
-                クラウドへ送る
-              </button>
-              <button
-                type="button"
-                className="secondary-button"
-                onClick={() => void handleCopyMemo()}
-                disabled={isCopyingMemo}
-                title={includeCompletedInCopy ? "完了済みを含めてメモ全体をコピー" : "完了済みを除いてメモ全体をコピー"}
-              >
-                {isCopyingMemo ? "コピー中…" : "コピー"}
-              </button>
-              <button
-                type="button"
-                className="secondary-button"
-                onClick={handleDownload}
-              >
-                .txt出力
-              </button>
-            </div>
-
-            <p>
-              並び順と番号は、メモコピー・区分コピー・.txt出力にも反映されます。{includeCompletedInCopy
-                ? "コピーには完了済みも含めます。"
-                : "コピーでは完了済みを除きます。"}
-            </p>
-          </div>
-        ) : null}
-      </section>
-
+      {isSeisho ? (
+        <SeishoView memo={memo} title={title} sortMode={entrySortMode} includeCompleted={includeCompletedInCopy}
+          paperRef={paperRef} onBack={()=>toggleSeisho(false)} onCopy={copySeisho} onPrint={()=>window.print()}/>
+      ) : <>
       <div className="editor-tabs" role="tablist" aria-label="入力する粒度">
         {ENTRY_KINDS.map((kind) => (
           <button
@@ -1121,17 +1043,17 @@ export function MemoEditorPage() {
         ))}
       </div>
 
-      <NoticeToast
-        key={notice?.id}
-        message={notice?.message ?? null}
-        onDismiss={() => setNotice(null)}
-      />
-
       {error ? (
         <p className="error-message" role="alert">
           {error}
         </p>
       ) : null}
+
+      <EntryComposer ref={deskRef} variant="desk" kind="sentence" memoId={memo.id}
+        memoUpdatedAt={memo.updated_at} tagSuggestions={entryTagSuggestions}
+        mobileKind={activeKind} disabled={isUploading}
+        existingReferenceUrls={memo.entries.filter(e=>e.kind==='word'&&e.link_url).map(e=>e.link_url)}
+        onSubmit={handleDeskCreate} onPlaced={setActiveKind}/>
 
       <section
         className="editor-grid"
@@ -1153,13 +1075,8 @@ export function MemoEditorPage() {
             showEntryNumbers={showEntryNumbers}
             compactView={compactEntryView}
             tagSuggestions={entryTagSuggestions}
-            disabled={isSaving || isUploading}
-            autoFocusComposer={
-              kind === composerFocusKind && shouldFocusNewMemoComposer
-            }
-            autoFocusKey={memo?.id}
+            disabled={isUploading}
             addAtBottom={addEntriesAtBottom}
-            onAutoFocusHandled={handleComposerAutoFocusHandled}
             onCreate={createEntry}
             onUpdate={(entryId, patch) => updateEntry(entryId, patch)}
             onDelete={deleteEntry}
@@ -1174,10 +1091,12 @@ export function MemoEditorPage() {
             onRenameTag={(currentTag, nextTag) =>
               renameEntryTag(kind, currentTag, nextTag)
             }
-            onMoveToKind={moveEntryToKind}
+            onMoveToKind={handleMoveEntryToKind}
           />
         ))}
       </section>
+
+      </>}
 
       <CloudAccountDialog
         open={isCloudDialogOpen}
