@@ -52,8 +52,9 @@ async function write(page, kind, text, { heading = '', tag = '', note = '' } = {
   }
   if (note) {
     await page.getByRole('button', { name: '気持ち・備考を付ける', exact: true }).click();
-    await page.getByRole('textbox', { name: '気持ち・備考', exact: true }).fill(note);
-    await page.locator('.entry-composer__meta-apply').first().click();
+    const noteField = page.getByRole('textbox', { name: '気持ち・備考', exact: true });
+    await noteField.fill(note);
+    await noteField.press('Control+Enter');
   }
   if (heading) await page.getByRole('textbox', { name: '段落タイトル', exact: true }).fill(heading);
   await deskOf(page).fill(text);
