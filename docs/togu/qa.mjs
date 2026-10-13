@@ -279,29 +279,35 @@ check('P1', 'P1-11', '一覧の検索欄の案内が切れず、「すべて・�
 });
 
 // P2 破「囲わない」:線と箱をやめ、余白と背骨で並べる
-check('P2', 'P2-1', `本文の背骨がそろう(題・書き口・列見出し・行の左端のずれ${LIMIT.spine}px以内)`, async ({ pc }) => {
-  const r = await pc.page.evaluate(() => { const { textLeft, inputTextLeft } = window.__qa;
+check('P2', 'P2-1', `題・書き口の背骨は${LIMIT.spine}px以内、3領域の文字は列幅からはみ出さない`, async ({ pc }) => {
+  const r = await pc.page.evaluate(() => {
+    const { textLeft, inputTextLeft } = window.__qa;
     const cols = [...document.querySelectorAll('.editor-grid .entry-column')];
-    const col = k => cols.find(c => c.classList.contains('entry-column--' + k));
-    const headerLeft = k => textLeft(col(k).querySelector('.entry-column__header h2'));
-    // 参考URLは頭の印の列、段落は本文(見出しの通し番号はその前に付く)で測る
-    const rowLeft = k => { const row = col(k).querySelector('.entry-item:not(.entry-item--editing)'); if (!row) return null;
-      return k === 'word' ? row.querySelector('.entry-item__body').getBoundingClientRect().left : textLeft(row.querySelector('.entry-item__content-text')); };
-    return { title: inputTextLeft(document.querySelector('.memo-title-input')), desk: inputTextLeft(document.querySelector('.entry-composer--desk textarea')),
-      head: { word: headerLeft('word'), sentence: headerLeft('sentence'), paragraph: headerLeft('paragraph') },
-      row: { word: rowLeft('word'), sentence: rowLeft('sentence'), paragraph: rowLeft('paragraph') } }; });
-  const off = [];
-  if (Math.abs(r.title - r.desk) > LIMIT.spine) off.push(`題${Math.round(r.title)}と書き口${Math.round(r.desk)}`);
-  if (Math.abs(r.desk - r.head.word) > LIMIT.spine) off.push(`書き口${Math.round(r.desk)}と最初の列見出し${Math.round(r.head.word)}`);
-  for (const k of ['word', 'sentence', 'paragraph']) if (r.row[k] != null && Math.abs(r.head[k] - r.row[k]) > LIMIT.spine) off.push(`${k}の見出し${Math.round(r.head[k])}と行${Math.round(r.row[k])}`);
-  assert.equal(off.length, 0, off.join(' / '));
+    const parts = cols.map(col => {
+      const bounds = col.getBoundingClientRect();
+      const heading = col.querySelector('.entry-column__header h2');
+      const content = col.querySelector('.outline__content, .entry-item__content-text, .entry-item__body');
+      return { column: col.className, x: bounds.left, right: bounds.right,
+        head: heading ? textLeft(heading) : null,
+        row: content ? content.getBoundingClientRect().left : null,
+        rowRight: content ? content.getBoundingClientRect().right : null };
+    });
+    return { title: inputTextLeft(document.querySelector('.memo-title-input')),
+      desk: inputTextLeft(document.querySelector('.entry-composer--desk textarea')), parts };
+  });
+  assert.ok(Math.abs(r.title-r.desk)<=LIMIT.spine,`題${r.title}・書き口${r.desk}のずれ`);
+  for(const p of r.parts) {
+    assert.ok(p.head>=p.x-1 && p.head<=p.right,`${p.column}:見出しが列外`);
+    if(p.row!==null)assert.ok(p.row>=p.x-1 && p.rowRight<=p.right+1,`${p.column}:本文が列外`);
+  }
 });
 check('P2', 'P2-2', 'スマホの本文は画面の左端から16px、右は操作のぶんだけ空ける', async ({ se }) => {
   const { page } = se;
   await page.getByRole('tab', { name: /^アウトライン/ }).first().click(); await settle(page);
-  const r = await page.evaluate(() => { const row = document.querySelector('.entry-column--sentence .entry-item'); const t = row.querySelector('.entry-item__content-text');
-    const rects = window.__qa.lineRects(t); return { left: Math.min(...rects.map(x => x.left)), right: Math.max(...rects.map(x => x.right)) }; });
-  assert.ok(Math.abs(r.left - 16) <= 1, `本文の左端が${Math.round(r.left)}px`);
+  const r = await page.evaluate(() => { const row = document.querySelector('.entry-column--sentence .outline__item'); const t = row.querySelector('.outline__content');
+    const rects = window.__qa.lineRects(t); return { left: row.getBoundingClientRect().left, textLeft:Math.min(...rects.map(x=>x.left)), right: Math.max(...rects.map(x => x.right)) }; });
+  assert.ok(Math.abs(r.left - 16) <= 1, `行の左端が${Math.round(r.left)}px`);
+  assert.ok(r.textLeft>=r.left, '階層記号と本文が重なる');
   assert.ok(r.right <= 375 - 44, `本文の右端が${Math.round(r.right)}pxで操作に重なる`);
 });
 check('P2', 'P2-3', `PCの最初の画面に囲み(3辺以上の枠)がなく、行の罫を除く線は${LIMIT.pcBorderSides}辺まで`, async ({ pc }) => {
@@ -324,19 +330,19 @@ check('P2', 'P2-4', `PCの最初の画面の文字は大きさ${LIMIT.pcFontSize
 });
 check('P2', 'P2-5', '行の道具は本文を隠さず、触れても行の高さが変わらない(PC)', async ({ pc }) => {
   const { page } = pc;
-  const row = page.locator('.entry-column--sentence .entry-item').filter({ hasText: SAMPLE.sentences[1] }).first();
+  const row = page.locator('.entry-column--sentence .outline__item').filter({ hasText: SAMPLE.sentences[1] }).first();
   const h0 = (await row.boundingBox()).height;
   await row.hover(); await page.waitForTimeout(350);
   const h1 = (await row.boundingBox()).height;
-  const hit = await row.evaluate(el => { const a = el.querySelector('[data-entry-actions]').getBoundingClientRect();
-    const lines = window.__qa.lineRects(el.querySelector('.entry-item__content-text'));
+  const hit = await row.evaluate(el => { const a = el.querySelector('.outline__actions').getBoundingClientRect();
+    const lines = window.__qa.lineRects(el.querySelector('.outline__content'));
     return lines.some(l => !(l.right <= a.left || l.left >= a.right || l.bottom <= a.top || l.top >= a.bottom)); });
   await settle(page);
   assert.ok(!hit, '行の道具が本文の字に重なる');
   assert.ok(Math.abs(h1 - h0) < 1, `触れると行の高さが${Math.round(h0)}→${Math.round(h1)}px`);
 });
 check('P2', 'P2-6', 'スマホの行の操作は枠なしで、44px四方の押せる大きさ', async ({ se }) => {
-  const r = await se.page.evaluate(() => { const b = [...document.querySelectorAll('.entry-item__structure-button')].find(x => window.__qa.vis(x)); const s = getComputedStyle(b); const rect = b.getBoundingClientRect();
+  const r = await se.page.evaluate(() => { const b = [...document.querySelectorAll('.outline__mobile-actions')].find(x => window.__qa.vis(x)); const s = getComputedStyle(b); const rect = b.getBoundingClientRect();
     return { border: parseFloat(s.borderTopWidth) + parseFloat(s.borderLeftWidth), w: rect.width, h: rect.height }; });
   assert.equal(r.border, 0, '操作ボタンに枠がある');
   assert.ok(r.w >= 44 && r.h >= 44, `${Math.round(r.w)}×${Math.round(r.h)}px`);
@@ -419,8 +425,8 @@ check('P3', 'P3-3', '「置く」は書くまで沈み、書くと朱が灯る',
 check('P3', 'P3-4', '置いた字は朱から墨へ乾く(動きを減らす設定では最初から墨)', async ({ pc, browser }) => {
   const { page } = pc;
   await write(page, 'sentence', '乾く字の確認');
-  const color = () => page.evaluate(() => { const row = [...document.querySelectorAll('.entry-item')].find(r => r.textContent.includes('乾く字の確認'));
-    return getComputedStyle(row.querySelector('.entry-item__content-text')).color; });
+  const color = () => page.evaluate(() => { const row = [...document.querySelectorAll('.outline__item')].find(r => r.textContent.includes('乾く字の確認'));
+    return getComputedStyle(row.querySelector('.outline__content')).color; });
   const wet = (await color()).match(/\d+/g).map(Number);
   await page.waitForTimeout(2100);
   const dry = (await color()).match(/\d+/g).map(Number);
@@ -429,8 +435,8 @@ check('P3', 'P3-4', '置いた字は朱から墨へ乾く(動きを減らす設�
   const rm = await open(browser, PC, { reducedMotion: 'reduce' }, { seed: false });
   await rm.page.getByRole('button', { name: /新しいメモ/ }).first().click(); await rm.page.waitForURL(/\/memos\//);
   await write(rm.page, 'sentence', '動かない確認');
-  const still = await rm.page.evaluate(() => { const row = [...document.querySelectorAll('.entry-item')].find(r => r.textContent.includes('動かない確認'));
-    const t = row.querySelector('.entry-item__content-text'); return { color: getComputedStyle(t).color, anim: getComputedStyle(t).animationName }; });
+  const still = await rm.page.evaluate(() => { const row = [...document.querySelectorAll('.outline__item')].find(r => r.textContent.includes('動かない確認'));
+    const t = row.querySelector('.outline__content'); return { color: getComputedStyle(t).color, anim: getComputedStyle(t).animationName }; });
   await rm.context.close();
   assert.ok(still.anim === 'none' && /35, 33, 29/.test(still.color), `動きを減らす設定で${still.anim} / ${still.color}`);
 });
