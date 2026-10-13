@@ -58,5 +58,7 @@
     .outline__new textarea { min-height:44px; font-size:16px; }
     .outline__structure-actions button { min-height:44px; }
   }
-  @media (prefers-reduced-motion:reduce) { .outline *, .editor-grid { transition:none !important; animation:none !important; } }
+  @media (prefers-reduced-motion:reduce) { .outline *, .editor-grid { transition:none !important; animation:none !important; }
+    .outline__item.entry-item--fresh .outline__content { color: var(--color-ink) !important; }
+  }
 }
