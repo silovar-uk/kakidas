@@ -75,6 +75,7 @@ type EntryColumnProps = {
     parentId?: string | null,
     position?: EntryInsertPosition,
     draftId?: string,
+    outlineIndex?: number,
   ) => Promise<unknown>;
   onUpdate: (entryId: string, patch: EntryUpdate) => Promise<unknown>;
   onDelete: (entryId: string) => Promise<EntryDeletionResult>;
@@ -1131,7 +1132,7 @@ export function EntryColumn({
       <div className="entry-list" aria-live="polite">
         {kind === "sentence" && onRelocateOutline ? (
           <OutlineList entries={primaryEntries} disabled={disabled || isDeletingAll}
-            onCreate={async (content, parentId) => onCreate("sentence", content, {}, parentId, "bottom") as Promise<import("../types/memo").EntryRow>}
+            onCreate={async (content, parentId, index) => onCreate("sentence", content, {}, parentId, "bottom", undefined, index) as Promise<import("../types/memo").EntryRow>}
             onRelocate={onRelocateOutline}
             onUpdate={handleUpdateEntry}
             onGrow={(entry) => onCreate("paragraph", entry.content, {}, null, "bottom")}
