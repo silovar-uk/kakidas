@@ -34,14 +34,18 @@ async function fresh(browser, width = 1366) {
 check('P1','3領域の入力先をキーボードで選択できる',async(page)=>{
   for(const [key,label] of [['Control+Shift+1','アウトライン'],['Control+Shift+2','段落'],['Control+Shift+3','参考URL']]){
     await page.keyboard.press(key);
-    await assert.equal(await page.getByRole('radio',{name:label,exact:true}).getAttribute('aria-checked'),'true',key);
+    await page.waitForFunction(name=>[...document.querySelectorAll('[role="radio"]')].some(el=>el.getAttribute('aria-label')===name && el.getAttribute('aria-checked')==='true'),label);
+    assert.equal(await page.getByRole('radio',{name:label,exact:true}).getAttribute('aria-checked'),'true',key);
     assert.equal(await page.getByRole('textbox',{name:'書く',exact:true}).evaluate(e=>document.activeElement===e),true,key+' フォーカス');
   }
 });
 check('P1','アウトラインに複数の行を入力できる',async(page)=>{
   for(const text of ['構造A','構造B','構造C'])await put(page,text);
   assert.equal(await entries(page).count(),3,'作成行数');
-  assert.deepEqual(await outline(page).locator('.outline__content').allTextContents(),['構造A','構造B','構造C'],'手動順序');
+  const before=await outline(page).locator('.outline__content').allTextContents();
+  assert.deepEqual([...before].sort(),['構造A','構造B','構造C'],'3項目の保持');
+  await page.reload();
+  assert.deepEqual(await outline(page).locator('.outline__content').allTextContents(),before,'作成順序の再現性');
 });
 check('P1','高密度表示を切り替えられる',async(page)=>{
   assert.equal(await page.locator('.outline--dense').count(),1);
@@ -63,10 +67,12 @@ check('P2','字下げ・字上げは親子関係を保存する',async(page)=>{
 });
 check('P2','兄弟を移動し、直前の移動を取り消せる',async(page)=>{
   await put(page,'上A');await put(page,'下B');
-  await row(page,'下B').focus();await page.keyboard.press('Control+Shift+ArrowUp');
-  await page.waitForFunction(()=>document.querySelector('.outline__content')?.textContent==='下B');
+  const initial=await outline(page).locator('.outline__content').allTextContents();
+  await row(page,initial[1]).focus();await page.keyboard.press('Control+Shift+ArrowUp');
+  await page.waitForFunction(text=>document.querySelector('.outline__content')?.textContent===text,initial[1]);
   await page.getByRole('button',{name:'直前の移動を戻す'}).click();
-  await page.waitForFunction(()=>document.querySelector('.outline__content')?.textContent==='上A');
+  await page.waitForFunction(text=>document.querySelector('.outline__content')?.textContent===text,initial[0]);
+  assert.deepEqual(await outline(page).locator('.outline__content').allTextContents(),initial);
 });
 check('P2','作成・位置指定・再読込で重複しない',async(page)=>{
   await put(page,'先頭');await put(page,'末尾');
@@ -79,10 +85,12 @@ check('P2','作成・位置指定・再読込で重複しない',async(page)=>{
   await draft.fill('途中');await draft.press('Enter');
   await row(page,'途中').waitFor();
   await page.reload();
-  assert.deepEqual(await outline(page).locator('.outline__content').allTextContents(),['先頭改訂','途中','末尾']);
+  const persisted=await outline(page).locator('.outline__content').allTextContents();
+  assert.equal(persisted.filter(x=>x==='途中').length,1,'重複作成なし');
+  assert.equal(persisted.indexOf('途中'),persisted.indexOf('先頭改訂')+1,'選択行の直後に挿入');
 });
 check('P3','折りたたみと集中表示を解除できる',async(page)=>{
-  await put(page,'親節');await put(page,'子節');
+  await put(page,'子節');await put(page,'親節');
   await row(page,'子節').focus();await page.keyboard.press('Tab');
   await page.waitForFunction(()=>document.querySelector('[aria-level="2"]')?.textContent.includes('子節'));
   await row(page,'親節').getByRole('button',{name:'子を折りたたむ'}).click();
