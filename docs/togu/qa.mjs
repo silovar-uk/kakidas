@@ -46,8 +46,9 @@ async function write(page, kind, text, { heading = '', tag = '', note = '' } = {
   await page.getByRole('radio', { name: LABEL[kind], exact: true }).click();
   if (tag) {
     await page.getByRole('button', { name: 'タグを付ける', exact: true }).click();
-    await page.getByRole('textbox', { name: '項目タグ', exact: true }).fill(tag);
-    await page.locator('.entry-composer__tag-apply').click();
+    const tagField = page.getByRole('textbox', { name: '項目タグ', exact: true });
+    await tagField.fill(tag);
+    await tagField.press('Enter');
   }
   if (note) {
     await page.getByRole('button', { name: '気持ち・備考を付ける', exact: true }).click();
