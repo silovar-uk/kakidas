@@ -106,6 +106,7 @@ export interface MemoRepository {
     input: Omit<EntryInsert, "created_at" | "updated_at">,
     position?: EntryInsertPosition,
     draftId?: string,
+    outlineIndex?: number,
   ): Promise<EntryRow>;
   updateEntry(entryId: string, patch: EntryUpdate): Promise<EntryRow>;
   /** アウトラインの移動・階層変更を一括保存。子孫は親IDのまま追随する。 */
@@ -748,6 +749,7 @@ class IndexedDbMemoRepository implements MemoRepository {
     input: Omit<EntryInsert, "created_at" | "updated_at">,
     position: EntryInsertPosition = "bottom",
     draftId?: string,
+    outlineIndex?: number,
   ): Promise<EntryRow> {
     const content = input.content.trim();
 
@@ -802,7 +804,20 @@ class IndexedDbMemoRepository implements MemoRepository {
     const timestamp = nowIso();
     // sort_orderは親・種別ごとの表示順。先頭追加では最小値より1つ前、
     // 末尾追加では最大値より1つ後を採用して、既存の順番を崩さない。
-    const nextSortOrder = input.sort_order ?? (
+    // アウトラインの挿入位置を兄弟の並びと同一トランザクションで確定する。
+    // 作成後に別トランザクションで移動すると、失敗時に項目が重複するため避ける。
+    const insertAt = input.kind === "sentence" && outlineIndex !== undefined
+      ? Math.max(0, Math.min(Math.floor(outlineIndex), siblings.length))
+      : null;
+    if (insertAt !== null) {
+      siblings.forEach((sibling, i) => {
+        const next = i >= insertAt ? i + 1 : i;
+        if (sibling.sort_order !== next) {
+          entryStore.put({ ...sibling, sort_order: next, updated_at: timestamp } satisfies EntryRow);
+        }
+      });
+    }
+    const nextSortOrder = insertAt ?? input.sort_order ?? (
       siblings.length === 0
         ? 0
         : position === "top"
