@@ -260,6 +260,7 @@ export function useMemoDetail(memoId: string | undefined) {
       position: EntryInsertPosition = "bottom",
       draftId?: string,
       entryId?: string,
+      outlineIndex?: number,
     ): Promise<EntryRow> => {
       if (!memoId) {
         throw new Error("メモIDがありません。");
@@ -273,7 +274,7 @@ export function useMemoDetail(memoId: string | undefined) {
           parent_id: parentId,
           content,
           ...metadata,
-        }, position, draftId);
+        }, position, draftId, outlineIndex);
 
         await refreshAfterWrite();
         return entry;
