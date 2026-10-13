@@ -233,7 +233,6 @@ check('P1', 'P1-8', 'スマホの「この項目の操作」に満足度・完�
   const { page } = se;
   await page.getByRole('tab', { name: /^アウトライン/ }).first().click();
   const row = rowsOf(page, 'sentence').filter({ hasText: SAMPLE.sentences[1] }).first();
-  await row.getByRole('button', { name: '項目の詳細', exact: true }).click();
   await row.getByRole('button', { name: 'この項目の操作', exact: true }).click();
   for (const name of ['完了にする', '気持ち・備考を書く', 'リンクを付ける', 'タグを変える']) {
     assert.ok(await page.getByRole('menuitem', { name, exact: true }).or(page.getByRole('button', { name, exact: true })).first().isVisible(), `「${name}」がない`);
