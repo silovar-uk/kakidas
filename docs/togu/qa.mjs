@@ -232,7 +232,7 @@ check('P1', 'P1-7', '何も触れていないとき、朱の枠線はない', as
 check('P1', 'P1-8', 'スマホの「この項目の操作」は、ブラウザー既定のボタンが残らない', async ({ se }) => {
   const { page } = se;
   await page.getByRole('tab', { name: /^アウトライン/ }).first().click();
-  await page.locator('.entry-item').filter({ hasText: SAMPLE.sentences[0] }).first().getByRole('button', { name: 'この項目の操作', exact: true }).click();
+  await page.locator('.outline__item-wrap').filter({ hasText: SAMPLE.sentences[0] }).first().getByRole('button', { name: 'この項目の操作', exact: true }).click();
   await page.waitForTimeout(400);
   const bad = await page.evaluate(() => [...document.querySelectorAll('.mobile-action-sheet__panel button')].filter(b => window.__qa.vis(b)).filter(b => {
     const s = getComputedStyle(b); return /rgb\(240, 240, 240\)|rgb\(239, 239, 239\)/.test(s.backgroundColor) || !/Hiragino|Noto Sans JP|BIZ UD/.test(s.fontFamily) || b.getBoundingClientRect().height < 40;
