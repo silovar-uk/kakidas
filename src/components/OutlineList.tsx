@@ -7,6 +7,7 @@ type OutlineListProps = {
   onCreate: (content: string, parentId: string | null, index: number) => Promise<EntryRow>;
   onRelocate: (id: string, parentId: string | null, index: number) => Promise<void>;
   onOpenActions?: (id: string) => void;
+  onToggleCompleted?: (id: string) => Promise<void>;
   onUpdate: (id: string, patch: EntryUpdate) => Promise<unknown>;
   onGrow: (entry: EntryTreeNode) => Promise<unknown>;
   renderDetails: (entry: EntryTreeNode) => ReactNode;
@@ -16,7 +17,7 @@ type MoveHistory = { id: string; parentId: string | null; index: number };
 const DENSITY_KEY = "kakidas.outline-density.v1";
 
 /** 親子構造はDBの parent_id / sort_order に保存し、このコンポーネントには一時的な開閉・選択だけを置く。 */
-export function OutlineList({ entries, disabled = false, onCreate, onRelocate, onOpenActions, onUpdate, onGrow, renderDetails }: OutlineListProps) {
+export function OutlineList({ entries, disabled = false, onCreate, onRelocate, onOpenActions, onToggleCompleted, onUpdate, onGrow, renderDetails }: OutlineListProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingValue, setEditingValue] = useState("");
@@ -235,6 +236,7 @@ export function OutlineList({ entries, disabled = false, onCreate, onRelocate, o
         {details.has(row.id) ? <div className="outline__details">
           <div className="outline__structure-actions">
             <button type="button" disabled={disabled} onClick={() => startEdit(row)}>編集</button>
+            {onToggleCompleted ? <button type="button" disabled={disabled} onClick={() => void onToggleCompleted(row.id).catch(showError)}>{row.is_completed ? "未完了に戻す" : "完了にする"}</button> : null}
             <button type="button" onClick={() => setZoomId(row.id)}>この枝に集中</button>
             <button type="button" disabled={disabled || busy} onClick={() => move(row,"indent")}>↳ 下げる</button>
             <button type="button" disabled={disabled || busy} onClick={() => move(row,"outdent")}>↰ 上げる</button>
