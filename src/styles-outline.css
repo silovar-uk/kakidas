@@ -22,7 +22,7 @@
   .outline__item:hover { background:var(--color-hover); }
   .outline__item--selected { background:var(--color-shu-wash); }
   .outline__twisty { display:grid; flex:0 0 18px; width:18px; height:25px; place-items:center; border:0; padding:0; background:transparent; color:var(--color-ink-3); font-size:12px; cursor:pointer; }
-  .outline__twisty:disabled { opacity:.32; cursor:default; }
+  .outline__twisty--empty { opacity:.32; cursor:default; }
   .outline__item.entry-item--fresh .outline__content { color: var(--color-shu); transition: color 1.6s ease; }
   .outline__content { display:-webkit-box; flex:1; min-width:0; padding:4px 2px; border:0; text-align:left; background:transparent; font-size:14px; font-weight:400; color:inherit; line-height:1.35; overflow:hidden; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow-wrap:anywhere; cursor:text; }
   .outline--dense .outline__content { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; display:block; }
@@ -49,6 +49,7 @@
     .outline__item { min-height:44px; padding-block:2px; }
     .outline__twisty { min-width:36px; min-height:44px; }
     .outline__actions { opacity:1; }
+    .outline__actions > button:first-child { display:none; }
     .outline__actions button { min-width:44px; min-height:44px; }
     .outline__content { font-size:15px; }
     .outline__hint { display:none; }
