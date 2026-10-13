@@ -40,7 +40,7 @@ const SAMPLE = {
   sentences: ['書き始める前に、置き場所を選ばせない', '操作は、触れようとしたときにだけ現れればいい', '保存中でも、次の一文を打てること', '列ごとの表示設定は、ふだん目に入らなくていい'],
   paragraph: ['清書が誇りになる', '散らかった作業台のまま、人にメモを見せることはありません。ひと押しで一枚に仕立て直せれば、メモそのものが成果物になります。'],
 };
-const LABEL = { url: '参考URL', sentence: '文', paragraph: '段落' };
+const LABEL = { url: '参考URL', sentence: 'アウトライン', paragraph: '段落' };
 const deskOf = page => page.getByRole('textbox', { name: '書く', exact: true });
 async function write(page, kind, text, { heading = '', tag = '', note = '' } = {}) {
   await page.getByRole('radio', { name: LABEL[kind], exact: true }).click();
@@ -230,7 +230,7 @@ check('P1', 'P1-7', '何も触れていないとき、朱の枠線はない', as
 });
 check('P1', 'P1-8', 'スマホの「この項目の操作」は、ブラウザー既定のボタンが残らない', async ({ se }) => {
   const { page } = se;
-  await page.getByRole('tab', { name: /^文/ }).first().click();
+  await page.getByRole('tab', { name: /^アウトライン/ }).first().click();
   await page.locator('.entry-item').filter({ hasText: SAMPLE.sentences[0] }).first().getByRole('button', { name: 'この項目の操作', exact: true }).click();
   await page.waitForTimeout(400);
   const bad = await page.evaluate(() => [...document.querySelectorAll('.mobile-action-sheet__panel button')].filter(b => window.__qa.vis(b)).filter(b => {
@@ -297,7 +297,7 @@ check('P2', 'P2-1', `本文の背骨がそろう(題・書き口・列見出し�
 });
 check('P2', 'P2-2', 'スマホの本文は画面の左端から16px、右は操作のぶんだけ空ける', async ({ se }) => {
   const { page } = se;
-  await page.getByRole('tab', { name: /^文/ }).first().click(); await settle(page);
+  await page.getByRole('tab', { name: /^アウトライン/ }).first().click(); await settle(page);
   const r = await page.evaluate(() => { const row = document.querySelector('.entry-column--sentence .entry-item'); const t = row.querySelector('.entry-item__content-text');
     const rects = window.__qa.lineRects(t); return { left: Math.min(...rects.map(x => x.left)), right: Math.max(...rects.map(x => x.right)) }; });
   assert.ok(Math.abs(r.left - 16) <= 1, `本文の左端が${Math.round(r.left)}px`);
@@ -361,7 +361,7 @@ check('P2', 'P2-9', 'メニューの項目名は、印(✓)の有無にかかわ
 });
 check('P2', 'P2-10', '消す操作は赤で、ほかと罫で分ける(列の操作)', async ({ pc }) => {
   const { page } = pc;
-  await page.getByRole('button', { name: '文の操作', exact: true }).click(); await page.waitForTimeout(300);
+  await page.getByRole('button', { name: 'アウトラインの操作', exact: true }).click(); await page.waitForTimeout(300);
   const c = await page.evaluate(() => { const b = [...document.querySelectorAll('.entry-column__menu button')].at(-1); return { text: b.textContent, color: getComputedStyle(b).color }; });
   await page.keyboard.press('Escape'); await settle(page);
   const [r, g, b] = c.color.match(/\d+/g).map(Number);
