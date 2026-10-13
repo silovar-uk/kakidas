@@ -130,6 +130,7 @@ async function open(browser, url, viewport, extra = {}, seed = viewport.width >=
       try {
         const done = rowWith(page, 'sentence', SAMPLE.done).first();
         await done.hover();
+        await done.getByRole('button', { name: '項目の詳細' }).click();
         await done.getByRole('button', { name: /^完了(にする)?$/ }).first().click({ timeout: 5000 });
         await page.waitForTimeout(400);
       } catch { /* 完了にできなくても測定は続ける(P3-3で分かる) */ }
