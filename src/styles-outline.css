@@ -1,6 +1,6 @@
 /* The outline is intentionally an editable tree, not a stack of cards. */
 @layer outline {
-  .editor-grid { gap: 0; }
+  .editor-grid { gap: var(--s-6); }
   .editor-grid .entry-column { min-width: 0; }
   .editor-grid .entry-column--sentence { order: 0; }
   .editor-grid .entry-column--paragraph { order: 1; }
