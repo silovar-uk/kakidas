@@ -1,3 +1,4 @@
+import { OutlineList } from "./OutlineList";
 import { fetchReferenceTitle } from "../lib/referenceTitle";
 import { MoreIcon, CopyIcon } from "./icons";
 import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
@@ -91,6 +92,7 @@ type EntryColumnProps = {
   onCreateMemoFromEntry: (entryId: string) => Promise<unknown>;
   isCopying?: boolean;
   onMoveToKind: (entryId: string, targetKind: EntryKind) => Promise<unknown>;
+  onRelocateOutline?: (id: string, parentId: string | null, index: number) => Promise<void>;
   /** タグでまとめる見出しから、現在の区分にある同名タグを一括変更する。 */
   onRenameTag: (currentTag: string, nextTag: string) => Promise<unknown>;
 };
@@ -149,6 +151,7 @@ export function EntryColumn({
   onCreateMemoFromEntry,
   isCopying = false,
   onMoveToKind,
+  onRelocateOutline,
   onRenameTag,
 }: EntryColumnProps) {
   const [structureEntryId, setStructureEntryId] = useState<string | null>(null);
@@ -1126,7 +1129,14 @@ export function EntryColumn({
       </div>
 
       <div className="entry-list" aria-live="polite">
-        {primaryEntries.length === 0 ? (
+        {kind === "sentence" && onRelocateOutline ? (
+          <OutlineList entries={primaryEntries} disabled={disabled || isDeletingAll}
+            onCreate={async (content, parentId) => onCreate("sentence", content, {}, parentId, "bottom") as Promise<import("../types/memo").EntryRow>}
+            onRelocate={onRelocateOutline}
+            onUpdate={handleUpdateEntry}
+            onGrow={(entry) => onCreate("paragraph", entry.content, {}, null, "bottom")}
+            renderDetails={(entry) => renderEntry(entry)} />
+        ) : primaryEntries.length === 0 ? (
           <p className="entry-list__empty">
             {kind === "word" ? "書き口にURLを貼ると、ここに並びます。" : "まだありません。書き口から置けます。"}
           </p>
