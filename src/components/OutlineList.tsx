@@ -203,6 +203,7 @@ export function OutlineList({ entries, disabled = false, onCreate, onRelocate, o
       {visible.map((row) => <div key={row.id} className="outline__item-wrap">
         <div
           data-outline-id={row.id}
+          data-entry-id={row.id}
           className={`outline__item ${selectedId === row.id ? "outline__item--selected" : ""}`}
           role="treeitem"
           aria-level={zoom ? row.depth - zoom.depth : row.depth + 1}
