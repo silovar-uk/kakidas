@@ -1136,6 +1136,7 @@ export function EntryColumn({
             onCreate={async (content, parentId, index) => onCreate("sentence", content, {}, parentId, "bottom", undefined, undefined, index) as Promise<import("../types/memo").EntryRow>}
             onRelocate={onRelocateOutline}
             onOpenActions={openStructureActions}
+            onToggleCompleted={toggleCompleted}
             onUpdate={handleUpdateEntry}
             onGrow={(entry) => onCreate("paragraph", entry.content, {}, null, "bottom")}
             renderDetails={(entry) => renderEntry(entry)} />
