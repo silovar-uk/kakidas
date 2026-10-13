@@ -6,6 +6,7 @@ type OutlineListProps = {
   disabled?: boolean;
   onCreate: (content: string, parentId: string | null, index: number) => Promise<EntryRow>;
   onRelocate: (id: string, parentId: string | null, index: number) => Promise<void>;
+  onOpenActions?: (id: string) => void;
   onUpdate: (id: string, patch: EntryUpdate) => Promise<unknown>;
   onGrow: (entry: EntryTreeNode) => Promise<unknown>;
   renderDetails: (entry: EntryTreeNode) => ReactNode;
@@ -15,7 +16,7 @@ type MoveHistory = { id: string; parentId: string | null; index: number };
 const DENSITY_KEY = "kakidas.outline-density.v1";
 
 /** 親子構造はDBの parent_id / sort_order に保存し、このコンポーネントには一時的な開閉・選択だけを置く。 */
-export function OutlineList({ entries, disabled = false, onCreate, onRelocate, onUpdate, onGrow, renderDetails }: OutlineListProps) {
+export function OutlineList({ entries, disabled = false, onCreate, onRelocate, onOpenActions, onUpdate, onGrow, renderDetails }: OutlineListProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingValue, setEditingValue] = useState("");
@@ -226,8 +227,9 @@ export function OutlineList({ entries, disabled = false, onCreate, onRelocate, o
               onDoubleClick={() => startEdit(row)} title="ダブルクリックで編集 / Enterで編集">{row.content}</span>}
           {row.has_children && collapsed.has(row.id) ? <span className="outline__child-count">{row.child_count}</span> : null}
           <div className="outline__actions">
-            <button type="button" title="この枝に集中" aria-label="この枝に集中" onClick={() => setZoomId(row.id)}>⌕</button>
-            <button type="button" title="階層・メモ・タグの詳細" aria-label="項目の詳細" aria-expanded={details.has(row.id)} onClick={() => toggleDetails(row.id)}>⋯</button>
+            <button type="button" className="outline__zoom-action" title="この枝に集中" aria-label="この枝に集中" onClick={() => setZoomId(row.id)}>⌕</button>
+            <button type="button" className="outline__details-action" title="階層・メモ・タグの詳細" aria-label="項目の詳細" aria-expanded={details.has(row.id)} onClick={() => toggleDetails(row.id)}>⋯</button>
+            {onOpenActions ? <button type="button" className="outline__mobile-actions" aria-label="この項目の操作" onClick={() => onOpenActions(row.id)}>⋯</button> : null}
           </div>
         </div>
         {details.has(row.id) ? <div className="outline__details">
