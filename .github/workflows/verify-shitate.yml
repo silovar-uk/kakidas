@@ -38,6 +38,7 @@ jobs:
             if curl -fsS http://127.0.0.1:4173/ >/dev/null; then break; fi
             sleep 1
           done
+          QA_PHASES=${{ matrix.phase }} BASE_URL=http://127.0.0.1:4173/ node docs/outline/qa.mjs
           QA_TARGET=app QA_PHASES=${{ matrix.phase }} BASE_URL=http://127.0.0.1:4173/ node docs/shitate/qa.mjs
           QA_PHASES=${{ matrix.phase }} BASE_URL=http://127.0.0.1:4173/ node docs/togu/qa.mjs
       - name: PC・スマホの本番前画面を撮影
@@ -96,6 +97,12 @@ jobs:
           done
           echo "::error::対象コミットのVercel本番反映が確認できない"
           exit 1
+      - name: 本番アウトライン専用受け入れ確認
+        timeout-minutes: 15
+        env:
+          QA_PHASES: ${{ matrix.phase }}
+          BASE_URL: https://kakidas-3gqw.vercel.app/
+        run: node docs/outline/qa.mjs
       - name: 本番29項目の受け入れ確認
         timeout-minutes: 15
         env:
