@@ -92,7 +92,7 @@ check('P2','作成・位置指定・再読込で重複しない',async(page)=>{
 check('P3','折りたたみと集中表示を解除できる',async(page)=>{
   await put(page,'子節');await put(page,'親節');
   await row(page,'子節').focus();await page.keyboard.press('Tab');
-  await page.waitForFunction(()=>document.querySelector('[aria-level="2"]')?.textContent.includes('子節'));
+  await page.waitForFunction(()=>[...document.querySelectorAll('[role="treeitem"][aria-level="2"]')].some(x=>x.textContent.includes('子節')));
   await row(page,'親節').getByRole('button',{name:'子を折りたたむ'}).click();
   assert.equal(await row(page,'子節').count(),0);
   await row(page,'親節').getByRole('button',{name:'子を展開'}).click();
