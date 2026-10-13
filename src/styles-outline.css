@@ -47,6 +47,7 @@
   .outline__message button { border:0; background:transparent; text-decoration:underline; }
   .outline__empty { margin:12px 0; font-size:13px; color:var(--color-ink-3); }
   @media (max-width:920px) {
+    .outline { padding-inline: 16px; }
     .outline__item { min-height:44px; padding-block:2px; }
     .outline__twisty { min-width:36px; min-height:44px; }
     .outline__actions { opacity:1; }
