@@ -309,7 +309,7 @@ check('P2', 'P2-7', '上の帯の「メモの操作」に、クラウド・コ�
   for (const name of [/クラウドに保存/, /クラウドに合わせる/, /ChatGPT/, /メモをコピー/, /\.txt/, /ショートカット/, /メモを削除/]) {
     assert.ok(await page.getByRole('menuitem', { name }).first().isVisible(), `メモの操作に${name}がない`);
   }
-  assert.equal(await page.getByRole('menuitemradio').count(), 3, '並び順の3つがない');
+  assert.equal(await page.getByRole('menuitemradio').count(), 4, '既存の3つと手動順序がそろっていない');
   await page.keyboard.press('Escape');
 });
 check('P2', 'P2-10', `PCで最初の項目の上端は${LIMIT.pcFirstEntryTop}px以内`, async ({ pc }) => {
