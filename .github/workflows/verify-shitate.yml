@@ -38,9 +38,11 @@ jobs:
             if curl -fsS http://127.0.0.1:4173/ >/dev/null; then break; fi
             sleep 1
           done
-          QA_PHASES=${{ matrix.phase }} BASE_URL=http://127.0.0.1:4173/ node docs/outline/qa.mjs
-          QA_TARGET=app QA_PHASES=${{ matrix.phase }} BASE_URL=http://127.0.0.1:4173/ node docs/shitate/qa.mjs
-          QA_PHASES=${{ matrix.phase }} BASE_URL=http://127.0.0.1:4173/ node docs/togu/qa.mjs
+          status=0
+          QA_PHASES=${{ matrix.phase }} BASE_URL=http://127.0.0.1:4173/ node docs/outline/qa.mjs || status=1
+          QA_TARGET=app QA_PHASES=${{ matrix.phase }} BASE_URL=http://127.0.0.1:4173/ node docs/shitate/qa.mjs || status=1
+          QA_PHASES=${{ matrix.phase }} BASE_URL=http://127.0.0.1:4173/ node docs/togu/qa.mjs || status=1
+          exit "$status"
       - name: PC・スマホの本番前画面を撮影
         if: matrix.phase == 'P3'
         timeout-minutes: 15
