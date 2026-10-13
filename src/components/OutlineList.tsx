@@ -214,15 +214,16 @@ export function OutlineList({ entries, disabled = false, onCreate, onRelocate, o
           onKeyDown={(event) => { if (event.target === event.currentTarget) onRowKeyDown(event, row); }}
           style={{ "--outline-depth": zoom ? Math.max(0, row.depth - zoom.depth - 1) : row.depth } as CSSProperties}
         >
-          <button className="outline__twisty" type="button" tabIndex={-1} disabled={!row.has_children}
-            aria-label={row.has_children ? collapsed.has(row.id) ? "子を展開" : "子を折りたたむ" : "子なし"}
-            onClick={() => toggleCollapsed(row.id)}>{row.has_children ? collapsed.has(row.id) ? "▸" : "▾" : "·"}</button>
+          {row.has_children ? <button className="outline__twisty" type="button" tabIndex={-1}
+            aria-label={collapsed.has(row.id) ? "子を展開" : "子を折りたたむ"}
+            onClick={() => toggleCollapsed(row.id)}>{collapsed.has(row.id) ? "▸" : "▾"}</button>
+          : <span className="outline__twisty outline__twisty--empty" aria-hidden="true">·</span>}
           {editingId === row.id ? <textarea ref={editorRef} className="outline__edit" rows={1} value={editingValue}
             aria-label="アウトラインの本文を編集" onChange={(event) => setEditingValue(event.target.value)}
             onKeyDown={(event) => onEditorKeyDown(event, row)}
             onBlur={() => { if (skipBlurRef.current) { skipBlurRef.current = false; return; } void commitEditing(); }}/>
-          : <button type="button" className="outline__content" onClick={() => setSelectedId(row.id)} onKeyDown={(event) => onRowKeyDown(event as unknown as KeyboardEvent<HTMLDivElement>, row)}
-              onDoubleClick={() => startEdit(row)} title="ダブルクリックで編集 / Enterで編集">{row.content}</button>}
+          : <span className="outline__content" onClick={(event) => { setSelectedId(row.id); event.currentTarget.closest<HTMLElement>('[role="treeitem"]')?.focus(); }}
+              onDoubleClick={() => startEdit(row)} title="ダブルクリックで編集 / Enterで編集">{row.content}</span>}
           {row.has_children && collapsed.has(row.id) ? <span className="outline__child-count">{row.child_count}</span> : null}
           <div className="outline__actions">
             <button type="button" title="この枝に集中" aria-label="この枝に集中" onClick={() => setZoomId(row.id)}>⌕</button>
@@ -231,6 +232,8 @@ export function OutlineList({ entries, disabled = false, onCreate, onRelocate, o
         </div>
         {details.has(row.id) ? <div className="outline__details">
           <div className="outline__structure-actions">
+            <button type="button" disabled={disabled} onClick={() => startEdit(row)}>編集</button>
+            <button type="button" onClick={() => setZoomId(row.id)}>この枝に集中</button>
             <button type="button" disabled={disabled || busy} onClick={() => move(row,"indent")}>↳ 下げる</button>
             <button type="button" disabled={disabled || busy} onClick={() => move(row,"outdent")}>↰ 上げる</button>
             <button type="button" disabled={disabled || busy} onClick={() => move(row,"up")}>↑ 移動</button>
