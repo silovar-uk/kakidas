@@ -29,6 +29,7 @@
   .outline__content:focus-visible { outline:2px solid var(--color-ink-2); outline-offset:-2px; }
   .outline__edit, .outline__new textarea { width:100%; flex:1; min-width:0; min-height:30px; border:1px solid var(--color-shu); border-radius:3px; background:var(--color-sheet); color:var(--color-ink); font-size:14px; padding:4px; resize:vertical; line-height:1.5; }
   .outline__actions { display:flex; flex:0 0 auto; opacity:0; }
+  .outline__mobile-actions { display:none !important; }
   .outline__item:hover .outline__actions, .outline__item:focus-within .outline__actions, .outline__item--selected .outline__actions { opacity:1; }
   .outline__actions button { display:grid; place-items:center; min-width:23px; height:26px; padding:0; border:0; background:transparent; color:var(--color-ink-3); cursor:pointer; font-size:17px; }
   .outline__child-count { font-size:12px; color:var(--color-ink-3); padding:0 2px; }
@@ -49,7 +50,8 @@
     .outline__item { min-height:44px; padding-block:2px; }
     .outline__twisty { min-width:36px; min-height:44px; }
     .outline__actions { opacity:1; }
-    .outline__actions > button:first-child { display:none; }
+    .outline__zoom-action { display:none !important; }
+    .outline__mobile-actions { display:grid !important; }
     .outline__actions button { min-width:44px; min-height:44px; }
     .outline__content { font-size:15px; }
     .outline__hint { display:none; }
