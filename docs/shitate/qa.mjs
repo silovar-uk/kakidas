@@ -33,8 +33,8 @@ const LIMIT = {
   seRowControls: 2,    // スマホの1行に見える操作部品
   headerControls: 2,   // 列見出しに見える操作部品(折りたたみ・操作)
 };
-const LABEL = { url: '参考URL', sentence: '文', paragraph: '段落' };
-const OLD_INPUT = { url: '参考URLを入力', sentence: '文を入力', paragraph: '段落を入力' };
+const LABEL = { url: '参考URL', sentence: 'アウトライン', paragraph: '段落' };
+const OLD_INPUT = { url: '参考URLを入力', sentence: 'アウトラインを入力', paragraph: '段落を入力' };
 
 /* ---------- 試作の配信(doctype付きの包みで出す) ---------- */
 async function serveMock() {
@@ -86,7 +86,7 @@ async function write(page, kind, text, { heading = '' } = {}) {
   await page.waitForTimeout(350);
 }
 const column = (page, kind) => page.getByRole('region', { name: LABEL[kind], exact: true });
-const rowsOf = (page, kind) => column(page, kind).locator('.entry-item');
+const rowsOf = (page, kind) => kind === 'sentence' ? column(page, kind).locator('.outline__item-wrap') : column(page, kind).locator('.entry-item');
 const rowWith = (page, kind, text) => rowsOf(page, kind).filter({ hasText: text });
 
 /* ---------- 見本のメモ(試作と同じ件数:参考URL3・文5+完了1・段落2) ---------- */
@@ -158,7 +158,7 @@ check('P1', 'P1-1', '続けて打っても、打った文が消えない', async
   for (const t of texts) { await page.keyboard.type(t); await page.keyboard.press('Enter'); }
   await page.waitForTimeout(1500);
   for (const t of texts) {
-    const got = await rowsOf(page, 'sentence').locator('.e-text, p, span').filter({ hasText: new RegExp(`^${t}$`) }).count();
+    const got = await rowsOf(page, 'sentence').locator('.outline__content, .e-text, p, span').filter({ hasText: new RegExp(`^${t}$`) }).count();
     assert.ok(got >= 1, `「${t}」がそのまま文に置かれていない(字が消えたか、前の文とつながった)`);
   }
 });
@@ -179,7 +179,7 @@ check('P1', 'P1-2', '保存中も入力欄を止めない(disabledにしない)'
 check('P1', 'P1-3', '行の操作は、触れたとき(ホバー・フォーカス)だけ見える', async ({ pc }) => {
   const { page } = pc;
   const row = rowWith(page, 'sentence', SAMPLE.sentences[0]).first();
-  const actions = row.locator('[data-entry-actions]');
+  const actions = row.locator('.outline__actions, [data-entry-actions]').first();
   assert.equal(await actions.count(), 1, '行の操作をまとめた要素に data-entry-actions がない');
   await page.mouse.move(2, 2); await page.waitForTimeout(250);
   const rest = await actions.evaluate(el => parseFloat(getComputedStyle(el).opacity));
@@ -222,7 +222,7 @@ check('P1', 'P1-6', 'スマホに「Alt+Q」などのキー表示を出さない
 });
 check('P1', 'P1-7', `スマホの1行に見える操作は${LIMIT.seRowControls}個まで`, async ({ se }) => {
   const { page } = se;
-  await page.getByRole('tab', { name: /^文/ }).first().click();
+  await page.getByRole('tab', { name: /^アウトライン/ }).first().click();
   const row = rowsOf(page, 'sentence').filter({ hasText: SAMPLE.sentences[1] }).first();
   await row.scrollIntoViewIfNeeded();
   const n = await row.evaluate((row, src) => { const vis = eval(src); return [...row.querySelectorAll('button, select')].filter(vis).length; }, VISIBLE_FN);
@@ -230,8 +230,9 @@ check('P1', 'P1-7', `スマホの1行に見える操作は${LIMIT.seRowControls}
 });
 check('P1', 'P1-8', 'スマホの「この項目の操作」に満足度・完了・気持ち・リンク・タグがそろう', async ({ se }) => {
   const { page } = se;
-  await page.getByRole('tab', { name: /^文/ }).first().click();
+  await page.getByRole('tab', { name: /^アウトライン/ }).first().click();
   const row = rowsOf(page, 'sentence').filter({ hasText: SAMPLE.sentences[1] }).first();
+  await row.getByRole('button', { name: '項目の詳細', exact: true }).click();
   await row.getByRole('button', { name: 'この項目の操作', exact: true }).click();
   for (const name of ['完了にする', '気持ち・備考を書く', 'リンクを付ける', 'タグを変える']) {
     assert.ok(await page.getByRole('menuitem', { name, exact: true }).or(page.getByRole('button', { name, exact: true })).first().isVisible(), `「${name}」がない`);
@@ -271,16 +272,16 @@ check('P2', 'P2-3', 'Shift+Enterで段落へ育ち、Ctrl+Enterで段落に置�
 check('P2', 'P2-4', 'ふつうに書いてEnterなら文に置かれる', async ({ pc }) => {
   const { page } = pc;
   await deskOf(page).fill('ふつうの一文');
-  assert.equal(await page.getByRole('radio', { name: '文', exact: true }).getAttribute('aria-checked'), 'true', '置き先が文ではない');
+  assert.equal(await page.getByRole('radio', { name: 'アウトライン', exact: true }).getAttribute('aria-checked'), 'true', '置き先が文ではない');
   await deskOf(page).press('Enter');
   await page.waitForTimeout(600);
   assert.equal(await rowWith(page, 'sentence', 'ふつうの一文').count(), 1, '文に置かれていない');
 });
-check('P2', 'P2-5', 'Alt+1/2/3で置き先を選べる', async ({ pc }) => {
+check('P2', 'P2-5', 'Ctrl+Shift+1/2/3で入力先を選べる', async ({ pc }) => {
   const { page } = pc;
   await deskOf(page).click();
   await page.evaluate(() => { window.__keytrace = []; window.addEventListener('keydown', e => window.__keytrace.push([e.key,e.code,e.altKey,e.ctrlKey]),{capture:true}); });
-  for (const [key, name] of [['Alt+1', '参考URL'], ['Alt+3', '段落'], ['Alt+2', '文']]) {
+  for (const [key, name] of [['Control+Shift+3', '参考URL'], ['Control+Shift+2', '段落'], ['Control+Shift+1', 'アウトライン']]) {
     await page.keyboard.press(key);
     console.log('P2キー', key, await page.evaluate(() => window.__keytrace));
     await page.waitForFunction(name => [...document.querySelectorAll('[role="radio"]')].some(el => el.getAttribute('aria-label') === name && el.getAttribute('aria-checked') === 'true'), name, {timeout:1500});
@@ -295,7 +296,7 @@ check('P2', 'P2-6', `列見出しに見える操作は${LIMIT.headerControls}個
       return [...col.querySelectorAll('button, select')].filter(b => vis(b) && Math.abs(b.getBoundingClientRect().top - top) < 30).length; }, VISIBLE_FN);
     assert.ok(n <= LIMIT.headerControls, `${LABEL[kind]}の見出しに${n}個見えている`);
   }
-  await page.getByRole('button', { name: '文の操作', exact: true }).click();
+  await page.getByRole('button', { name: 'アウトラインの操作', exact: true }).click();
   for (const name of [/タグでまとめる/, /^畳む$/, /すべて削除/]) {
     assert.ok(await page.getByRole('menuitem', { name }).or(page.getByRole('menuitemcheckbox', { name })).first().isVisible(), `文の操作に${name}がない`);
   }
@@ -317,7 +318,7 @@ check('P2', 'P2-10', `PCで最初の項目の上端は${LIMIT.pcFirstEntryTop}px
 });
 check('P2', 'P2-11', `スマホで書き口は${LIMIT.seDeskTop}px、最初の項目は${LIMIT.seFirstEntryTop}px以内`, async ({ se }) => {
   const { page } = se;
-  await page.getByRole('tab', { name: /^文/ }).first().click();
+  await page.getByRole('tab', { name: /^アウトライン/ }).first().click();
   await page.evaluate(() => (document.scrollingElement.scrollTop = 0));
   const d = await topOf(deskOf(page));
   const r = await topOf(rowsOf(page, 'sentence'));
@@ -326,7 +327,7 @@ check('P2', 'P2-11', `スマホで書き口は${LIMIT.seDeskTop}px、最初の�
 });
 check('P2', 'P2-12', 'スマホで置くと、置いた棚のタブへ移る', async ({ se }) => {
   const { page } = se;
-  await page.getByRole('tab', { name: /^文/ }).first().click();
+  await page.getByRole('tab', { name: /^アウトライン/ }).first().click();
   await deskOf(page).fill('スマホから段落へ');
   await page.getByRole('radio', { name: '段落', exact: true }).click();
   await page.getByRole('button', { name: '置く', exact: true }).click();
