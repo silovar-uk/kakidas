@@ -96,7 +96,10 @@ check('P3','折りたたみと集中表示を解除できる',async(page)=>{
     await row(page,'親節').focus();await page.keyboard.press('Control+Shift+ArrowUp');
     await page.waitForFunction(()=>document.querySelector('.outline__content')?.textContent==='親節');
   }
-  await row(page,'子節').focus();await page.keyboard.press('Tab');
+  await row(page,'子節').focus();
+  console.log('P3構造・字下げ前',await outline(page).locator('[role="treeitem"]').evaluateAll(els=>els.map(el=>({txt:el.textContent.slice(0,20),level:el.getAttribute('aria-level')}))));
+  await page.keyboard.press('Tab');
+  console.log('P3構造・字下げ後',await outline(page).locator('[role="treeitem"]').evaluateAll(els=>els.map(el=>({txt:el.textContent.slice(0,20),level:el.getAttribute('aria-level')}))));
   await page.waitForFunction(()=>[...document.querySelectorAll('[role="treeitem"][aria-level="2"]')].some(x=>x.textContent.includes('子節')));
   await row(page,'親節').getByRole('button',{name:'子を折りたたむ'}).click();
   assert.equal(await row(page,'子節').count(),0);
