@@ -4,7 +4,7 @@ import type { EntryRow, EntryTreeNode, EntryUpdate } from "../types/memo";
 type OutlineListProps = {
   entries: EntryTreeNode[];
   disabled?: boolean;
-  onCreate: (content: string, parentId: string | null) => Promise<EntryRow>;
+  onCreate: (content: string, parentId: string | null, index: number) => Promise<EntryRow>;
   onRelocate: (id: string, parentId: string | null, index: number) => Promise<void>;
   onUpdate: (id: string, patch: EntryUpdate) => Promise<unknown>;
   onGrow: (entry: EntryTreeNode) => Promise<unknown>;
@@ -98,10 +98,9 @@ export function OutlineList({ entries, disabled = false, onCreate, onRelocate, o
     if (!draft || savingRef.current || !draft.value.trim()) return;
     savingRef.current = true;
     try {
-      const row = await onCreate(draft.value.trim(), draft.parentId);
       const siblings = childrenOf(draft.parentId);
       const index = draft.afterId ? Math.max(0, siblings.findIndex((entry) => entry.id === draft.afterId) + 1) : siblings.length;
-      await onRelocate(row.id, draft.parentId, index);
+      const row = await onCreate(draft.value.trim(), draft.parentId, index);
       setDraft(null); setSelectedId(row.id); setMessage("");
     } catch (error) { showError(error); }
     finally { savingRef.current = false; }
@@ -176,7 +175,7 @@ export function OutlineList({ entries, disabled = false, onCreate, onRelocate, o
     }
   };
   const onEditorKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>, row: EntryTreeNode) => {
-    if (event.nativeEvent.isComposing || event.key === "Process") return;
+    if (event.nativeEvent.isComposing || event.key === "Process" || event.nativeEvent.keyCode === 229) return;
     if (event.key === "Escape") {
       event.preventDefault(); skipBlurRef.current = true; setEditingId(null); setEditingValue(row.content); setSelectedId(row.id); return;
     }
@@ -241,12 +240,12 @@ export function OutlineList({ entries, disabled = false, onCreate, onRelocate, o
         </div> : null}
         {draft?.afterId === row.id ? <div className="outline__new" style={{"--outline-depth":row.depth} as CSSProperties}>
           <span>＋</span><textarea rows={1} ref={draftRef} value={draft.value} placeholder="新しい項目" aria-label="新しいアウトライン項目" onChange={(event) => setDraft({ ...draft, value: event.target.value })}
-          onKeyDown={(event) => { if (event.nativeEvent.isComposing) return; if (event.key === "Escape") {event.preventDefault(); setDraft(null);} else if (event.key === "Enter" && !event.shiftKey) {event.preventDefault(); void commitDraft();} }}/>
+          onKeyDown={(event) => { if (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229) return; if (event.key === "Escape") {event.preventDefault(); setDraft(null);} else if (event.key === "Enter" && !event.shiftKey) {event.preventDefault(); void commitDraft();} }}/>
           <button type="button" disabled={!draft.value.trim() || busy} onClick={() => void commitDraft()}>追加</button>
         </div> : null}
       </div>)}
       {draft && !draft.afterId ? <div className="outline__new"><span>＋</span><textarea rows={1} ref={draftRef} value={draft.value} placeholder="新しい項目" aria-label="新しいアウトライン項目" onChange={(event) => setDraft({ ...draft, value: event.target.value })}
-        onKeyDown={(event) => { if (event.nativeEvent.isComposing) return; if (event.key === "Escape") {event.preventDefault();setDraft(null);} else if (event.key === "Enter" && !event.shiftKey) {event.preventDefault();void commitDraft();} }}/>
+        onKeyDown={(event) => { if (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229) return; if (event.key === "Escape") {event.preventDefault();setDraft(null);} else if (event.key === "Enter" && !event.shiftKey) {event.preventDefault();void commitDraft();} }}/>
         <button type="button" disabled={!draft.value.trim() || busy} onClick={() => void commitDraft()}>追加</button></div> : null}
       {visible.length === 0 && !draft ? <p className="outline__empty">項目がありません。まず一行書いてみよう。</p> : null}
     </div>
