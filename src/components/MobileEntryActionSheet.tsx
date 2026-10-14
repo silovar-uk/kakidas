@@ -22,6 +22,7 @@ type MobileEntryActionSheetProps = {
   onToggleCompleted: (entryId: string) => Promise<unknown> | unknown;
   onUpdate: (entryId: string, patch: EntryUpdate) => Promise<unknown> | unknown;
   onRequestEdit: (entryId:string, target:"note"|"link"|"tag")=>void;
+  onRequestOutlineDetails?: (entryId: string) => void;
   /** falseを返した場合は、確認を取り消したものとしてシートを閉じない。 */
   onMoveToKind: (
     entryId: string,
@@ -48,6 +49,7 @@ export function MobileEntryActionSheet({
   onToggleCompleted,
   onUpdate,
   onRequestEdit,
+  onRequestOutlineDetails,
   onMoveToKind,
   onCopy,
   onCreateMemoFromEntry,
@@ -185,6 +187,9 @@ export function MobileEntryActionSheet({
           </button>
         ) : null}
 
+        {kind === "sentence" && onRequestOutlineDetails ? (
+          <button role="menuitem" type="button" onClick={() => {onRequestOutlineDetails(entry.id); close();}}>↳ 階層・段落の操作</button>
+        ) : null}
         <button role="menuitem" type="button" onClick={()=>{onRequestEdit(entry.id,"note");close()}}><NoteIcon />気持ち・備考を書く</button>
         <button role="menuitem" type="button" onClick={()=>{onRequestEdit(entry.id,"link");close()}}><LinkIcon />{entry.link_url.trim()?"リンクを編集":"リンクを付ける"}</button>
         <button role="menuitem" type="button" onClick={()=>{onRequestEdit(entry.id,"tag");close()}}><TagIcon />タグを変える</button>

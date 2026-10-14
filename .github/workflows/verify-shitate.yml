@@ -58,10 +58,48 @@ jobs:
           path: /tmp/togu-shots/
           if-no-files-found: warn
 
+  responsive:
+    name: 13幅のボタン重なり検証
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: ソース取得
+        uses: actions/checkout@v5
+      - name: Node.js 22
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - name: 依存関係を復元
+        run: npm ci
+      - name: 本番ビルド
+        run: npm run build
+      - name: Playwrightを用意
+        timeout-minutes: 8
+        run: |
+          npm install --no-save --package-lock=false playwright
+          npx playwright install --with-deps chromium
+      - name: レスポンシブ衝突確認
+        timeout-minutes: 12
+        run: |
+          npm run preview -- --host 127.0.0.1 --port 4173 > /tmp/kakidas-preview.log 2>&1 &
+          for i in $(seq 1 40); do
+            if curl -fsS http://127.0.0.1:4173/ > /dev/null; then break; fi
+            sleep 1
+          done
+          QA_SHOTS_DIR=/tmp/kakidas-responsive node docs/layout/qa.mjs
+      - name: 幅別の画面写真を保存
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: kakidas-responsive-13-widths
+          path: /tmp/kakidas-responsive/
+          if-no-files-found: warn
+
   production:
     name: 本番受け入れ確認 ${{ matrix.phase }}
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: verify
+    needs: [verify, responsive]
     runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:

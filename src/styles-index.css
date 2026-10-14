@@ -21,3 +21,6 @@
 @import "./styles-togu.css";
 
 @import "./styles-outline.css";
+
+/* 最終段で各ブレークポイントの重なりを防ぐ（非レイヤーで仕上げの後に評価）。 */
+@import "./styles-layout-guard.css";
