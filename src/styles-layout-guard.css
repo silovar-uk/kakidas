@@ -1,0 +1,228 @@
+/*
+ * v0.7.1 - レイアウトの安全域
+ * 「旧式」「仕上げ」「アウトライン」の競合による衝突をここで収束させる。
+ * 単純な overflow:hidden はボタンや本文を消してしまうため使わず、
+ * Grid の minmax(0,1fr) と、必要な操作領域の固定幅で解決する。
+ */
+.editor-page,
+.editor-header--shitate,
+.editor-header__title,
+.editor-grid,
+.editor-grid .entry-column,
+.entry-column__header,
+.entry-column__heading-group,
+.entry-column__header-actions,
+.entry-column .entry-list {
+  min-width: 0;
+}
+.editor-header--shitate .editor-header__title {
+  flex: 1 1 0;
+  min-width: 0;
+}
+.editor-header__title .memo-title-input {
+  min-width: 0;
+  width: 100%;
+  text-overflow: ellipsis;
+}
+.editor-header--shitate .memo-actions,
+.editor-header--shitate .editor-header__seisho,
+.editor-header--shitate .editor-header__margin {
+  flex: 0 0 auto;
+}
+.entry-composer--desk > form.entry-composer,
+.entry-composer--desk .entry-composer__control-row,
+.entry-composer--desk .entry-composer__desk-fields,
+.entry-composer--desk .entry-composer__meta-row,
+.entry-composer--desk .entry-composer__meta-controls {
+  min-width: 0;
+}
+.entry-column__header { gap: 8px; }
+.entry-column__heading-group { min-width: 0; }
+.entry-column__header h2 { overflow-wrap: anywhere; }
+.entry-column__header-actions { flex: 0 0 auto; }
+.memo-actions__panel, .entry-column__menu {
+  max-width: min(360px, calc(100vw - 24px));
+  box-sizing: border-box;
+}
+.outline__tree, .outline__item-wrap, .outline__item {
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+.outline__content { min-width: 0; max-width: 100%; }
+
+@media (max-width: 920px) {
+  /* 二段ヘッダー：長い題を、操作ボタンが踏みつけない。 */
+  .editor-header.editor-header--shitate {
+    display: grid;
+    grid-template-columns: 40px minmax(0,1fr) 48px 48px;
+    grid-template-rows: minmax(44px,auto) 40px;
+    align-items: center;
+    column-gap: 4px;
+    row-gap: 0;
+    height: auto;
+    min-height: 90px;
+    padding: 3px 8px 5px;
+  }
+  .editor-header--shitate .back-link {
+    grid-area: 1 / 1;
+    margin: 0;
+    width: 40px;
+    height: 40px;
+    min-width: 40px;
+  }
+  .editor-header--shitate .editor-header__title {
+    grid-area: 1 / 2 / 2 / 4;
+    display: flex;
+    overflow: hidden;
+    gap: 2px;
+  }
+  .editor-header__title .memo-title-input {
+    font-size: 16px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .editor-header--shitate .editor-header__title .memo-tag-control {
+    flex: 0 1 auto;
+    min-width: 0;
+    max-width: 90px;
+  }
+  .editor-header--shitate .save-status {
+    grid-area: 2 / 1 / 3 / 3;
+    justify-self: start;
+    margin-left: 8px;
+    margin-right: 0;
+    min-width: 0;
+    font-size: 12px;
+  }
+  .editor-header--shitate .editor-header__seisho {
+    grid-area: 2 / 3;
+    justify-self: stretch;
+    min-width: 0;
+    padding: 0 2px;
+    min-height: 40px;
+  }
+  .editor-header--shitate .editor-header__margin {
+    grid-area: 2 / 4;
+    justify-self: stretch;
+    min-width: 0;
+    padding: 0 2px;
+    min-height: 40px;
+  }
+  .editor-header--shitate .memo-actions {
+    grid-area: 1 / 4;
+    justify-self: end;
+    min-width: 0;
+  }
+  .editor-header--shitate .memo-actions__trigger {
+    width: 40px;
+    height: 40px;
+  }
+
+  .entry-column--sentence .entry-list,
+  .entry-column--sentence .outline {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+  }
+  /* 1行の操作は一つの「⋯」。他の操作はシートの内側に収容する。 */
+  .entry-column--sentence .outline__item {
+    display: grid;
+    grid-template-columns: 36px minmax(0,1fr) 44px;
+    align-items: center;
+    gap: 0;
+    width: 100%;
+    max-width: 100%;
+    padding: 2px 0;
+  }
+  .entry-column--sentence .outline__twisty { width: 36px; min-width: 36px; }
+  .entry-column--sentence .outline__actions {
+    display: flex;
+    width: 44px;
+    min-width: 44px;
+    max-width: 44px;
+    justify-content: flex-end;
+    opacity: 1;
+  }
+  .entry-column--sentence .outline__actions .outline__zoom-action,
+  .entry-column--sentence .outline__actions .outline__details-action {
+    display: none !important;
+  }
+  .entry-column--sentence .outline__actions .outline__mobile-actions {
+    display: grid !important;
+    width: 44px;
+    min-width: 44px;
+    min-height: 44px;
+  }
+  .entry-column--sentence .outline__content {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .entry-column--sentence .outline__details,
+  .entry-column--sentence .outline__structure-actions {
+    min-width: 0;
+    max-width: 100%;
+  }
+}
+@media (max-width: 560px) {
+  /* 書き口の3択とタグ・備考・リンクを別行にする。重ねるのではなく並べる。 */
+  .entry-composer--desk > form.entry-composer {
+    grid-template-columns: minmax(0,1fr);
+    grid-template-areas: "fields" "note" "dest" "meta";
+    row-gap: 5px;
+    column-gap: 0;
+  }
+  .entry-composer--desk .entry-composer__control-row,
+  .entry-composer--desk .entry-composer__desk-fields,
+  .entry-composer--desk .entry-composer__meta-row {
+    min-width: 0;
+    width: 100%;
+  }
+  .entry-composer--desk .entry-composer__destinations {
+    display: grid;
+    grid-template-columns: repeat(3,minmax(0,1fr));
+    justify-self: stretch;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+  .entry-composer--desk .entry-composer__destinations button {
+    min-width: 0;
+    white-space: nowrap;
+    padding-inline: 2px;
+    text-align: center;
+  }
+  .entry-composer--desk .entry-composer__meta-row {
+    justify-self: stretch;
+    justify-content: flex-end;
+    gap: 6px;
+  }
+  .entry-composer--desk .entry-composer__meta-controls {
+    min-width: 0;
+    max-width: 100%;
+  }
+  .editor-tabs, .editor-tab {
+    min-width: 0;
+  }
+  .editor-tabs {
+    display: grid;
+    grid-template-columns: repeat(3,minmax(0,1fr));
+  }
+  .editor-tab {
+    padding-inline: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .entry-column--sentence .outline__item {
+    width: 100%;
+  }
+  .memo-actions__panel {
+    max-width: calc(100vw - 16px);
+  }
+}
