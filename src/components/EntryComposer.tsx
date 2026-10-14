@@ -495,8 +495,10 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
       // 入力欄を同期的に空け、保存中の続きの打鍵を受け入れる。
       const submittedValue = latestValueRef.current || value;
       const createdId = isDesk ? crypto.randomUUID() : undefined;
-      const canTransition = Boolean(isDesk && createdId && typeof document.startViewTransition === "function" &&
-        !window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+      // 文字の「飛行コピー」は長文・連続入力時に列をまたぐ残像になり、
+      // ボタンを覆ってしまう。項目自体の朱→墨の乾燥表示は残し、
+      // 保存時のレイヤー複製は行わない。
+      const canTransition = false;
       latestValueRef.current = "";
       // Reactの状態更新をここで描画し、VTが古い画面を撮る時点で写しを置く。
       // VTの非同期コールバックで入力欄を空にすると、連続入力が失われる。
