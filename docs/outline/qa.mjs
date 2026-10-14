@@ -99,7 +99,7 @@ check('P3','折りたたみと集中表示を解除できる',async(page)=>{
   await page.waitForTimeout(120);
   console.log('P3字下げ直前', await page.evaluate(() => ({
     focused: document.activeElement?.getAttribute('data-outline-id'),
-    rows: [...document.querySelectorAll('[role="treeitem"]')].map(el=>({text:el.querySelector('.outline__content')?.textContent,level:el.getAttribute('aria-level') }))
+    rows: [...document.querySelectorAll('[role="treeitem"]')].map(el=>({id:el.getAttribute('data-outline-id'),text:el.querySelector('.outline__content')?.textContent,level:el.getAttribute('aria-level'),parent:el.getAttribute('data-outline-parent-id'),sort:el.getAttribute('data-outline-sort-order') }))
   })));
   await page.keyboard.press('Tab');
   await page.waitForTimeout(150);
