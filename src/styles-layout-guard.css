@@ -51,6 +51,43 @@
 }
 .outline__content { min-width: 0; max-width: 100%; }
 
+/*
+ * PCの真因: .entry-list はgridだが暗黙のauto trackが本文のmax-content幅へ膨らむ。
+ * 文章が長くなっても列幅を超えないよう、明示的な0始点トラックを指定する。
+ */
+.entry-column--sentence .entry-list {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+.entry-column--sentence .outline,
+.entry-column--sentence .outline__tree,
+.entry-column--sentence .outline__item-wrap {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+.entry-column--sentence .outline__item {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+.entry-column--sentence .outline__content {
+  flex: 1 1 0%;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+
 @media (max-width: 920px) {
   /* 二段ヘッダー：長い題を、操作ボタンが踏みつけない。 */
   .editor-header.editor-header--shitate {
