@@ -235,7 +235,10 @@ check('P1', 'P1-8', 'スマホの「この項目の操作」に満足度・完�
   await page.getByRole('tab', { name: /^アウトライン/ }).first().click();
   const row = rowsOf(page, 'sentence').filter({ hasText: SAMPLE.sentences[1] }).first();
   const action = row.getByRole('button', { name: 'この項目の操作', exact: true });
-  console.log('スマホ操作導線', {count:await action.count(),visible:await action.isVisible(),row:await row.getAttribute('class')});
+  console.log('スマホ操作導線', {count:await action.count(),visible:await action.isVisible(),row:await row.getAttribute('class'),
+    geometry: await action.evaluate(el => { const r=el.getBoundingClientRect(); const s=getComputedStyle(el); const centerX=r.x+r.width/2,centerY=r.y+r.height/2;
+      const atop=document.elementFromPoint(centerX,centerY);return {x:r.x,y:r.y,w:r.width,h:r.height,centerX,centerY,innerW:innerWidth,innerH:innerHeight,
+        opacity:s.opacity,display:s.display,pointerEvents:s.pointerEvents,atop:atop?.outerHTML.slice(0,350)}; })});
   await action.click();
   console.log('スマホ操作シート', await page.locator('[role="dialog"]').allTextContents());
   for (const name of ['完了にする', '気持ち・備考を書く', 'リンクを付ける', 'タグを変える']) {
