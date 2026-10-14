@@ -47,8 +47,10 @@
   .outline__message button { border:0; background:transparent; text-decoration:underline; }
   .outline__empty { margin:12px 0; font-size:13px; color:var(--color-ink-3); }
   @media (max-width:920px) {
-    .outline { box-sizing:border-box; width:100%; max-width:100%; padding-inline: 16px; }
-    .outline__item { box-sizing:border-box; width:100%; }
+    .entry-column--sentence .entry-list { grid-template-columns:minmax(0,1fr); min-width:0; max-width:100%; }
+    .entry-column--sentence .entry-list > .outline { min-width:0; }
+    .outline { box-sizing:border-box; width:100%; min-width:0; max-width:calc(100vw - 0px); padding-inline: 16px; }
+    .outline__item { box-sizing:border-box; width:100%; min-width:0; max-width:calc(100vw - 32px); }
     .outline__actions { min-width:0; }
     .outline__content { min-width:0; max-width:100%; }
     .outline__item { min-height:44px; padding-block:2px; }
