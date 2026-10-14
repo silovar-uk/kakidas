@@ -205,6 +205,8 @@ export function OutlineList({ entries, disabled = false, onCreate, onRelocate, o
       {visible.map((row) => <div key={row.id} className="outline__item-wrap">
         <div
           data-outline-id={row.id}
+          data-outline-parent-id={row.parent_id ?? ""}
+          data-outline-sort-order={row.sort_order}
           data-entry-id={row.id}
           className={`outline__item ${selectedId === row.id ? "outline__item--selected" : ""}`}
           role="treeitem"
