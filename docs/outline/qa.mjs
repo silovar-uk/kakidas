@@ -96,7 +96,17 @@ check('P3','折りたたみと集中表示を解除できる',async(page)=>{
   assert.equal(before.length,2);
   const [parentText,childText]=before;
   await row(page,childText).focus();
+  await page.waitForTimeout(120);
+  console.log('P3字下げ直前', await page.evaluate(() => ({
+    focused: document.activeElement?.getAttribute('data-outline-id'),
+    rows: [...document.querySelectorAll('[role="treeitem"]')].map(el=>({text:el.querySelector('.outline__content')?.textContent,level:el.getAttribute('aria-level') }))
+  })));
   await page.keyboard.press('Tab');
+  await page.waitForTimeout(150);
+  console.log('P3字下げ直後', await page.evaluate(() => ({
+    focused: document.activeElement?.getAttribute('data-outline-id'),
+    rows: [...document.querySelectorAll('[role="treeitem"]')].map(el=>({text:el.querySelector('.outline__content')?.textContent,level:el.getAttribute('aria-level') }))
+  })));
   await page.waitForFunction(text=>[...document.querySelectorAll('[role="treeitem"][aria-level="2"]')].some(x=>x.textContent.includes(text)),childText);
   await row(page,parentText).getByRole('button',{name:'子を折りたたむ'}).click();
   assert.equal(await row(page,childText).count(),0);
