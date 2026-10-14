@@ -306,10 +306,14 @@ check('P2', 'P2-2', 'スマホの本文は画面の左端から16px、右は操�
   const { page } = se;
   await page.getByRole('tab', { name: /^アウトライン/ }).first().click(); await settle(page);
   const r = await page.evaluate(() => { const row = document.querySelector('.entry-column--sentence .outline__item'); const t = row.querySelector('.outline__content');
-    const rects = window.__qa.lineRects(t); return { left: row.getBoundingClientRect().left, textLeft:Math.min(...rects.map(x=>x.left)), right: Math.max(...rects.map(x => x.right)) }; });
+    const actions = row.querySelector('.outline__actions');const rect=t.getBoundingClientRect();const button=actions.getBoundingClientRect();
+    const glyphs = window.__qa.lineRects(t);
+    return { left: row.getBoundingClientRect().left, textLeft:Math.min(...glyphs.map(x=>x.left)), right:rect.right, actionLeft:button.left,
+      clip:getComputedStyle(t).overflowX, fullTextRight:Math.max(...glyphs.map(x=>x.right)) }; });
   assert.ok(Math.abs(r.left - 16) <= 1, `行の左端が${Math.round(r.left)}px`);
   assert.ok(r.textLeft>=r.left, '階層記号と本文が重なる');
-  assert.ok(r.right <= 375 - 44, `本文の右端が${Math.round(r.right)}pxで操作に重なる`);
+  assert.ok(r.clip === 'hidden' || r.clip === 'clip', `本文を省略せずに横へ伸ばしている(${r.clip})`);
+  assert.ok(r.right <= r.actionLeft + 1 && r.actionLeft <= 375, `可視本文${Math.round(r.right)}pxと操作${Math.round(r.actionLeft)}pxが重なる`);
 });
 check('P2', 'P2-3', `PCの最初の画面に囲み(3辺以上の枠)がなく、行の罫を除く線は${LIMIT.pcBorderSides}辺まで`, async ({ pc }) => {
   const r = await pc.page.evaluate(() => { const { vis, parse, name } = window.__qa; const boxes = []; let lines = 0; const who = [];
