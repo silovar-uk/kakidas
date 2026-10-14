@@ -51,6 +51,9 @@ for(const width of widths){
   if(m.rowOverlap>16)problems.push('行本文とボタン '+m.rowOverlap);
   if(mobile&&m.mobileActions!==1)problems.push('行のメニュー数 '+m.mobileActions);
   if(m.offscreen.length)problems.push('画面外 '+m.offscreen.join(','));
+  // 移り変わりが落ち着いた通常画面も保存。操作シートを開いた後の画像と混同しない。
+  await page.waitForTimeout(380);
+  await page.screenshot({path:resolve(out,'layout-'+width+'.png')});
   if(mobile){
    await page.locator('.outline__item').first().getByRole('button',{name:'この項目の操作'}).click({timeout:3000});
    const modal=page.getByRole('dialog',{name:/.+/});
@@ -58,7 +61,6 @@ for(const width of widths){
    await action.click({timeout:3000});
    await page.locator('.outline__details').first().waitFor({state:'visible',timeout:3000});
   }
-  await page.screenshot({path:resolve(out,'layout-'+width+'.png')});
   if(problems.length){failures++;console.error('NG',width,problems.join('; '));}
   else{passes++;console.log('OK',width,'overflow',m.scroll-m.width);}
  }catch(e){failures++;console.error('NG',width,String(e.stack||e).slice(0,850));try{await page.screenshot({path:resolve(out,'error-'+width+'.png')})}catch{}}
