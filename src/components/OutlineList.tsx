@@ -7,6 +7,8 @@ type OutlineListProps = {
   onCreate: (content: string, parentId: string | null, index: number) => Promise<EntryRow>;
   onRelocate: (id: string, parentId: string | null, index: number) => Promise<void>;
   onOpenActions?: (id: string) => void;
+  mobileDetailsRequestId?: string | null;
+  onMobileDetailsHandled?: () => void;
   onToggleCompleted?: (id: string) => Promise<void>;
   onUpdate: (id: string, patch: EntryUpdate) => Promise<unknown>;
   onGrow: (entry: EntryTreeNode) => Promise<unknown>;
@@ -17,7 +19,7 @@ type MoveHistory = { id: string; parentId: string | null; index: number };
 const DENSITY_KEY = "kakidas.outline-density.v1";
 
 /** 親子構造はDBの parent_id / sort_order に保存し、このコンポーネントには一時的な開閉・選択だけを置く。 */
-export function OutlineList({ entries, disabled = false, onCreate, onRelocate, onOpenActions, onToggleCompleted, onUpdate, onGrow, renderDetails }: OutlineListProps) {
+export function OutlineList({ entries, disabled = false, onCreate, onRelocate, onOpenActions, mobileDetailsRequestId, onMobileDetailsHandled, onToggleCompleted, onUpdate, onGrow, renderDetails }: OutlineListProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingValue, setEditingValue] = useState("");
@@ -74,6 +76,12 @@ export function OutlineList({ entries, disabled = false, onCreate, onRelocate, o
     }
   }
 
+  useEffect(() => {
+    if (!mobileDetailsRequestId) return;
+    setSelectedId(mobileDetailsRequestId);
+    setDetails(previous => new Set(previous).add(mobileDetailsRequestId));
+    onMobileDetailsHandled?.();
+  }, [mobileDetailsRequestId, onMobileDetailsHandled]);
   useEffect(() => { if (editingId) editorRef.current?.focus(); }, [editingId]);
   useEffect(() => { if (draft) draftRef.current?.focus(); }, [draft?.afterId, draft?.parentId]);
   useEffect(() => {
