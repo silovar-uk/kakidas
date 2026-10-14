@@ -260,6 +260,7 @@ export function useMemoDetail(memoId: string | undefined) {
       position: EntryInsertPosition = "bottom",
       draftId?: string,
       entryId?: string,
+      outlineIndex?: number,
     ): Promise<EntryRow> => {
       if (!memoId) {
         throw new Error("メモIDがありません。");
@@ -273,7 +274,7 @@ export function useMemoDetail(memoId: string | undefined) {
           parent_id: parentId,
           content,
           ...metadata,
-        }, position, draftId);
+        }, position, draftId, outlineIndex);
 
         await refreshAfterWrite();
         return entry;
@@ -376,6 +377,16 @@ export function useMemoDetail(memoId: string | undefined) {
     [memoId, refreshAfterWrite, runWrite],
   );
 
+  const relocateOutlineEntry = useCallback(
+    async (entryId: string, parentId: string | null, index: number): Promise<void> => {
+      return runWrite(async () => {
+        await memoRepository.relocateOutlineEntry(entryId, parentId, index);
+        await refreshAfterWrite();
+      });
+    },
+    [refreshAfterWrite, runWrite],
+  );
+
   const moveEntryToKind = useCallback(
     async (entryId: string, targetKind: EntryKind): Promise<void> => {
       return runWrite(async () => {
@@ -414,6 +425,7 @@ export function useMemoDetail(memoId: string | undefined) {
     deleteCompletedEntries,
     renameEntryTag,
     moveEntryToKind,
+    relocateOutlineEntry,
     deleteMemo,
   };
 }

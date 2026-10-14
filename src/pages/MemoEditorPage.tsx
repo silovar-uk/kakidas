@@ -84,6 +84,7 @@ const HIDE_COMPLETED_ENTRIES_STORAGE_KEY = "kakidas.hide-completed-entries";
 const ADD_ENTRIES_AT_BOTTOM_STORAGE_KEY = "kakidas.add-entries-at-bottom";
 const COMPACT_ENTRY_VIEW_STORAGE_KEY = "kakidas.compact-entry-view";
 const COLLAPSED_ENTRY_COLUMNS_STORAGE_KEY = "kakidas.collapsed-entry-columns.v1";
+const WORKSPACE_KINDS: EntryKind[] = ["sentence", "paragraph", "word"];
 
 type CollapsedEntryColumns = Record<EntryKind, boolean>;
 
@@ -202,6 +203,7 @@ export function MemoEditorPage() {
     deleteCompletedEntries,
     renameEntryTag,
     moveEntryToKind,
+    relocateOutlineEntry,
     createMemoFromEntry,
     deleteMemo,
   } = useMemoDetail(memoId);
@@ -262,6 +264,30 @@ export function MemoEditorPage() {
   const [collapsedEntryColumns, setCollapsedEntryColumns] = useState<CollapsedEntryColumns>(
     readCollapsedEntryColumns,
   );
+  const [isMediumScreen, setIsMediumScreen] = useState(
+    () => window.matchMedia("(min-width: 921px) and (max-width: 1199px)").matches,
+  );
+  const [mediumUrlExpanded, setMediumUrlExpanded] = useState(false);
+  useEffect(() => {
+    const media = window.matchMedia("(min-width: 921px) and (max-width: 1199px)");
+    const update = () => setIsMediumScreen(media.matches);
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, []);
+  // ショートカット経由では折りたたまれている列を開き、スマホではそのタブを見せる。
+  useEffect(() => {
+    const selectKind = (event: Event) => {
+      const kind = (event as CustomEvent<EntryKind>).detail;
+      if (!ENTRY_KINDS.includes(kind)) return;
+      setActiveKind(kind);
+      if (kind === "word") setMediumUrlExpanded(true);
+      setCollapsedEntryColumns((previous) => previous[kind]
+        ? { ...previous, [kind]: false }
+        : previous);
+    };
+    window.addEventListener("kakidas:choose-entry-kind", selectKind);
+    return () => window.removeEventListener("kakidas:choose-entry-kind", selectKind);
+  }, []);
   /** 画面と出力に共通で使う、端末ごとの並び順。 */
   const [entrySortMode, setEntrySortMode] = useState<EntrySortMode>(
     readEntrySortMode,
@@ -346,34 +372,29 @@ export function MemoEditorPage() {
     writeEntrySortMode(entrySortMode);
   }, [entrySortMode]);
 
+  const effectiveCollapsed = useMemo(() => ({
+    ...collapsedEntryColumns,
+    word: collapsedEntryColumns.word || (isMediumScreen && !mediumUrlExpanded),
+  }), [collapsedEntryColumns, isMediumScreen, mediumUrlExpanded]);
+
   const toggleEntryColumnCollapsed = useCallback((targetKind: EntryKind) => {
+    if (targetKind === "word" && isMediumScreen && !mediumUrlExpanded && !collapsedEntryColumns.word) {
+      setMediumUrlExpanded(true);
+      return;
+    }
     setCollapsedEntryColumns((current) => {
       const openCount = ENTRY_KINDS.filter((kind) => !current[kind]).length;
-
-      // 最後の1列だけは閉じない。復帰先がない空画面を作らない。
-      if (!current[targetKind] && openCount <= 1) {
-        return current;
-      }
-
-      return {
-        ...current,
-        [targetKind]: !current[targetKind],
-      };
+      if (!current[targetKind] && openCount <= 1) return current;
+      return { ...current, [targetKind]: !current[targetKind] };
     });
-  }, []);
+  }, [collapsedEntryColumns.word, isMediumScreen, mediumUrlExpanded]);
 
-  const openEntryColumnCount = ENTRY_KINDS.filter((kind) => !collapsedEntryColumns[kind]).length;
-
-  const editorGridStyle = useMemo<CSSProperties>(
-    () => ({
-      gridTemplateColumns: ENTRY_KINDS
-        .map((kind) =>
-          collapsedEntryColumns[kind] ? "44px" : "minmax(0, 1fr)"
-        )
-        .join(" "),
-    }),
-    [collapsedEntryColumns],
-  );
+  const openEntryColumnCount = ENTRY_KINDS.filter((kind) => !effectiveCollapsed[kind]).length;
+  const editorGridStyle = useMemo<CSSProperties>(() => ({
+    gridTemplateColumns: WORKSPACE_KINDS.map((kind) =>
+      effectiveCollapsed[kind] ? "44px" : `minmax(0, ${({ sentence: 42, paragraph: 38, word: 20 })[kind]}fr)`
+    ).join(" "),
+  }), [effectiveCollapsed]);
 
   // メモ画面を離れた後に、モバイル操作シート等のスクロールロックを残さない。
   useEffect(() => {
@@ -1022,7 +1043,7 @@ export function MemoEditorPage() {
           paperRef={paperRef} onBack={()=>toggleSeisho(false)} onCopy={copySeisho} onPrint={()=>window.print()}/>
       ) : <>
       <div className="editor-tabs" role="tablist" aria-label="入力する粒度">
-        {ENTRY_KINDS.map((kind) => (
+        {WORKSPACE_KINDS.map((kind) => (
           <button
             key={`${memo.id}:${kind}`}
             type="button"
@@ -1061,7 +1082,7 @@ export function MemoEditorPage() {
         aria-label="書き出しスペース"
         style={editorGridStyle}
       >
-        {ENTRY_KINDS.map((kind) => (
+        {WORKSPACE_KINDS.map((kind) => (
           <EntryColumn
             key={kind}
             memoId={memo.id}
@@ -1069,7 +1090,7 @@ export function MemoEditorPage() {
             kind={kind}
             entries={entriesByKind[kind]}
             isActiveOnMobile={activeKind === kind}
-            isCollapsed={collapsedEntryColumns[kind]}
+            isCollapsed={effectiveCollapsed[kind]}
             canCollapse={openEntryColumnCount > 1}
             onToggleCollapsed={() => toggleEntryColumnCollapsed(kind)}
             showCreatedAt={showEntryTimestamps}
@@ -1093,6 +1114,7 @@ export function MemoEditorPage() {
               renameEntryTag(kind, currentTag, nextTag)
             }
             onMoveToKind={handleMoveEntryToKind}
+            onRelocateOutline={relocateOutlineEntry}
           />
         ))}
       </section>

@@ -16,7 +16,7 @@ const OUT = process.env.OUT;
 mkdirSync(OUT, { recursive: true });
 const PC = { width: 1366, height: 633 };
 const SE = { width: 375, height: 667 };
-const LABEL = { url: '参考URL', sentence: '文', paragraph: '段落' };
+const LABEL = { url: '参考URL', sentence: 'アウトライン', paragraph: '段落' };
 
 const SAMPLE = {
   urls: ['https://www.nngroup.com/articles/progressive-disclosure/', 'https://developer.chrome.com/blog/view-transitions-in-2025', 'https://getdrafts.com/'],
@@ -33,7 +33,7 @@ async function write(page, kind, text, { heading = '', tag = '', note = '' } = {
     try {
       await page.getByRole('button', { name: 'タグを付ける', exact: true }).click();
       await page.getByRole('textbox', { name: '項目タグ', exact: true }).fill(tag);
-      await page.locator('.entry-composer__tag-apply').click();
+      await page.getByRole('textbox', { name: '項目タグ' }).press('Enter');
     } catch (e) { console.log('tag失敗', e.message.split('\n')[0]); }
   }
   if (note) {
@@ -151,7 +151,7 @@ async function seedMemo(page, rich) {
   for (const [i, s] of SAMPLE.sentences.entries()) await write(page, 'sentence', s, i === 1 ? { tag: '設計', note: 'あとで確認したい' } : i === 3 ? { tag: '設計' } : {});
   for (const [h, p] of SAMPLE.paragraphs) await write(page, 'paragraph', p, { heading: h });
   try {
-    const done = page.getByRole('region', { name: '文', exact: true }).locator('.entry-item').filter({ hasText: SAMPLE.done }).first();
+    const done = page.getByRole('region', { name: 'アウトライン', exact: true }).locator('.outline__item-wrap').filter({ hasText: SAMPLE.done }).first();
     await done.hover();
     await done.getByRole('button', { name: /^完了(にする)?$/ }).first().click({ timeout: 4000 });
     await page.waitForTimeout(400);
@@ -189,7 +189,7 @@ try {
       rows: [...col.querySelectorAll('.entry-item')].slice(0, 4).map(r => { const b = r.getBoundingClientRect(); const s = getComputedStyle(r); return { y: Math.round(b.top), h: Math.round(b.height), pad: s.padding, border: s.borderBottom, bg: s.backgroundColor, radius: s.borderRadius, mb: s.marginBottom }; }),
     })));
     // 行にホバー
-    const row = page.getByRole('region', { name: '文', exact: true }).locator('.entry-item').filter({ hasText: SAMPLE.sentences[1] }).first();
+    const row = page.getByRole('region', { name: 'アウトライン', exact: true }).locator('.outline__item-wrap').filter({ hasText: SAMPLE.sentences[1] }).first();
     await row.hover(); await page.waitForTimeout(300);
     await shot(page, 'pc-04-row-hover.png');
     const rb = await row.boundingBox();
@@ -212,7 +212,7 @@ try {
     results.pcMemoMenu = await page.evaluate(MEASURE);
     await page.keyboard.press('Escape'); await page.waitForTimeout(200);
     // 列の操作
-    try { await page.getByRole('button', { name: '文の操作', exact: true }).click(); await page.waitForTimeout(300); await shot(page, 'pc-07-column-menu.png'); await page.keyboard.press('Escape'); } catch (e) { console.log('列メニュー失敗', e.message.split('\n')[0]); }
+    try { await page.getByRole('button', { name: 'アウトラインの操作', exact: true }).click(); await page.waitForTimeout(300); await shot(page, 'pc-07-column-menu.png'); await page.keyboard.press('Escape'); } catch (e) { console.log('列メニュー失敗', e.message.split('\n')[0]); }
     // 余白
     try { await page.getByRole('button', { name: '余白を開く', exact: true }).click(); await page.waitForTimeout(500); await page.getByRole('textbox', { name: '余白に書く', exact: true }).fill('ここは余白。思いついたことを置いておく。\n二行目のメモ。'); await shot(page, 'pc-08-yohaku.png'); results.pcYohaku = await page.evaluate(MEASURE); await page.keyboard.press('Escape'); await page.waitForTimeout(300); } catch (e) { console.log('余白失敗', e.message.split('\n')[0]); }
     // 清書
@@ -251,12 +251,12 @@ try {
     for (const [kind, label] of Object.entries(LABEL)) {
       try { await page.getByRole('tab', { name: new RegExp('^' + label) }).first().click(); await page.waitForTimeout(400); await page.evaluate(() => (document.scrollingElement.scrollTop = 0)); await shot(page, `se-02-editor-${kind}.png`); } catch (e) { console.log('tab失敗', kind, e.message.split('\n')[0]); }
     }
-    await page.getByRole('tab', { name: /^文/ }).first().click(); await page.waitForTimeout(300);
+    await page.getByRole('tab', { name: /^アウトライン/ }).first().click(); await page.waitForTimeout(300);
     await page.evaluate(() => (document.scrollingElement.scrollTop = 0));
     results.seEditor = await page.evaluate(MEASURE);
     results.seEditorRects = await page.evaluate(RECTS + `(${JSON.stringify(['.editor-header--shitate', '.editor-tabs', '.entry-composer--desk', '.entry-composer__textarea', '.entry-composer__submit', '.entry-column__header', '.entry-item', '.entry-item__structure-button'])})`);
     await shot(page, 'se-03-editor-full.png', { fullPage: true });
-    try { await page.locator('.entry-item').filter({ hasText: SAMPLE.sentences[1] }).first().getByRole('button', { name: 'この項目の操作', exact: true }).click(); await page.waitForTimeout(500); await shot(page, 'se-04-action-sheet.png'); results.seSheet = await page.evaluate(MEASURE); await page.keyboard.press('Escape'); await page.waitForTimeout(300); } catch (e) { console.log('シート失敗', e.message.split('\n')[0]); }
+    try { await page.locator('.outline__item-wrap').filter({ hasText: SAMPLE.sentences[1] }).first().getByRole('button', { name: 'この項目の操作', exact: true }).click(); await page.waitForTimeout(500); await shot(page, 'se-04-action-sheet.png'); results.seSheet = await page.evaluate(MEASURE); await page.keyboard.press('Escape'); await page.waitForTimeout(300); } catch (e) { console.log('シート失敗', e.message.split('\n')[0]); }
     try { await page.getByRole('button', { name: 'メモの操作', exact: true }).click(); await page.waitForTimeout(400); await shot(page, 'se-05-memo-menu.png'); await page.keyboard.press('Escape'); await page.waitForTimeout(300); } catch (e) { console.log('メニュー失敗', e.message.split('\n')[0]); }
     try { const b = page.locator('.memo-actions__backdrop'); if (await b.count() && await b.isVisible()) await b.click(); } catch {}
     try { await page.getByRole('button', { name: '余白を開く', exact: true }).click(); await page.waitForTimeout(500); await shot(page, 'se-06-yohaku.png'); await page.keyboard.press('Escape'); await page.waitForTimeout(300); } catch (e) { console.log('余白失敗', e.message.split('\n')[0]); }

@@ -22,6 +22,7 @@ export type EntryInsertPosition = "top" | "bottom";
  * DBの sort_order や作成日時は書き換えず、画面とコピーの順番だけを切り替える。
  */
 export const ENTRY_SORT_MODES = [
+  "manual",
   "created_asc",
   "created_desc",
   "satisfaction_desc",
@@ -40,6 +41,7 @@ export const MEMO_SORT_MODE_LABEL: Record<MemoSortMode, string> = {
 };
 
 export const ENTRY_SORT_MODE_LABEL: Record<EntrySortMode, string> = {
+  manual: "手動順",
   created_asc: "追加順（昇順）",
   created_desc: "追加順（降順）",
   satisfaction_desc: "評価順（高い順）",
@@ -329,14 +331,14 @@ export type BackupPayload = {
 /** 画面に出す名前だけを日本語にする。kind / DB値は従来のまま。 */
 export const ENTRY_KIND_LABEL: Record<EntryKind, string> = {
   word: "参考URL",
-  sentence: "文",
+  sentence: "アウトライン",
   paragraph: "段落",
 };
 
 /** 入力欄でだけ使う、短い補助文。 */
 export const ENTRY_KIND_PLACEHOLDER: Record<EntryKind, string> = {
   word: "URLを貼り付け…",
-  sentence: "一文で書く",
+  sentence: "論点を書き出す",
   paragraph: "少し長めに書く",
 };
 
@@ -692,6 +694,7 @@ function compareEntriesForDisplay(
   b: EntryRow,
   sortMode: EntrySortMode,
 ): number {
+  if (sortMode === "manual") return compareEntries(a, b);
   // 完了項目は常に後ろへ寄せる。タグでまとめる表示では、この順を使って最下部の完了グループへ分ける。
   if (a.is_completed !== b.is_completed) {
     return Number(a.is_completed) - Number(b.is_completed);
@@ -722,10 +725,11 @@ export function getEntryTree(
   kind: EntryKind,
   sortMode: EntrySortMode = "created_desc",
 ): EntryTreeNode[] {
+  const effectiveSortMode = kind === "sentence" ? "manual" : sortMode;
   const activeEntries = entries
     .filter((entry) => entry.kind === kind && entry.deleted_at === null)
     .map(normalizeEntryRow)
-    .sort((a, b) => compareEntriesForDisplay(a, b, sortMode));
+    .sort((a, b) => compareEntriesForDisplay(a, b, effectiveSortMode));
 
   const entryById = new Map(activeEntries.map((entry) => [entry.id, entry]));
   const childrenByParent = new Map<string | null, EntryRow[]>();
@@ -744,7 +748,7 @@ export function getEntryTree(
   }
 
   for (const siblings of childrenByParent.values()) {
-    siblings.sort((a, b) => compareEntriesForDisplay(a, b, sortMode));
+    siblings.sort((a, b) => compareEntriesForDisplay(a, b, effectiveSortMode));
   }
 
   const countDescendants = (entryId: string, seen: Set<string>): number => {
@@ -815,7 +819,7 @@ export function getEntryTree(
         (candidate.parent_id === entry.parent_id || candidate.id === entry.id),
     );
 
-    siblings.sort((a, b) => compareEntriesForDisplay(a, b, sortMode)).forEach((orphan, index) => {
+    siblings.sort((a, b) => compareEntriesForDisplay(a, b, effectiveSortMode)).forEach((orphan, index) => {
       if (visited.has(orphan.id)) return;
 
       visited.add(orphan.id);

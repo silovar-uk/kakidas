@@ -106,8 +106,11 @@ export interface MemoRepository {
     input: Omit<EntryInsert, "created_at" | "updated_at">,
     position?: EntryInsertPosition,
     draftId?: string,
+    outlineIndex?: number,
   ): Promise<EntryRow>;
   updateEntry(entryId: string, patch: EntryUpdate): Promise<EntryRow>;
+  /** アウトラインの移動・階層変更を一括保存。子孫は親IDのまま追随する。 */
+  relocateOutlineEntry(entryId: string, parentId: string | null, index: number): Promise<void>;
   /** 同じメモ・同じ区分の項目タグをまとめて別名へ置き換える。 */
   renameEntryTag(
     memoId: string,
@@ -746,6 +749,7 @@ class IndexedDbMemoRepository implements MemoRepository {
     input: Omit<EntryInsert, "created_at" | "updated_at">,
     position: EntryInsertPosition = "bottom",
     draftId?: string,
+    outlineIndex?: number,
   ): Promise<EntryRow> {
     const content = input.content.trim();
 
@@ -800,7 +804,20 @@ class IndexedDbMemoRepository implements MemoRepository {
     const timestamp = nowIso();
     // sort_orderは親・種別ごとの表示順。先頭追加では最小値より1つ前、
     // 末尾追加では最大値より1つ後を採用して、既存の順番を崩さない。
-    const nextSortOrder = input.sort_order ?? (
+    // アウトラインの挿入位置を兄弟の並びと同一トランザクションで確定する。
+    // 作成後に別トランザクションで移動すると、失敗時に項目が重複するため避ける。
+    const insertAt = input.kind === "sentence" && outlineIndex !== undefined
+      ? Math.max(0, Math.min(Math.floor(outlineIndex), siblings.length))
+      : null;
+    if (insertAt !== null) {
+      siblings.forEach((sibling, i) => {
+        const next = i >= insertAt ? i + 1 : i;
+        if (sibling.sort_order !== next) {
+          entryStore.put({ ...sibling, sort_order: next, updated_at: timestamp } satisfies EntryRow);
+        }
+      });
+    }
+    const nextSortOrder = insertAt ?? input.sort_order ?? (
       siblings.length === 0
         ? 0
         : position === "top"
@@ -847,6 +864,65 @@ class IndexedDbMemoRepository implements MemoRepository {
     await transactionToPromise(transaction);
 
     return entry;
+  }
+
+  async relocateOutlineEntry(entryId: string, targetParentId: string | null, targetIndex: number): Promise<void> {
+    const db = await getDatabase();
+    const transaction = db.transaction(
+      [STORE_NAMES.memos, STORE_NAMES.entries, STORE_NAMES.memoSyncMeta],
+      "readwrite",
+    );
+    const memos = transaction.objectStore(STORE_NAMES.memos);
+    const store = transaction.objectStore(STORE_NAMES.entries);
+    const sync = transaction.objectStore(STORE_NAMES.memoSyncMeta);
+    const current = await this.requireActiveEntry(store, entryId, transaction);
+    if (current.kind !== "sentence") {
+      transaction.abort();
+      throw new Error("アウトライン以外は移動できません。");
+    }
+    const all = (await this.getEntriesForMemo(store, current.memo_id))
+      .filter((entry) => entry.deleted_at === null && entry.kind === "sentence");
+    const byId = new Map(all.map((entry) => [entry.id, entry]));
+    // 自分自身・子孫・不正な親参照へ移動させない。循環した既存データも拒否する。
+    const seen = new Set([entryId]);
+    let ancestor = targetParentId;
+    while (ancestor !== null) {
+      if (seen.has(ancestor)) {
+        transaction.abort();
+        throw new Error("自分自身や子孫の下には移動できません。");
+      }
+      seen.add(ancestor);
+      const parent = byId.get(ancestor);
+      if (!parent) {
+        transaction.abort();
+        throw new Error("移動先の親が見つかりません。");
+      }
+      ancestor = parent.parent_id;
+    }
+    const siblings = (parentId: string | null) => all
+      .filter((entry) => entry.parent_id === parentId && entry.id !== entryId)
+      .sort(compareEntries);
+    const oldSiblings = siblings(current.parent_id);
+    const nextSiblings = targetParentId === current.parent_id
+      ? oldSiblings
+      : siblings(targetParentId);
+    const index = Math.max(0, Math.min(Math.floor(targetIndex), nextSiblings.length));
+    nextSiblings.splice(index, 0, { ...current, parent_id: targetParentId });
+    const timestamp = nowIso();
+    const updateSiblings = (rows: EntryRow[], parentId: string | null) => {
+      rows.forEach((row, position) => {
+        // 既に移動先の親IDで複製された一時オブジェクトではなく、DBから読んだ元レコードで差分判定する。
+        // sort_order が変わらなくても parent_id だけ変わるケースを必ず保存する。
+        const persisted = byId.get(row.id);
+        if (persisted?.sort_order === position && persisted.parent_id === parentId) return;
+        store.put({ ...row, parent_id: parentId, sort_order: position, updated_at: timestamp } satisfies EntryRow);
+      });
+    };
+    if (current.parent_id !== targetParentId) updateSiblings(oldSiblings, current.parent_id);
+    updateSiblings(nextSiblings, targetParentId);
+    await this.touchMemoWithinTransaction(memos, current.memo_id, timestamp);
+    await this.markMemoChangedWithinTransaction(sync, current.memo_id, timestamp);
+    await transactionToPromise(transaction);
   }
 
   async updateEntry(entryId: string, patch: EntryUpdate): Promise<EntryRow> {

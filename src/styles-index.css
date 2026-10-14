@@ -1,5 +1,5 @@
 /* 旧スタイルをlegacy層に、新しい仕上げをtogu層に集約する。 */
-@layer legacy, togu;
+@layer legacy, togu, outline;
 @import "./styles-tokens.css" layer(legacy);
 @import "./styles.css" layer(legacy);
 @import "./styles-paragraph-heading.css" layer(legacy);
@@ -19,3 +19,5 @@
 @import "./styles-workspace-fold.css" layer(legacy);
 @import "./styles-shitate.css" layer(legacy);
 @import "./styles-togu.css";
+
+@import "./styles-outline.css";
