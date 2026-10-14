@@ -96,19 +96,14 @@ check('P3','折りたたみと集中表示を解除できる',async(page)=>{
   assert.equal(before.length,2);
   const [parentText,childText]=before;
   await row(page,childText).focus();
-  await page.waitForTimeout(120);
-  console.log('P3字下げ直前', await page.evaluate(() => ({
-    focused: document.activeElement?.getAttribute('data-outline-id'),
-    rows: [...document.querySelectorAll('[role="treeitem"]')].map(el=>({id:el.getAttribute('data-outline-id'),text:el.querySelector('.outline__content')?.textContent,level:el.getAttribute('aria-level'),parent:el.getAttribute('data-outline-parent-id'),sort:el.getAttribute('data-outline-sort-order') }))
-  })));
   await page.keyboard.press('Tab');
-  await page.waitForTimeout(150);
-  console.log('P3字下げ直後', await page.evaluate(() => ({
-    focused: document.activeElement?.getAttribute('data-outline-id'),
-    error:document.querySelector('.outline__message')?.textContent,
-    rows: [...document.querySelectorAll('[role="treeitem"]')].map(el=>({id:el.getAttribute('data-outline-id'),text:el.querySelector('.outline__content')?.textContent,level:el.getAttribute('aria-level'),parent:el.getAttribute('data-outline-parent-id'),sort:el.getAttribute('data-outline-sort-order') }))
-  })));
   await page.waitForFunction(text=>[...document.querySelectorAll('[role="treeitem"][aria-level="2"]')].some(x=>x.textContent.includes(text)),childText);
+  // sort_orderが同じでもparent_idだけ変わる移動をDBへ必ず保存する。
+  const parentId=await row(page,parentText).getAttribute('data-outline-id');
+  assert.equal(await row(page,childText).getAttribute('data-outline-parent-id'),parentId);
+  await page.reload();
+  await row(page,childText).waitFor({state:'visible'});
+  assert.equal(await row(page,childText).getAttribute('aria-level'),'2','リロード後に親子関係が保たれる');
   await row(page,parentText).getByRole('button',{name:'子を折りたたむ'}).click();
   assert.equal(await row(page,childText).count(),0);
   await row(page,parentText).getByRole('button',{name:'子を展開'}).click();
