@@ -90,25 +90,22 @@ check('P2','作成・位置指定・再読込で重複しない',async(page)=>{
   assert.equal(persisted.indexOf('途中'),persisted.indexOf('先頭改訂')+1,'選択行の直後に挿入');
 });
 check('P3','折りたたみと集中表示を解除できる',async(page)=>{
-  await put(page,'子節');await put(page,'親節');
+  await put(page,'節A');await put(page,'節B');
+  // 利用者の「先頭／末尾へ追加」設定に依存させない。先頭表示を親、次を子にする。
   const before=await outline(page).locator('.outline__content').allTextContents();
-  if(before.indexOf('親節') > before.indexOf('子節')) {
-    await row(page,'親節').focus();await page.keyboard.press('Control+Shift+ArrowUp');
-    await page.waitForFunction(()=>document.querySelector('.outline__content')?.textContent==='親節');
-  }
-  await row(page,'子節').focus();
-  console.log('P3構造・字下げ前',await outline(page).locator('[role="treeitem"]').evaluateAll(els=>els.map(el=>({txt:el.textContent.slice(0,20),level:el.getAttribute('aria-level')}))));
+  assert.equal(before.length,2);
+  const [parentText,childText]=before;
+  await row(page,childText).focus();
   await page.keyboard.press('Tab');
-  console.log('P3構造・字下げ後',await outline(page).locator('[role="treeitem"]').evaluateAll(els=>els.map(el=>({txt:el.textContent.slice(0,20),level:el.getAttribute('aria-level')}))));
-  await page.waitForFunction(()=>[...document.querySelectorAll('[role="treeitem"][aria-level="2"]')].some(x=>x.textContent.includes('子節')));
-  await row(page,'親節').getByRole('button',{name:'子を折りたたむ'}).click();
-  assert.equal(await row(page,'子節').count(),0);
-  await row(page,'親節').getByRole('button',{name:'子を展開'}).click();
-  assert.equal(await row(page,'子節').count(),1);
-  await row(page,'親節').getByRole('button',{name:'この枝に集中'}).click();
+  await page.waitForFunction(text=>[...document.querySelectorAll('[role="treeitem"][aria-level="2"]')].some(x=>x.textContent.includes(text)),childText);
+  await row(page,parentText).getByRole('button',{name:'子を折りたたむ'}).click();
+  assert.equal(await row(page,childText).count(),0);
+  await row(page,parentText).getByRole('button',{name:'子を展開'}).click();
+  assert.equal(await row(page,childText).count(),1);
+  await row(page,parentText).getByRole('button',{name:'この枝に集中'}).click();
   assert.equal(await page.getByRole('navigation',{name:'アウトラインのズーム位置'}).count(),1);
   await page.getByRole('button',{name:'全体'}).click();
-  assert.equal(await row(page,'親節').count(),1);
+  assert.equal(await row(page,parentText).count(),1);
 });
 check('P3','スマホでもアウトライン項目が表示される',async(page)=>{
   await put(page,'モバイル入力');
