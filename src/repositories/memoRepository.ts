@@ -911,7 +911,10 @@ class IndexedDbMemoRepository implements MemoRepository {
     const timestamp = nowIso();
     const updateSiblings = (rows: EntryRow[], parentId: string | null) => {
       rows.forEach((row, position) => {
-        if (row.sort_order === position && row.parent_id === parentId) return;
+        // 既に移動先の親IDで複製された一時オブジェクトではなく、DBから読んだ元レコードで差分判定する。
+        // sort_order が変わらなくても parent_id だけ変わるケースを必ず保存する。
+        const persisted = byId.get(row.id);
+        if (persisted?.sort_order === position && persisted.parent_id === parentId) return;
         store.put({ ...row, parent_id: parentId, sort_order: position, updated_at: timestamp } satisfies EntryRow);
       });
     };
