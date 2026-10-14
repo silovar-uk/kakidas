@@ -39,16 +39,22 @@ for(const width of widths){
    const dest=rects('.entry-composer--desk .entry-composer__destinations button');
    const meta=rects('.entry-composer--desk .entry-composer__meta-controls button');
    const formOverlap=dest.flatMap(a=>meta.filter(b=>coll(a,b)>24).map(b=>[name(a),name(b)]));
+   const rail=document.querySelector('.entry-column--collapsed .entry-column__collapsed-rail');
+   const label=rail?.querySelector('.entry-column__collapsed-label');
+   const count=rail?.querySelector('.entry-column__collapsed-count');
+   const chevron=rail?.querySelector('.entry-column__collapsed-chevron');
+   const railOverlap=rail&&label&&count&&chevron?Math.max(coll(label,count),coll(label,chevron),coll(count,chevron)):0;
    const row=rects('.outline__item')[0],text=row?.querySelector('.outline__content'),actions=row?.querySelector('.outline__actions');
    const visibleActions=row?[...row.querySelectorAll('.outline__actions button')].filter(valid):[];
    const clickable=[...header,...dest,...meta,...visibleActions];
    const offscreen=clickable.filter(x=>R(x).x<-1||R(x).right>innerWidth+1).map(name);
-   return {width:innerWidth,scroll:document.documentElement.scrollWidth,overlap,formOverlap,rowOverlap:text&&actions?coll(text,actions):0,mobileActions:visibleActions.length,offscreen};
+   return {width:innerWidth,scroll:document.documentElement.scrollWidth,overlap,formOverlap,rowOverlap:text&&actions?coll(text,actions):0,railOverlap,mobileActions:visibleActions.length,offscreen};
   });
   if(m.scroll>m.width+2)problems.push('水平スクロール '+m.scroll+'/'+m.width);
   if(m.overlap.length)problems.push('ヘッダー '+JSON.stringify(m.overlap));
   if(m.formOverlap.length)problems.push('入力操作 '+JSON.stringify(m.formOverlap));
   if(m.rowOverlap>16)problems.push('行本文とボタン '+m.rowOverlap);
+  if(m.railOverlap>4)problems.push('収納URLレール内の操作が重なる '+m.railOverlap);
   if(mobile&&m.mobileActions!==1)problems.push('行のメニュー数 '+m.mobileActions);
   if(m.offscreen.length)problems.push('画面外 '+m.offscreen.join(','));
   // 移り変わりが落ち着いた通常画面も保存。操作シートを開いた後の画像と混同しない。
