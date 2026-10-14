@@ -158,6 +158,7 @@ export function EntryColumn({
 }: EntryColumnProps) {
   const [structureEntryId, setStructureEntryId] = useState<string | null>(null);
   const [mobileActionEntryId, setMobileActionEntryId] = useState<string | null>(null);
+  const [mobileOutlineDetailsRequestId, setMobileOutlineDetailsRequestId] = useState<string | null>(null);
   const [editRequest,setEditRequest]=useState<{entryId:string;target:"note"|"link"|"tag"}|null>(null);
   const [isHeaderMenuOpen, setIsHeaderMenuOpen] = useState(false);
   useEffect(() => {
@@ -1136,6 +1137,8 @@ export function EntryColumn({
             onCreate={async (content, parentId, index) => onCreate("sentence", content, {}, parentId, "bottom", undefined, undefined, index) as Promise<import("../types/memo").EntryRow>}
             onRelocate={onRelocateOutline}
             onOpenActions={openStructureActions}
+            mobileDetailsRequestId={mobileOutlineDetailsRequestId}
+            onMobileDetailsHandled={() => setMobileOutlineDetailsRequestId(null)}
             onToggleCompleted={toggleCompleted}
             onUpdate={handleUpdateEntry}
             onGrow={(entry) => onCreate("paragraph", entry.content, {}, null, "bottom")}
@@ -1201,6 +1204,7 @@ export function EntryColumn({
           onToggleCompleted={toggleCompleted}
           onUpdate={handleUpdateEntry}
           onRequestEdit={(entryId,target)=>setEditRequest({entryId,target})}
+          onRequestOutlineDetails={(entryId)=>{setMobileActionEntryId(null);setMobileOutlineDetailsRequestId(entryId);}}
           onMoveToKind={requestMoveToKind}
           onCopy={requestCopyEntry}
           onCreateMemoFromEntry={requestCreateMemoFromEntry}
