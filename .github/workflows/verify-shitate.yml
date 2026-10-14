@@ -27,6 +27,7 @@ jobs:
       - name: 型検査と本番ビルド
         run: npm run build
       - name: Playwrightを用意
+        timeout-minutes: 8
         run: |
           npm install --no-save --package-lock=false playwright
           npx playwright install --with-deps chromium
@@ -53,7 +54,7 @@ jobs:
         if: matrix.phase == 'P3' && always()
         uses: actions/upload-artifact@v4
         with:
-          name: togu-v0.6.1-shots
+          name: kakidas-v0.7.0-screenshots
           path: /tmp/togu-shots/
           if-no-files-found: warn
 
@@ -78,6 +79,7 @@ jobs:
       - name: 依存関係を復元
         run: npm ci
       - name: Playwrightを用意
+        timeout-minutes: 8
         run: |
           npm install --no-save --package-lock=false playwright
           npx playwright install --with-deps chromium
