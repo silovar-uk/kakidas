@@ -232,11 +232,50 @@
  * 項目固有の動きは残し、root の旧画面と新画面は即座に入れ替える。
  */
 @media (prefers-reduced-motion: no-preference) {
+  /* named snapshots (入力文字→項目) も古い画面へ拡大しない。朱の行アニメは維持。 */
+  ::view-transition-old(*),
+  ::view-transition-new(*),
   ::view-transition-old(root),
   ::view-transition-new(root) {
-    animation: none;
+    animation: none !important;
   }
 }
 ::view-transition {
   pointer-events: none;
+}
+
+/* 921〜1199px: 参考URLの収納レールではラベル・件数・展開操作を分離する。 */
+@media (min-width: 921px) and (max-width: 1199px) {
+  .entry-column--collapsed .entry-column__collapsed-rail {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto minmax(32px, 1fr);
+    justify-items: center;
+    align-content: start;
+    row-gap: 10px;
+    padding: 12px 2px;
+    overflow: hidden;
+  }
+  .entry-column--collapsed .entry-column__collapsed-label {
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+    font-size: 11px;
+    line-height: 1.2;
+    letter-spacing: 0;
+    white-space: nowrap;
+  }
+  .entry-column--collapsed .entry-column__collapsed-count {
+    display: grid;
+    min-width: 22px;
+    min-height: 22px;
+    margin: 0;
+    padding: 0;
+    font-size: 11px;
+    line-height: 1;
+  }
+  .entry-column--collapsed .entry-column__collapsed-chevron {
+    margin: 0;
+    justify-self: center;
+    align-self: end;
+  }
 }
