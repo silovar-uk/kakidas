@@ -87,6 +87,7 @@ for(const width of sizes)await trial(width+'pxでの本文・ボタンはみ出�
  const result=await page.evaluate(()=>{const t=document.querySelector('.node-text').getBoundingClientRect();return {vp:innerWidth,sw:document.documentElement.scrollWidth,right:t.right}});
  assert(result.sw<=result.vp+2,JSON.stringify(result));
  assert(result.right<=result.vp+1,JSON.stringify(result));
+ if(width<=800){const toolbar=await page.evaluate(()=>[...document.querySelectorAll('.mobile-tools button')].filter(b=>getComputedStyle(b).display!=='none').map(b=>{const x=b.getBoundingClientRect();return [x.left,x.right]}));assert(toolbar.every(([left,right])=>left>=-1&&right<=width+1),JSON.stringify(toolbar));}
  await page.screenshot({path:shots+'/viewport-'+width+'.png'});
 },width);
 await browser.close();
