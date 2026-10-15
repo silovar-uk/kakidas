@@ -37,7 +37,7 @@
 <nav class="mobile-tools" aria-label="モバイルの構造操作"><button data-action="new" aria-label="次の行を追加" title="次の行を追加">＋</button><button data-action="indent" aria-label="字下げ" title="字下げ">↳</button><button data-action="outdent" aria-label="字上げ" title="字上げ">↰</button><button data-action="up" aria-label="枝を上へ" title="枝を上へ">↑</button><button data-action="down" aria-label="枝を下へ" title="枝を下へ">↓</button><button data-action="undo" aria-label="元に戻す" title="元に戻す">↶</button><button data-action="zoom" aria-label="選択項目に集中" title="選択項目に集中">◎</button></nav>
 <script>
 (()=>{'use strict';
-const STORE='kakidas-p0-lab.v1';let uid=1;const sample=[
+const STUDY=new URLSearchParams(location.search).get('study')==='1';const STORE=STUDY?'kakidas-p0-study.v1':'kakidas-p0-lab.v1';let uid=1;const sample=[
 {id:'n1',parent:null,text:'市場の捉え方'},
 {id:'n2',parent:'n1',text:'誰が費用を支払うかを確認する'},
 {id:'n3',parent:'n1',text:'取引額と売上高を区別する'},
@@ -46,7 +46,7 @@ const STORE='kakidas-p0-lab.v1';let uid=1;const sample=[
 {id:'n6',parent:'n4',text:'映像やデータで改善できるか検証する'},
 {id:'n7',parent:null,text:'まだ分からないこと'}];
 const $=id=>document.getElementById(id), clone=x=>JSON.parse(JSON.stringify(x));
-let data={nodes:clone(sample),zoom:null,collapsed:[],selected:'n2'};
+let data={nodes:STUDY?[]:clone(sample),zoom:null,collapsed:[],selected:STUDY?null:'n2'};
 try{const saved=JSON.parse(localStorage.getItem(STORE)||'null');if(saved&&Array.isArray(saved.nodes)&&saved.nodes.length<5000&&saved.nodes.every(x=>typeof x.id==='string'&&(x.parent===null||typeof x.parent==='string')&&typeof x.text==='string'))data={...data,...saved};}catch{}
 let history=[],future=[],editOrigin=null,currentEditor=null,isRendering=false,openMenuId=null;
 let counter=Math.max(100,...data.nodes.map(x=>Number(x.id.replace(/\D/g,''))||0))+1;
@@ -108,7 +108,7 @@ if((e.ctrlKey||e.metaKey)&&e.shiftKey&&['ArrowUp','ArrowDown'].includes(e.key)){
 function onNavKey(e,id){const vis=visible().map(x=>x.n.id),idx=vis.indexOf(id);if(e.key==='ArrowUp'||e.key==='ArrowDown'){e.preventDefault();let next=vis[Math.max(0,Math.min(vis.length-1,idx+(e.key==='ArrowUp'?-1:1)))];data.selected=next;focusRow(next);updateContext();}else if(e.key==='ArrowRight'){e.preventDefault();const n=find(id);if(children(id).length&&data.collapsed.includes(id))action('collapse',id);else if(children(id).length){data.selected=children(id)[0].id;focusRow(data.selected);}}else if(e.key==='ArrowLeft'){e.preventDefault();if(children(id).length&&!data.collapsed.includes(id))action('collapse',id);else if(find(id)?.parent){data.selected=find(id).parent;focusRow(data.selected);}}else if(e.key==='Enter'){e.preventDefault();focusText(id);}else if(e.key==='Home'||e.key==='End'){e.preventDefault();data.selected=e.key==='Home'?vis[0]:vis.at(-1);focusRow(data.selected);}}
 $('add-end').addEventListener('click',()=>{const siblings=children(data.zoom);addNodeAfter(siblings.at(-1)?.id||null);});
 $('capture').addEventListener('submit',e=>{e.preventDefault();const input=$('capture-text'),text=input.value.trim();if(!text)return;mutate(()=>{const id=freshId();data.nodes.push({id,parent:null,text});data.selected=id;},'未整理のアイデアを追加');input.value='';input.focus();});
-$('reset').addEventListener('click',()=>{if(!confirm('この試作版のデータだけを初期化します。続けますか？'))return;data={nodes:clone(sample),zoom:null,collapsed:[],selected:'n2'};history=[];future=[];editOrigin=null;currentEditor=null;counter=101;save();render();status('試作データを初期化しました');});
+$('reset').addEventListener('click',()=>{if(!confirm('この試作版のデータだけを初期化します。続けますか？'))return;data={nodes:STUDY?[]:clone(sample),zoom:null,collapsed:[],selected:STUDY?null:'n2'};history=[];future=[];editOrigin=null;currentEditor=null;counter=101;save();render();status('試作データを初期化しました');});
 $('export').addEventListener('click',()=>{editCommit();const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json;charset=utf-8'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='kakidas-p0-prototype.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);});
 $('undo').addEventListener('click',()=>action('undo'));$('redo').addEventListener('click',()=>action('redo'));
 $('panel').addEventListener('click',()=>{const p=$('side'),open=p.style.display!=='none';p.style.display=open?'none':'';document.querySelector('.layout').style.gridTemplateColumns=open?'minmax(0,1fr)':'minmax(0,1fr) minmax(250px,308px)';$('panel').setAttribute('aria-pressed',String(!open));});
