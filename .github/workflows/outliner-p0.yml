@@ -37,6 +37,7 @@ jobs:
             sleep 1
           done
           SHOT_DIR=/tmp/kakidas-p0-shots node docs/prototypes/outliner-p0.qa.mjs
+          node docs/prototypes/outliner-p0.invariants.mjs
       - name: 検証時のスクリーンショット
         if: always()
         uses: actions/upload-artifact@v4
