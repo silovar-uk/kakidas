@@ -73,6 +73,7 @@ await trial('閲覧中の矢印移動とTabによるコンポーネント離脱'
  await page.locator('[data-editor-id="n2"]').click();await page.keyboard.press('Escape');
  assert(await page.locator('[data-node-id="n2"]').evaluate(el=>el===document.activeElement));
  await page.keyboard.press('ArrowDown');
+ await page.waitForFunction(()=>document.activeElement?.getAttribute('data-node-id')==='n3',null,{timeout:400});
  assert(await page.locator('[data-node-id="n3"]').evaluate(el=>el===document.activeElement));
  await page.keyboard.press('Tab');
  assert(!await page.locator('[data-node-id="n3"]').evaluate(el=>el===document.activeElement));
