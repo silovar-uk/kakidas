@@ -1,0 +1,46 @@
+name: kakidas outliner P0 experiment
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'public/outliner-lab.html'
+      - 'docs/prototypes/**'
+      - '.github/workflows/outliner-p0.yml'
+jobs:
+  prototype:
+    name: P0行内編集・構造操作・画面幅テスト
+    runs-on: ubuntu-latest
+    timeout-minutes: 22
+    steps:
+      - name: ソースを取得
+        uses: actions/checkout@v5
+      - name: Node 22
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - name: 依存関係
+        run: npm ci
+      - name: 既存アプリの型検査・ビルド
+        run: npm run build
+      - name: ブラウザーを準備
+        timeout-minutes: 8
+        run: |
+          npm install --no-save --package-lock=false playwright
+          npx playwright install --with-deps chromium
+      - name: 切り離された試作版のQA
+        timeout-minutes: 10
+        run: |
+          npm run preview -- --host 127.0.0.1 --port 4173 >/tmp/kakidas-p0-preview.log 2>&1 &
+          for i in $(seq 1 40); do
+            if curl -fsS http://127.0.0.1:4173/outliner-lab.html >/dev/null; then break; fi
+            sleep 1
+          done
+          SHOT_DIR=/tmp/kakidas-p0-shots node docs/prototypes/outliner-p0.qa.mjs
+      - name: 検証時のスクリーンショット
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: kakidas-p0-outliner-screenshots
+          path: /tmp/kakidas-p0-shots/
+          if-no-files-found: warn
