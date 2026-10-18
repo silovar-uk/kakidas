@@ -2,11 +2,15 @@ import {SeishoView} from "../components/SeishoView";
 import {BackIcon} from "../components/icons";
 import {withViewTransition} from "../lib/viewTransition";
 import {EntryComposer,type EntryComposerHandle} from "../components/EntryComposer";
+import {DeskSlot} from "../components/DeskSlot";
+import {type OutlineHandle} from "../components/OutlineList";
+import {releaseDeskFocus,restoreDeskFocus,trackDeskFocus} from "../lib/deskFocus";
+import {createPortal,flushSync} from "react-dom";
 import {MemoActionsMenu} from "../components/MemoActionsMenu";
 import {fetchReferenceTitle} from "../lib/referenceTitle";
 import {useCloudMemos} from "../hooks/useCloudMemos";
 import {type MemoSyncMetaRow,getLinkHostname} from "../types/memo";
-import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type CSSProperties, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { resetBodyScrollLock } from "../lib/bodyScrollLock";
 import { copyToClipboard } from "../lib/clipboard";
 import {
@@ -43,7 +47,13 @@ import {
   ENTRY_KIND_ORDER,
   formatDefaultMemoTitle,
   getEntryTree,
+  getReferenceUrlKey,
+  normalizeLinkUrlForSave,
 } from "../types/memo";
+
+function getLinkHostnameOrUrl(url: string): string {
+  return getLinkHostname(url) || url;
+}
 
 function downloadText(filename: string, content: string) {
   const blob = new Blob([content], {
@@ -87,6 +97,17 @@ const ADD_ENTRIES_AT_BOTTOM_STORAGE_KEY = "kakidas.add-entries-at-bottom";
 const COMPACT_ENTRY_VIEW_STORAGE_KEY = "kakidas.compact-entry-view";
 const COLLAPSED_ENTRY_COLUMNS_STORAGE_KEY = "kakidas.collapsed-entry-columns.v1";
 const WORKSPACE_KINDS = ENTRY_KIND_ORDER;
+/** 書き口がいない欄の入口。ボタンの読み上げ名と、見せる文。 */
+const DESK_OPEN_LABEL: Record<EntryKind, string> = {
+  sentence: "アウトラインに書く",
+  paragraph: "段落を書く",
+  word: "参考URLを貼る",
+};
+const DESK_OPEN_TEXT: Record<EntryKind, string> = {
+  sentence: "次の一行を書く",
+  paragraph: "段落を書く",
+  word: "URLを貼る",
+};
 
 type CollapsedEntryColumns = Record<EntryKind, boolean>;
 
@@ -267,6 +288,44 @@ export function MemoEditorPage() {
   const [isUploadDialogOpen, setIsUploadDialogOpen] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const deskRef = useRef<EntryComposerHandle>(null);
+  /** 書き口はひとつだけ作り、作り直さない。置き場所(DeskSlot)が、この箱をいる欄へ運ぶ。 */
+  const deskHost = useMemo(() => {
+    const el = document.createElement("div");
+    el.className = "desk-host";
+    return el;
+  }, []);
+  const outlineRef = useRef<OutlineHandle>(null);
+  const [isMobile, setIsMobile] = useState(() => window.matchMedia("(max-width: 920px)").matches);
+  useEffect(() => {
+    const media = window.matchMedia("(max-width: 920px)");
+    const update = () => setIsMobile(media.matches);
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, []);
+  /** 書き口がいる欄(PC)。スマホでは棚(activeKind)が書き口の欄になる。 */
+  const [deskSlot, setDeskSlot] = useState<EntryKind>("sentence");
+  /** 段落の書き口は、この段落の後ろに入る。null=末尾、"^"=先頭。 */
+  const [paragraphAfterId, setParagraphAfterId] = useState<string | null>(null);
+  const [deskDraft, setDeskDraft] = useState(false);
+  const [caretDescription, setCaretDescription] = useState("");
+  const effectiveSlot: EntryKind = isMobile ? activeKind : deskSlot;
+  useEffect(() => trackDeskFocus(deskHost), [deskHost]);
+  // 行が増えて置き場所が動いたときも、外れたフォーカスを戻す。
+  useLayoutEffect(() => restoreDeskFocus(deskHost));
+  /** 書き口を欄へ運び、フォーカスする。変換中は運ばない(呼ぶ側がキーを見て決める)。 */
+  /**
+   * 書き口を欄へ運び、そのままフォーカスする。キー操作の中でも、運んだ直後に同期でフォーカスを入れる
+   * (iOSでキーボードを閉じないため)。下書きの復元など、フォーカスを奪いたくないときは focus:false。
+   */
+  const moveDeskTo = useCallback((kind: EntryKind, options: { focus?: boolean; heading?: boolean } = {}) => {
+    const mobile = window.matchMedia("(max-width: 920px)").matches;
+    const apply = () => { if (mobile) setActiveKind(kind); else setDeskSlot(kind); };
+    if (options.focus === false) { apply(); return; }
+    flushSync(apply);
+    deskRef.current?.focus({ scroll: false, delay: 0, heading: options.heading });
+  }, []);
+  const moveDeskToRef = useRef(moveDeskTo);
+  moveDeskToRef.current = moveDeskTo;
   const {prepareImport,importSnapshot}=useCloudMemos(user?.id ?? null);
   const [showEntryTimestamps, setShowEntryTimestamps] = useState(
     readEntryTimestampVisibility,
@@ -301,11 +360,12 @@ export function MemoEditorPage() {
     const selectKind = (event: Event) => {
       const kind = (event as CustomEvent<EntryKind>).detail;
       if (!ENTRY_KINDS.includes(kind)) return;
-      setActiveKind(kind);
+      // 畳まれた参考URLのレールは、開いてから書き口を運ぶ。
       if (kind === "word") setMediumUrlExpanded(true);
       setCollapsedEntryColumns((previous) => previous[kind]
         ? { ...previous, [kind]: false }
         : previous);
+      moveDeskToRef.current(kind);
     };
     window.addEventListener("kakidas:choose-entry-kind", selectKind);
     return () => window.removeEventListener("kakidas:choose-entry-kind", selectKind);
@@ -950,15 +1010,96 @@ export function MemoEditorPage() {
     const url=new URL('https://chatgpt.com/');url.searchParams.set('prompt',prompt);
     tab.location.replace(url.toString());
   };
-  const handleDeskCreate=async(content:string,metadata:import('../types/memo').EntryCreateMetadata,draftId:string,kind:EntryKind='sentence',entryId?:string)=>{
-    const created=await createEntry(kind,content,metadata,null,addEntriesAtBottom?'bottom':'top',draftId,entryId);
-    if(kind==='word'&&metadata.link_url){
-      void fetchReferenceTitle(metadata.link_url).then(result=>{
-        if(result)return updateEntry(created.id,{content:result});
-      }).catch(()=>{});
+  /** 参考URLの題名は、置いたあとで取りに行く。 */
+  const enrichReferenceTitle=(entryId:string,url:string)=>{
+    void fetchReferenceTitle(url).then(result=>{
+      if(result)return updateEntry(entryId,{content:result});
+    }).catch(()=>{});
+  };
+  /** 画面の順ではなく、保存する順(手動の順)で、段落の挿入位置を求める。 */
+  const paragraphInsertIndex=()=>{
+    const list=getEntryTree(memo?.entries??[],"paragraph","manual");
+    if(paragraphAfterId==="^")return 0;
+    if(paragraphAfterId){
+      const at=list.findIndex(entry=>entry.id===paragraphAfterId);
+      if(at>=0)return at+1;
+    }
+    return list.length;
+  };
+  /** 続けて打ってEnterを重ねても、置く順番と位置(次の一行)が前後しないよう、ひとつずつ置く。 */
+  const deskQueueRef=useRef<Promise<unknown>>(Promise.resolve());
+  const handleDeskCreate=(content:string,metadata:import('../types/memo').EntryCreateMetadata,draftId:string,kind:EntryKind='sentence',entryId?:string)=>{
+    const run=deskQueueRef.current.then(()=>createFromDesk(content,metadata,draftId,kind,entryId));
+    deskQueueRef.current=run.catch(()=>undefined);
+    return run;
+  };
+  const createFromDesk=async(content:string,metadata:import('../types/memo').EntryCreateMetadata,draftId:string,kind:EntryKind='sentence',entryId?:string)=>{
+    let created;
+    if(kind==='sentence'){
+      // 次の一行の位置へ置き、次の一行を新しい行の下へ進める。
+      const position=outlineRef.current?.insertPosition();
+      created=await createEntry('sentence',content,metadata,position?.parentId??null,'bottom',draftId,entryId,position?.index);
+      outlineRef.current?.advance(created.id);
+    }else if(kind==='paragraph'){
+      // 段落は文書の順。選んだ段落の後ろ(なければ末尾)へ置き、続けて次の段落をその後ろへ。
+      created=await createEntry('paragraph',content,metadata,null,'bottom',draftId,entryId,paragraphInsertIndex());
+      setParagraphAfterId(created.id);
+    }else{
+      created=await createEntry(kind,content,metadata,null,addEntriesAtBottom?'bottom':'top',draftId,entryId);
+      if(metadata.link_url)enrichReferenceTitle(created.id,metadata.link_url);
     }
     return created;
   };
+
+  /** どこで貼っても: URLだけなら参考URLへ(重複は除く)。ふつうの文は書き口へ入れる(置くのはEnter)。 */
+  const placeReferenceUrls=async(urls:string[])=>{
+    const known=new Set((memo?.entries??[]).filter(entry=>entry.kind==='word'&&entry.link_url).map(entry=>getReferenceUrlKey(entry.link_url)));
+    const fresh:string[]=[];
+    for(const url of urls){
+      const key=getReferenceUrlKey(url);
+      if(!key||known.has(key))continue;
+      known.add(key);
+      fresh.push(url);
+    }
+    if(fresh.length===0){setNotice("貼ったURLはすべて保存済みです。");return;}
+    try{
+      for(const url of fresh){
+        const created=await createEntry('word',getLinkHostnameOrUrl(url),{link_url:url},null,addEntriesAtBottom?'bottom':'top');
+        enrichReferenceTitle(created.id,url);
+      }
+      const text=fresh.length>1?`参考URLに${fresh.length}件置きました`:'参考URLに置きました';
+      if(window.matchMedia("(max-width: 920px)").matches)handlePlaced('word');
+      else setNotice(text);
+    }catch(error){
+      setNotice(error instanceof Error?error.message:"参考URLに置けませんでした。");
+    }
+  };
+  const pasteRef=useRef<(event:ClipboardEvent)=>void>(()=>{});
+  pasteRef.current=(event:ClipboardEvent)=>{
+    const target=event.target as Element|null;
+    if(target&&typeof target.closest==='function'&&target.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"]), [role="dialog"], dialog'))return;
+    if(isSeisho||isUploading)return;
+    const text=event.clipboardData?.getData('text')??'';
+    const lines=text.split(/\r?\n/).map(line=>line.trim()).filter(Boolean);
+    if(lines.length===0)return;
+    event.preventDefault();
+    const isUrlLine=(line:string)=>{
+      if(!/^(https?:\/\/|www\.)\S+$/iu.test(line))return false;
+      try{normalizeLinkUrlForSave(line);return true;}catch{return false;}
+    };
+    if(lines.every(isUrlLine)){
+      void placeReferenceUrls(lines.map(line=>normalizeLinkUrlForSave(line)));
+      return;
+    }
+    // 参考URLの欄にいるときは、ふつうの文はアウトラインの書き口へ。
+    if(!window.matchMedia("(max-width: 920px)").matches&&deskSlot==='word')setDeskSlot('sentence');
+    deskRef.current?.insertText(text);
+  };
+  useEffect(()=>{
+    const onPaste=(event:ClipboardEvent)=>pasteRef.current(event);
+    document.addEventListener('paste',onPaste);
+    return()=>document.removeEventListener('paste',onPaste);
+  },[]);
 
   const toggleSeisho=(next:boolean)=>{
     void withViewTransition(()=>{
@@ -1031,7 +1172,7 @@ export function MemoEditorPage() {
     <main
       className={`app-shell editor-page ${
         compactEntryView ? "editor-page--compact" : ""
-      }`}
+      } ${isSeisho ? "editor-page--seisho" : ""}`}
     >
       <header className="editor-header editor-header--shitate">
         <Link to="/" className="back-link" aria-label="メモ一覧へ戻る" title="メモ一覧へ" onClick={e=>{e.preventDefault();void handleReturnToMemoList()}}><BackIcon /></Link>
@@ -1063,7 +1204,7 @@ export function MemoEditorPage() {
             {label:'番号を表示',value:showEntryNumbers,onChange:setShowEntryNumbers},
             {label:'本文だけ表示',value:compactEntryView,onChange:setCompactEntryView},
             {label:'完了を非表示',value:hideCompletedEntries,onChange:setHideCompletedEntries},
-            {label:'新しい項目を一番下に追加',value:addEntriesAtBottom,onChange:setAddEntriesAtBottom},
+            {label:'参考URLを下に足す',value:addEntriesAtBottom,onChange:setAddEntriesAtBottom},
             {label:'コピーに完了を含める',value:includeCompletedInCopy,onChange:setIncludeCompletedInCopy},
           ]}/>
       </header>
@@ -1112,11 +1253,7 @@ export function MemoEditorPage() {
         </p>
       ) : null}
 
-      <EntryComposer ref={deskRef} variant="desk" kind="sentence" memoId={memo.id}
-        memoUpdatedAt={memo.updated_at} tagSuggestions={entryTagSuggestions}
-        mobileKind={activeKind} disabled={isUploading}
-        existingReferenceUrls={memo.entries.filter(e=>e.kind==='word'&&e.link_url).map(e=>e.link_url)}
-        onSubmit={handleDeskCreate} onPlaced={handlePlaced}/>
+      {isMobile ? <DeskSlot active host={deskHost} label="書き口" onActivate={()=>undefined} className="editor-mobile-desk" /> : null}
       <div className="editor-receipt-anchor">
         {receipt ? <div className="editor-receipt" role="status" key={receipt.at}>
           <span>{ENTRY_KIND_LABEL[receipt.kind]}に置きました</span>
@@ -1148,6 +1285,22 @@ export function MemoEditorPage() {
             tagSuggestions={entryTagSuggestions}
             disabled={isUploading}
             addAtBottom={addEntriesAtBottom}
+            deskNode={isMobile?undefined:(
+              <DeskSlot active={deskSlot===kind} host={deskHost}
+                label={DESK_OPEN_LABEL[kind]} text={DESK_OPEN_TEXT[kind]}
+                onActivate={()=>moveDeskTo(kind)} />
+            )}
+            outlineRef={kind==='sentence'?outlineRef:undefined}
+            ghostOn={isMobile&&kind==='sentence'&&deskDraft}
+            onCaretDescribed={kind==='sentence'?setCaretDescription:undefined}
+            onRowSelected={()=>{
+              // 書き口が空で別の欄にいるなら、行を選んだらついてくる(書きかけはその場に残る)。
+              if(!isMobile&&deskSlot!=='sentence'&&deskRef.current?.isEmpty())setDeskSlot('sentence');
+            }}
+            onFocusDesk={()=>moveDeskTo('sentence')}
+            paragraphAfterId={paragraphAfterId}
+            onSelectParagraph={setParagraphAfterId}
+            manualOrder={entrySortMode==='manual'}
             onCreate={createEntry}
             onUpdate={(entryId, patch) => updateEntry(entryId, patch)}
             onDelete={deleteEntry}
@@ -1169,6 +1322,25 @@ export function MemoEditorPage() {
       </section>
 
       </>}
+
+      {createPortal(
+        <EntryComposer ref={deskRef} variant="desk" kind="sentence" memoId={memo.id}
+          memoUpdatedAt={memo.updated_at} tagSuggestions={entryTagSuggestions}
+          slot={effectiveSlot} disabled={isUploading}
+          existingReferenceUrls={memo.entries.filter(e=>e.kind==='word'&&e.link_url).map(e=>e.link_url)}
+          onSubmit={handleDeskCreate} onPlaced={handlePlaced}
+          onSlotHint={kind=>moveDeskTo(kind,{focus:false})}
+          onGrowToParagraph={()=>moveDeskTo('paragraph',{focus:false})}
+          onCaretIndent={()=>outlineRef.current?.indentCaret()}
+          onCaretOutdent={()=>outlineRef.current?.outdentCaret()}
+          onExitUp={()=>{releaseDeskFocus();outlineRef.current?.focusRowAboveCaret();}}
+          onExitDown={()=>{releaseDeskFocus();outlineRef.current?.focusRowBelowCaret();}}
+          onExit={()=>{releaseDeskFocus();(document.activeElement as HTMLElement|null)?.blur?.();}}
+          showDepthButtons={isMobile&&effectiveSlot==='sentence'}
+          caretDescription={caretDescription}
+          onDraftChange={setDeskDraft}/>,
+        deskHost,
+      )}
 
       <CloudAccountDialog
         open={isCloudDialogOpen}

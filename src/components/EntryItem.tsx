@@ -1,4 +1,4 @@
-import { NoteIcon, LinkIcon, MoreIcon } from "./icons";
+import { NoteIcon, LinkIcon, MoreIcon, UpIcon, DownIcon } from "./icons";
 import {
   type ChangeEvent,
   type CSSProperties,
@@ -8,18 +8,13 @@ import {
   useRef,
   useState,
 } from "react";
-import { EntrySatisfactionControl } from "./EntrySatisfactionControl";
-import { EntryTagControl } from "./EntryTagControl";
 import { MobileParagraphEditorSheet } from "./MobileParagraphEditorSheet";
 import { formatEntryCreatedAt } from "../lib/formatDate";
 import { getEntryTagToneClassName } from "../lib/entryTagGroups";
-import type { EntryTagSummary } from "../lib/memoTags";
 import {
   type EntryKind,
   type EntryTreeNode,
   type EntryUpdate,
-  ENTRY_KIND_LABEL,
-  ENTRY_KIND_MOVE_TARGETS,
   getLinkHostname,
   getOpenableLinkUrl,
   getReferenceFaviconUrl,
@@ -46,8 +41,16 @@ function readCssPixel(value: string): number | null {
 type EntryItemProps = {
   entry: EntryTreeNode;
   kind: EntryKind;
-  isStructureOpen: boolean;
   isMobileActionOpen: boolean;
+  /** 段落で、書き口がこの段落の後ろに入る(選ばれている)か。 */
+  isSelected?: boolean;
+  onSelect?: (entryId: string) => void;
+  /** 手動の順のときだけ渡す。段落を上・下へ移す。 */
+  onMove?: (entryId: string, direction: -1 | 1) => void;
+  canMoveUp?: boolean;
+  canMoveDown?: boolean;
+  /** PCの「項目の詳細」(行のそばの小窓)。 */
+  onOpenDetails: (entryId: string, anchor: HTMLElement) => void;
   showCreatedAt: boolean;
   /** 表示に振り番を含めるか。 */
   showEntryNumbers: boolean;
@@ -55,21 +58,12 @@ type EntryItemProps = {
   displayNumber?: string;
   /** 補助情報と操作を隠し、本文だけを密に表示するか。 */
   compactView?: boolean;
-  /** 現在のメモで使われている項目タグ。候補表示だけに使う。 */
-  tagSuggestions: EntryTagSummary[];
   /** 通常表示は気持ち行のタグ、タググループ内は右側アイコン、完了内は元タグを再表示する。 */
   tagPresentation?: EntryTagPresentation;
   disabled?: boolean;
-  editRequest?:"note"|"link"|"tag"|null;
-  onEditRequestHandled?:()=>void;
+  /** スマホの「この項目の操作」(下からのシート)。 */
   onOpenStructure: (entryId: string) => void;
-  onMoveToKind: (entryId: string, targetKind: EntryKind) => Promise<unknown>;
-  /** 「…」から本文をそのままコピーする。 */
-  onCopy: (entryId: string) => Promise<boolean>;
-  /** 元の項目を残したまま、新しいメモの起点として複製する。 */
-  onCreateMemoFromEntry: (entryId: string) => Promise<boolean>;
   onUpdate: (entryId: string, patch: EntryUpdate) => Promise<unknown>;
-  onDelete: (entryId: string) => Promise<unknown>;
 };
 
 /**
@@ -79,23 +73,21 @@ type EntryItemProps = {
 export function EntryItem({
   entry,
   kind,
-  isStructureOpen,
   isMobileActionOpen,
+  isSelected = false,
+  onSelect,
+  onMove,
+  canMoveUp = true,
+  canMoveDown = true,
+  onOpenDetails,
   showCreatedAt,
   showEntryNumbers,
   displayNumber,
   compactView = false,
-  tagSuggestions,
   tagPresentation = "meta",
   disabled = false,
-  editRequest,
-  onEditRequestHandled,
   onOpenStructure,
-  onMoveToKind,
-  onCopy,
-  onCreateMemoFromEntry,
   onUpdate,
-  onDelete,
 }: EntryItemProps) {
   const [editMode, setEditMode] = useState<EditMode>(null);
   const [value, setValue] = useState(entry.content);
@@ -138,8 +130,6 @@ export function EntryItem({
     ? getReferenceFaviconUrl(openableLinkUrl)
     : "";
   const isEditing = editMode !== null;
-  const completionLabel = entry.is_completed ? "未完了に戻す" : "完了にする";
-  const moveTargets = ENTRY_KIND_MOVE_TARGETS[kind];
 
   useEffect(() => {
     if (!isEditing) {
@@ -325,18 +315,6 @@ export function EntryItem({
     setEditMode("link");
   };
 
-  useEffect(()=>{
-    if(!editRequest)return;
-    if(editRequest==="note")beginNoteEdit();
-    else if(editRequest==="link")beginLinkEdit();
-    else {
-      // タグ編集は既存のタグ管理ボタンを操作する。
-      const row=document.querySelector(`[data-entry-id="${CSS.escape(entry.id)}"]`);
-      (row?.querySelector('.entry-tag-control button') as HTMLButtonElement|null)?.click();
-    }
-    onEditRequestHandled?.();
-  },[editRequest]);
-
   const persist = async (exitEditing = true): Promise<boolean> => {
     const nextContent = value.trim();
     const nextHeading = isParagraph ? headingValue.trim() : "";
@@ -478,14 +456,6 @@ export function EntryItem({
     }
 
     void save();
-  };
-
-  const remove = async () => {
-    await onDelete(entry.id);
-  };
-
-  const advanceSatisfaction = async (nextValue: number) => {
-    await onUpdate(entry.id, { satisfaction: nextValue });
   };
 
   const toggleCompletion = async () => {
@@ -728,16 +698,6 @@ export function EntryItem({
               >
                 {entry.is_completed ? "未完了に戻す" : "完了にする"}
               </button>
-              <button
-                type="button"
-                className="text-button text-button--danger"
-                onMouseDown={(event) => {
-                  event.preventDefault();
-                  void remove();
-                }}
-              >
-                削除
-              </button>
             </>
           ) : null}
           <button
@@ -770,14 +730,13 @@ export function EntryItem({
       <article
       data-entry-id={entry.id} className={`entry-item ${completionClassName} ${satisfactionClassName} ${numberVisibilityClassName} ${
         isHierarchical ? "entry-item--hierarchical" : ""
-      } ${entry.depth > 0 ? "entry-item--nested" : ""} ${
-        isStructureOpen ? "entry-item--structure-open" : ""
-      } ${isMobileActionOpen ? "entry-item--mobile-action-open" : ""} ${
+      } ${entry.depth > 0 ? "entry-item--nested" : ""} ${isMobileActionOpen ? "entry-item--mobile-action-open" : ""} ${isSelected ? "entry-item--selected" : ""} ${
         mobileParagraphEditorFocus ? "entry-item--mobile-paragraph-editing" : ""
       } ${isReferenceUrl ? "entry-item--reference-url" : ""} ${
         isLegacyWord ? "entry-item--legacy-word" : ""
       }`}
       style={style}
+      onClick={onSelect ? () => onSelect(entry.id) : undefined}
     >
       <div className="entry-item__row">
         <div
@@ -918,50 +877,18 @@ export function EntryItem({
             </div>
           ) : null}
 
-          <div className="entry-item__inline-actions">
-            <button
-              type="button"
-              className="entry-item__note-trigger entry-item__note-trigger--inline"
-              onClick={beginNoteEdit}
-              disabled={disabled}
-              aria-label={
-                isReferenceUrl
-                  ? hasNote ? "備考を編集" : "備考を追加"
-                  : hasNote ? "気持ち・備考を編集" : "気持ち・備考を追加"
-              }
-              title={
-                isReferenceUrl
-                  ? hasNote ? "備考を編集" : "備考を追加"
-                  : hasNote ? "気持ち・備考を編集" : "気持ち・備考を追加"
-              }
+          {openableLinkUrl && !isReferenceUrl ? (
+            <a
+              className="entry-item__link-trigger entry-item__link-trigger--active"
+              href={openableLinkUrl}
+              target="_blank"
+              rel="noreferrer"
+              aria-label="リンクを開く"
+              title="リンクを開く"
             >
-              <NoteIcon />
-            </button>
-
-            {openableLinkUrl ? (
-              <a
-                className="entry-item__link-trigger entry-item__link-trigger--active"
-                href={openableLinkUrl}
-                target="_blank"
-                rel="noreferrer"
-                aria-label="リンクを開く"
-                title="リンクを開く"
-              >
-                <LinkIcon />
-              </a>
-            ) : (
-              <button
-                type="button"
-                className="entry-item__link-trigger"
-                onClick={beginLinkEdit}
-                disabled={disabled}
-                aria-label="リンクを追加"
-                title="リンクを追加"
-              >
-                <LinkIcon />
-              </button>
-            )}
-          </div>
+              <LinkIcon />
+            </a>
+          ) : null}
 
           {showCreatedAt ? (
             <time
@@ -976,89 +903,48 @@ export function EntryItem({
 
         {entry.satisfaction>0?<small className="entry-item__satisfaction-mark" aria-label={`満足度${entry.satisfaction}`}>{entry.satisfaction}</small>:null}
         <div data-entry-actions="" className={`entry-item__quick-actions ${isReferenceUrl ? "entry-item__quick-actions--reference" : ""}`}>
-          <EntrySatisfactionControl
-            value={entry.satisfaction}
-            disabled={disabled}
-            onChange={advanceSatisfaction}
-          />
+          {onMove && isParagraph ? (
+            <>
+              <button
+                type="button"
+                className="icon-button entry-item__quick-action"
+                onClick={() => onMove(entry.id, -1)}
+                disabled={disabled || !canMoveUp}
+                aria-label="上へ移す"
+                title="上へ移す"
+              >
+                <UpIcon />
+              </button>
+              <button
+                type="button"
+                className="icon-button entry-item__quick-action"
+                onClick={() => onMove(entry.id, 1)}
+                disabled={disabled || !canMoveDown}
+                aria-label="下へ移す"
+                title="下へ移す"
+              >
+                <DownIcon />
+              </button>
+            </>
+          ) : null}
 
           <button
             type="button"
-            className={`entry-item__complete ${
-              entry.is_completed ? "entry-item__complete--active" : ""
-            }`}
-            onClick={() => void toggleCompletion()}
-            disabled={disabled || isSaving}
-            aria-pressed={entry.is_completed}
-            aria-label={completionLabel}
-            title={completionLabel}
+            className="icon-button entry-item__quick-action entry-item__details-button"
+            onClick={(event) => onOpenDetails(entry.id, event.currentTarget)}
+            disabled={disabled}
+            aria-label="項目の詳細"
+            title="詳細と操作"
           >
-            {entry.is_completed ? "戻す" : "完了"}
+            <MoreIcon />
           </button>
-
-          {/* PCでは、気持ち用のペンとリンクを完了ボタンの右側へまとめる。
-              スマホも同じペンの入口を右側に置き、位置は変えない。 */}
-          <div className="entry-item__desktop-inline-actions">
-            <button
-              type="button"
-              className="entry-item__note-trigger entry-item__note-trigger--inline"
-              onClick={beginNoteEdit}
-              disabled={disabled || isSaving}
-              aria-label={
-                isReferenceUrl
-                  ? hasNote ? "備考を編集" : "備考を追加"
-                  : hasNote ? "気持ち・備考を編集" : "気持ち・備考を追加"
-              }
-              title={
-                isReferenceUrl
-                  ? hasNote ? "備考を編集" : "備考を追加"
-                  : hasNote ? "気持ち・備考を編集" : "気持ち・備考を追加"
-              }
-            >
-              <NoteIcon />
-            </button>
-
-            {openableLinkUrl ? (
-              <a
-                className="entry-item__link-trigger entry-item__link-trigger--active"
-                href={openableLinkUrl}
-                target="_blank"
-                rel="noreferrer"
-                aria-label="リンクを開く"
-                title="リンクを開く"
-              >
-                <LinkIcon />
-              </a>
-            ) : (
-              <button
-                type="button"
-                className="entry-item__link-trigger"
-                onClick={beginLinkEdit}
-                disabled={disabled || isSaving}
-                aria-label="リンクを追加"
-                title="リンクを追加"
-              >
-                <LinkIcon />
-              </button>
-            )}
-          </div>
-
-          <EntryTagControl
-            tag={entry.tag}
-            suggestions={tagSuggestions}
-            disabled={disabled || isSaving}
-            onSave={async (tag) => {
-              await onUpdate(entry.id, { tag });
-            }}
-          />
-
           <button
             type="button"
             className="icon-button entry-item__quick-action entry-item__structure-button"
             onClick={() => onOpenStructure(entry.id)}
             disabled={disabled}
             aria-label="この項目の操作"
-            aria-expanded={isStructureOpen || isMobileActionOpen}
+            aria-expanded={isMobileActionOpen}
             title="操作"
           >
             <MoreIcon />
@@ -1066,51 +952,6 @@ export function EntryItem({
         </div>
       </div>
 
-      {isStructureOpen ? (
-        <div className="entry-item__structure-actions" aria-label="項目の操作">
-          <button
-            type="button"
-            className="structure-action structure-action--copy"
-            onClick={() => void onCopy(entry.id)}
-            disabled={disabled}
-          >
-            ⧉ コピー
-          </button>
-          {!isReferenceUrl ? (
-            <button
-              type="button"
-              className="structure-action structure-action--derive"
-              onClick={() => void onCreateMemoFromEntry(entry.id)}
-              disabled={disabled}
-            >
-              ↗ 新しいメモにする
-            </button>
-          ) : null}
-          {moveTargets.length > 0 ? (
-            <div className="entry-item__kind-actions" aria-label="区分を移動">
-              {moveTargets.map((targetKind) => (
-                <button
-                  key={targetKind}
-                  type="button"
-                  className={`structure-action structure-action--kind structure-action--kind-${targetKind}`}
-                  onClick={() => void onMoveToKind(entry.id, targetKind)}
-                  disabled={disabled}
-                >
-                  {ENTRY_KIND_LABEL[targetKind]}へ移動
-                </button>
-              ))}
-            </div>
-          ) : null}
-          <button
-            type="button"
-            className="structure-action structure-action--danger"
-            onClick={() => void remove()}
-            disabled={disabled}
-          >
-            削除
-          </button>
-        </div>
-      ) : null}
       </article>
       <MobileParagraphEditorSheet
         key={mobileParagraphEditorFocus ? `${entry.id}-${mobileParagraphEditorFocus}` : "closed"}

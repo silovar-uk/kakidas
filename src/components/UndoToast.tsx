@@ -4,10 +4,15 @@ type UndoToastProps = {
   onUndo: () => void;
   onDismiss: () => void;
   kind: "word" | "sentence" | "paragraph";
+  /** 見える字。省略時は「元に戻す」(削除の通知)。 */
+  actionLabel?: string;
+  /** 読み上げ名。見える字が短いとき(「戻す」)に、何を戻すかを伝える。 */
+  actionAriaLabel?: string;
+  dismissAriaLabel?: string;
 };
 
 /**
- * 削除直後だけ出る、軽量な復元導線。
+ * 削除・移動の直後だけ出る、軽量な復元導線。
  * 毎回の確認ダイアログで書き出しを止めないためのUndoトースト。
  */
 export function UndoToast({
@@ -16,6 +21,9 @@ export function UndoToast({
   onUndo,
   onDismiss,
   kind,
+  actionLabel = "元に戻す",
+  actionAriaLabel,
+  dismissAriaLabel = "削除の通知を閉じる",
 }: UndoToastProps) {
   return (
     <div
@@ -30,15 +38,16 @@ export function UndoToast({
           className="undo-toast__undo"
           onClick={onUndo}
           disabled={isUndoing}
+          aria-label={actionAriaLabel}
         >
-          {isUndoing ? "復元中…" : "元に戻す"}
+          {isUndoing ? "復元中…" : actionLabel}
         </button>
         <button
           type="button"
           className="undo-toast__close"
           onClick={onDismiss}
           disabled={isUndoing}
-          aria-label="削除の通知を閉じる"
+          aria-label={dismissAriaLabel}
         >
           ×
         </button>

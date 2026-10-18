@@ -806,10 +806,14 @@ class IndexedDbMemoRepository implements MemoRepository {
     // 末尾追加では最大値より1つ後を採用して、既存の順番を崩さない。
     // アウトラインの挿入位置を兄弟の並びと同一トランザクションで確定する。
     // 作成後に別トランザクションで移動すると、失敗時に項目が重複するため避ける。
-    const insertAt = input.kind === "sentence" && outlineIndex !== undefined
+    // 段落は親なしのときだけ、文書の順で位置を指定できる(書き口が段落の後ろに入るため)。
+    const canInsertAt = input.kind === "sentence" || (input.kind === "paragraph" && parentId === null);
+    const insertAt = canInsertAt && outlineIndex !== undefined
       ? Math.max(0, Math.min(Math.floor(outlineIndex), siblings.length))
       : null;
     if (insertAt !== null) {
+      // 画面の手動順(完了を末尾へ寄せない順)で数え直し、見えている位置と保存する位置を一致させる。
+      siblings.sort(compareEntries);
       siblings.forEach((sibling, i) => {
         const next = i >= insertAt ? i + 1 : i;
         if (sibling.sort_order !== next) {
@@ -876,12 +880,14 @@ class IndexedDbMemoRepository implements MemoRepository {
     const store = transaction.objectStore(STORE_NAMES.entries);
     const sync = transaction.objectStore(STORE_NAMES.memoSyncMeta);
     const current = await this.requireActiveEntry(store, entryId, transaction);
-    if (current.kind !== "sentence") {
+    // アウトライン、または親のない段落(手動の順)だけ動かせる。
+    const isRootParagraph = current.kind === "paragraph" && current.parent_id === null && targetParentId === null;
+    if (current.kind !== "sentence" && !isRootParagraph) {
       transaction.abort();
-      throw new Error("アウトライン以外は移動できません。");
+      throw new Error("アウトライン、または親のない段落だけ移動できます。");
     }
     const all = (await this.getEntriesForMemo(store, current.memo_id))
-      .filter((entry) => entry.deleted_at === null && entry.kind === "sentence");
+      .filter((entry) => entry.deleted_at === null && entry.kind === current.kind);
     const byId = new Map(all.map((entry) => [entry.id, entry]));
     // 自分自身・子孫・不正な親参照へ移動させない。循環した既存データも拒否する。
     const seen = new Set([entryId]);

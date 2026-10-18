@@ -1,0 +1,277 @@
+/* ==========================================================================
+   kakidas「並べずに、編む」 — 書き口が「いる場所」へ来る画面(@layer amu)
+   既存のCSSは変えず、この層を最後に重ねる。見た目の型(色・余白・文字・角丸・影・動き)は
+   v0.6.1のトークンをそのまま使い、新しい色は足さない。
+   ========================================================================== */
+@layer amu {
+
+/* --------------------------------------------------------------------------
+   1. PC:動かない帯と、流れる欄(921px〜)。ページは動かず、欄ごとに流れる
+   -------------------------------------------------------------------------- */
+@media (min-width: 921px) {
+  .editor-page.app-shell:not(.editor-page--seisho) {
+    height: 100dvh; display: flex; flex-direction: column;
+    padding-top: 0; padding-bottom: 0; overflow: hidden;
+  }
+  .editor-page:not(.editor-page--seisho) .editor-header--shitate { flex: 0 0 52px; height: 52px; min-height: 52px; }
+  .editor-page:not(.editor-page--seisho) .editor-grid { flex: 1 1 auto; min-height: 0; margin: 0; align-items: stretch; }
+  .editor-page:not(.editor-page--seisho) .editor-grid > .entry-column:not(.entry-column--collapsed) {
+    display: grid; grid-template-rows: auto minmax(0, 1fr); min-height: 0;
+  }
+  .editor-page:not(.editor-page--seisho) .editor-grid .entry-list {
+    overflow-y: auto; min-height: 0; padding: 6px 0 24px; align-content: start;
+    scrollbar-gutter: stable; scrollbar-width: thin; overscroll-behavior: contain;
+  }
+  /* 欄の見出しは、帯の下で静かに */
+  .editor-page:not(.editor-page--seisho) .editor-grid .entry-column__header { min-height: 36px; }
+  /* 書き口はスマホの棚の下にだけある。PCは欄の中にいる */
+  .editor-mobile-desk { display: none; }
+}
+
+/* --------------------------------------------------------------------------
+   2. 書き口の箱。いる欄に運ばれる(紙の箱は持たず、欄の一部になる)
+   -------------------------------------------------------------------------- */
+.desk-host { min-width: 0; }
+.desk-slot__open {
+  display: flex; align-items: center; gap: 6px; width: 100%;
+  padding: 8px var(--pad); border: 0; border-radius: var(--radius-s);
+  background: none; color: var(--color-ink-3);
+  font: 400 var(--text-s)/1.4 var(--font-sans); text-align: left;
+}
+.desk-slot__open:hover { background: var(--color-hover); color: var(--color-shu-ink); }
+.desk-slot__open > span { color: var(--color-shu); }
+.entry-list__desk-slot { padding: 2px 0 6px; }
+
+@media (min-width: 921px) {
+  .desk-host .entry-composer--desk {
+    margin: 0; padding: 0; border: 0; border-radius: 0;
+    background: transparent; box-shadow: none;
+  }
+  .desk-host .entry-composer--desk > form.entry-composer {
+    display: grid; align-items: end; gap: 0 var(--s-2);
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    grid-template-areas: "fields meta put" "route route route" "note note note" "notice notice notice";
+    margin: 0; padding: 0;
+  }
+  .desk-host .entry-composer--desk .entry-composer__control-row,
+  .desk-host .entry-composer--desk .entry-composer__meta-row { display: contents; }
+  .desk-host .entry-composer--desk .entry-composer__desk-fields { grid-area: fields; }
+  .desk-host .entry-composer--desk .entry-composer__meta-controls { grid-area: meta; align-self: end; padding-bottom: 2px; }
+  .desk-host .entry-composer--desk .entry-composer__submit { grid-area: put; align-self: end; min-width: 52px; height: 30px; min-height: 30px; margin: 0 0 4px; padding: 0 12px; }
+  .desk-host .entry-composer--desk .entry-composer__route { grid-area: route; }
+  .desk-host .entry-composer--desk .entry-composer__note-toggle,
+  .desk-host .entry-composer--desk .entry-composer__reference-note { grid-area: note; }
+  .desk-host .entry-composer--desk .entry-composer__reference-notice { grid-area: notice; }
+  /* 段落・参考URLの欄は、書く場所を広く取り、添える道具と「置く」は下の段へ */
+  .desk-host .entry-composer--desk[data-slot="paragraph"] > form.entry-composer,
+  .desk-host .entry-composer--desk[data-slot="word"] > form.entry-composer {
+    grid-template-areas: "fields fields fields" "route meta put" "note note note" "notice notice notice";
+    padding: 2px var(--pad) 6px;
+  }
+  .desk-host .entry-composer--desk[data-slot="paragraph"] .entry-composer__route,
+  .desk-host .entry-composer--desk[data-slot="word"] .entry-composer__route { align-self: center; padding-bottom: 0; }
+  /* 添える道具は、字のないアイコンで。タグだけは、付けたタグの名前を見せる */
+  .desk-host .entry-composer--desk .entry-composer__meta-trigger > span { display: none; }
+  .desk-host .entry-composer--desk .entry-composer__textarea { min-height: 32px; padding: 6px 4px; font-size: 15px; line-height: 1.5; }
+  .desk-host .entry-composer--desk[data-slot="paragraph"] .entry-composer__textarea { min-height: 96px; line-height: 1.85; }
+  .desk-host .entry-composer--desk .entry-composer__desk-heading--open input { height: 34px; padding: 6px 4px 2px; font-size: var(--text-l); }
+}
+
+/* 添える道具(気持ち・リンク・タグ)は、書きかけがあるときだけ出す。フォーカスの出入りでは出し入れしない */
+.entry-composer--desk[data-draft="false"] .entry-composer__meta-controls { display: none; }
+.entry-composer--desk[data-draft="false"] .entry-composer__meta-row { display: none; }
+@media (min-width: 921px) {
+  .desk-host .entry-composer--desk[data-draft="false"] .entry-composer__meta-row { display: contents; }
+}
+.entry-composer--desk .entry-composer__draft-error { grid-column: 1 / -1; }
+
+/* 行き先の予告と、備考の入口 */
+.entry-composer__route {
+  margin: 0; padding: 2px var(--s-1) 4px;
+  color: var(--color-shu-ink); font: 400 var(--text-xs)/1.5 var(--font-sans);
+}
+.entry-composer__note-toggle {
+  justify-self: start; margin: 0; padding: 4px;
+  border: 0; border-radius: var(--radius-s); background: none;
+  color: var(--color-ink-3); font: 400 var(--text-xs)/1.4 var(--font-sans);
+}
+.entry-composer__note-toggle:hover { color: var(--color-ink); background: var(--color-hover); }
+
+/* スマホのアウトラインの欄の「↰ 字上げ」「↳ 字下げ」 */
+.entry-composer__depth { display: flex; gap: 0; align-self: end; margin-right: 2px; }
+.entry-composer__depth button {
+  display: grid; place-items: center; width: 44px; height: 44px;
+  border: 0; border-radius: var(--radius-s); background: none;
+  color: var(--color-ink-2); font-size: 16px;
+}
+.entry-composer__depth button:active { background: var(--color-press); }
+
+/* --------------------------------------------------------------------------
+   3. アウトライン:「次の一行」(書き口がいる場所)と、行の印・道具
+   -------------------------------------------------------------------------- */
+.outline__caret {
+  display: flex; align-items: flex-start; min-width: 0;
+  padding: 0 4px 0 calc(var(--outline-depth, 0) * 15px + 2px);
+  transition: padding-left var(--dur-2) var(--ease);
+}
+.outline__caret-plus { flex: 0 0 18px; height: 32px; display: grid; place-items: center; color: var(--color-shu); font-size: 14px; }
+.outline__caret-host { flex: 1; min-width: 0; }
+.outline__caret .desk-slot__open { padding: 6px 4px; }
+/* 入口のボタンは自分の「＋」を持つので、二重に出さない */
+.outline__caret:has(.desk-slot__open) .outline__caret-plus { display: none; }
+.outline__caret:has(.desk-slot__open) .desk-slot__open { padding-left: 2px; }
+/* 木の最後にあるときは、欄の下端に貼り付いて、いつも見える */
+.outline__caret--end {
+  position: sticky; bottom: -24px; z-index: 2; padding-bottom: 24px;
+  /* 机と同じ地(色+紙の目)を、画面に固定して敷く。下の行が透けない。 */
+  background-color: var(--color-paper); background-image: var(--grain); background-attachment: fixed;
+}
+.outline__ghost {
+  margin: 2px 4px 2px calc(var(--outline-depth, 0) * 16px + 4px); padding: 6px 8px;
+  border-radius: var(--radius-s); background: var(--color-shu-wash); color: var(--color-shu-ink);
+  font: 400 var(--text-xs)/1.4 var(--font-sans);
+  animation: amu-pulse 1.2s var(--ease) infinite alternate;
+}
+@keyframes amu-pulse { from { opacity: .55; } to { opacity: 1; } }
+.outline__caret:has(.outline__ghost):not(:has(.outline__caret-host)) { padding-left: 0; }
+
+.outline__marks { display: flex; align-items: center; gap: 4px; padding: 0 2px; flex: 0 0 auto; }
+.outline__mark {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 20px; padding: 0 3px; border: 0; border-radius: 4px; background: none;
+  color: var(--color-ink-3); font-size: 12px; line-height: 18px; text-decoration: none;
+}
+a.outline__mark:hover { background: var(--color-shu-wash); color: var(--color-shu-ink); }
+.outline__chip { color: var(--color-shu-ink); font: 400 var(--text-xs)/1 var(--font-sans); padding: 0 2px; white-space: nowrap; }
+.outline__item--selected { background: var(--color-shu-wash); }
+.outline__item--lens, .entry-item--lens { background: var(--color-shu-wash); box-shadow: inset 3px 0 0 var(--color-shu); }
+
+/* --------------------------------------------------------------------------
+   4. 行の道具:段落・参考URLは3つまで。満足度・完了・気持ち・リンク・タグは項目の詳細へ
+   -------------------------------------------------------------------------- */
+@media (min-width: 921px) {
+  .entry-item__structure-button { display: none; }
+}
+@media (max-width: 920px) {
+  .entry-item__details-button { display: none; }
+}
+.entry-item--selected { background: var(--color-shu-wash); }
+
+/* --------------------------------------------------------------------------
+   5. 項目の詳細(PCは行のそばの小窓、スマホは下からのシートの中身)
+   -------------------------------------------------------------------------- */
+.entry-inspector__scrim { position: fixed; inset: 0; z-index: 79; border: 0; padding: 0; background: transparent; cursor: default; }
+.entry-inspector {
+  position: fixed; z-index: 80; width: 320px;
+  max-height: calc(100dvh - 24px); overflow: auto; overscroll-behavior: contain;
+  padding: var(--s-2); border-radius: var(--radius-l);
+  background: var(--color-sheet); box-shadow: var(--shadow-2);
+}
+.entry-inspector__title {
+  margin: 4px var(--s-2) 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: var(--color-ink); font: 600 var(--text-s)/1.5 var(--font-sans);
+}
+.entry-inspector__sub { margin: 0 var(--s-2) var(--s-2); color: var(--color-ink-3); font: 400 var(--text-xs)/1.4 var(--font-sans); }
+.entry-inspector__section { padding: 6px 0; border-top: 1px solid var(--color-line); }
+.entry-inspector__body > .entry-inspector__section:first-child { border-top: 0; }
+.entry-inspector__caption { margin: 4px var(--s-2); color: var(--color-ink-3); font: 400 11px/1.4 var(--font-sans); letter-spacing: .08em; }
+.entry-inspector__chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 6px var(--s-2); }
+.entry-inspector__section.entry-inspector__chips { padding: 8px; }
+.entry-inspector__chips--end { justify-content: flex-end; }
+.entry-inspector__chip {
+  display: inline-flex; align-items: center; gap: 6px; min-height: 32px;
+  padding: 6px 12px; border: 0; border-radius: var(--radius-pill);
+  background: var(--color-track); color: var(--color-ink);
+  font: 400 var(--text-s)/1.2 var(--font-sans); white-space: nowrap;
+}
+.entry-inspector__chip:hover:not(:disabled) { background: var(--color-line); }
+.entry-inspector__chip svg { width: 16px; height: 16px; }
+.entry-inspector__chip--danger { background: transparent; color: var(--color-danger); }
+.entry-inspector__moves { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; padding: 4px; }
+.entry-inspector__moves button {
+  display: grid; place-items: center; gap: 2px; padding: 8px 2px;
+  border: 0; border-radius: var(--radius-s); background: var(--color-track); color: var(--color-ink);
+  font: 400 var(--text-xs)/1.2 var(--font-sans);
+}
+.entry-inspector__moves button:hover:not(:disabled) { background: var(--color-line); }
+.entry-inspector__moves button:disabled { opacity: .4; }
+.entry-inspector__stars { padding: 0 0 2px; }
+.entry-inspector__star-buttons { display: flex; gap: 4px; padding: 4px var(--s-2); }
+.entry-inspector__star-buttons button {
+  flex: 1; padding: 6px 0; border: 0; border-radius: var(--radius-s);
+  background: var(--color-track); color: var(--color-ink); font: 400 var(--text-s)/1.2 var(--font-sans);
+}
+.entry-inspector__star-buttons button[aria-pressed="true"] { background: var(--color-ink); color: var(--color-sheet); }
+
+/* スマホのシートの中身は、ふちを持たず、シートの余白に任せる */
+.entry-inspector__body--sheet .entry-inspector__section { padding: 8px 0; }
+.entry-inspector__body--sheet .entry-inspector__chip { min-height: 44px; padding: 8px 14px; font-size: 14px; }
+.entry-inspector__body--sheet .entry-inspector__moves button { min-height: 52px; font-size: 13px; }
+.entry-inspector__body--sheet .entry-inspector__star-buttons button { min-height: 44px; }
+
+/* --------------------------------------------------------------------------
+   6. 書き添えのカード(気持ち・リンク・タグ・URL)
+   -------------------------------------------------------------------------- */
+.entry-meta-card--inline { margin: 4px var(--s-2); padding: 8px; border-radius: var(--radius-m); background: var(--color-paper); }
+.entry-meta-card__title { margin: 0 0 4px; color: var(--color-ink-3); font: 400 var(--text-xs)/1.4 var(--font-sans); }
+.entry-meta-card__field {
+  display: block; width: 100%; margin: 0; padding: 6px 2px;
+  border: 0; border-bottom: 1px solid var(--color-line-strong); border-radius: 0;
+  background: transparent; color: var(--color-ink);
+  font: 400 var(--text-m)/1.5 var(--font-sans); resize: vertical; outline: 0;
+}
+.entry-meta-card__field:focus { border-bottom-color: var(--color-ink); }
+.entry-meta-card__suggestions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.entry-meta-card__suggestions button {
+  padding: 4px 10px; border: 0; border-radius: var(--radius-pill);
+  background: var(--color-track); font: 400 var(--text-xs)/1.4 var(--font-sans);
+}
+.entry-meta-card__error { margin: 6px 0 0; color: var(--color-danger); font: 400 var(--text-xs)/1.5 var(--font-sans); }
+.entry-meta-card__actions { display: flex; justify-content: flex-end; align-items: center; gap: 6px; margin-top: 8px; }
+.entry-meta-card__actions > span { margin-right: auto; }
+.entry-meta-card__actions button {
+  padding: 6px 14px; border: 0; border-radius: var(--radius-pill);
+  background: var(--color-track); font: 400 var(--text-s)/1.2 var(--font-sans);
+}
+.entry-meta-card__actions .entry-meta-card__ok { background: var(--color-ink); color: var(--color-sheet); }
+/* スマホ: 画面の上半分に置く(キーボードで押し上げられない場所) */
+.entry-meta-card__layer { position: fixed; inset: 0; z-index: 90; }
+.entry-meta-card__scrim { position: absolute; inset: 0; width: 100%; border: 0; padding: 0; background: rgb(35 33 29 / .18); }
+.entry-meta-card--card {
+  position: fixed; top: 56px; left: 8px; right: 8px; max-height: calc(50dvh - 56px); overflow: auto;
+  padding: 12px; border-radius: var(--radius-l); background: var(--color-sheet); box-shadow: var(--shadow-2);
+}
+.entry-meta-card--card .entry-meta-card__field { font-size: 16px; }
+.entry-meta-card--card .entry-meta-card__actions button { min-height: 44px; }
+
+/* --------------------------------------------------------------------------
+   7. スマホ:棚の下の書き口(流れの中に置く。キーボードを追いかけない)
+   -------------------------------------------------------------------------- */
+@media (max-width: 920px) {
+  .editor-mobile-desk .desk-host { padding: 0; }
+  .editor-mobile-desk .entry-composer--desk > form.entry-composer {
+    display: grid; align-items: end; gap: 0 4px;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-areas: "depth fields put" "meta meta meta" "route route route" "note note note" "notice notice notice";
+  }
+  .editor-mobile-desk .entry-composer--desk .entry-composer__control-row,
+  .editor-mobile-desk .entry-composer--desk .entry-composer__meta-row { display: contents; }
+  .editor-mobile-desk .entry-composer--desk .entry-composer__depth { grid-area: depth; }
+  .editor-mobile-desk .entry-composer--desk .entry-composer__desk-fields { grid-area: fields; }
+  .editor-mobile-desk .entry-composer--desk .entry-composer__submit { grid-area: put; align-self: end; }
+  .editor-mobile-desk .entry-composer--desk .entry-composer__meta-controls { grid-area: meta; justify-self: end; }
+  .editor-mobile-desk .entry-composer--desk[data-draft="false"] .entry-composer__meta-row,
+  .editor-mobile-desk .entry-composer--desk[data-draft="false"] .entry-composer__meta-controls { display: none; }
+  .editor-mobile-desk .entry-composer--desk .entry-composer__route { grid-area: route; }
+  .editor-mobile-desk .entry-composer--desk .entry-composer__note-toggle,
+  .editor-mobile-desk .entry-composer--desk .entry-composer__reference-note { grid-area: note; }
+  .editor-mobile-desk .entry-composer--desk .entry-composer__reference-notice { grid-area: notice; }
+  .editor-mobile-desk .entry-composer--desk .entry-composer__textarea { font-size: 16px; }
+  .editor-mobile-desk .entry-composer--desk[data-slot="paragraph"] .entry-composer__textarea { min-height: 72px; }
+  /* 列の見出しは、棚が名前と数を持つのでスマホでは出さない(列の操作は棚の下の一覧で) */
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .outline__caret, .outline__ghost { transition: none; animation: none; }
+}
+}

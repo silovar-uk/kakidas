@@ -73,7 +73,7 @@ async function write(page, kind, text, { heading = '' } = {}) {
   const desk = deskOf(page);
   if (await desk.count()) {
     await selectKind(page, kind);
-    if (heading) await page.getByRole('textbox', { name: '段落タイトル', exact: true }).fill(heading);
+    if (heading) await page.getByRole('textbox', { name: '段落の見出し', exact: true }).fill(heading);
     await desk.fill(text);
     await desk.press(kind === 'paragraph' ? 'Control+Enter' : 'Enter');
   } else {
@@ -132,8 +132,8 @@ async function open(browser, url, viewport, extra = {}, seed = viewport.width >=
         const done = rowWith(page, 'sentence', SAMPLE.done).first();
         await done.hover();
         await done.getByRole('button', { name: '項目の詳細' }).click();
-        await done.getByRole('button', { name: /^完了(にする)?$/ }).first().click({ timeout: 5000 });
-        await done.getByRole('button', { name: '項目の詳細' }).click();
+        // v0.8.0: 項目の詳細は行のそばの小窓。完了にすると小窓は閉じる
+        await page.getByRole('dialog', { name: '項目の詳細' }).getByRole('button', { name: /^完了(にする)?$/ }).first().click({ timeout: 5000 });
         await page.waitForTimeout(400);
       } catch { /* 完了にできなくても測定は続ける(P3-3で分かる) */ }
     }
@@ -156,6 +156,8 @@ check('P1', 'P1-1', '続けて打っても、打った文が消えない', async
   const { page } = pc;
   const texts = ['連打の一', '連打の二', '連打の三', '連打の四'];
   const desk = deskOf(page);
+  // 見本の最後は段落。書き口は最後に書いた欄にいるので、アウトラインの欄へ運んでから打つ(v0.8.0)
+  if (await desk.count()) await selectKind(page, 'sentence');
   const box = (await desk.count()) ? desk : page.getByRole('textbox', { name: OLD_INPUT.sentence, exact: true }).first();
   await box.click();
   for (const t of texts) { await page.keyboard.type(t); await page.keyboard.press('Enter'); }
@@ -272,7 +274,7 @@ check('P2', 'P2-3', 'Shift+Enterで段落へ育ち、Ctrl+Enterで段落に置�
   await page.keyboard.press('Shift+Enter');
   await page.keyboard.type('二行目');
   assert.equal(await routedTo(page, 'paragraph'), true, '置き先が段落にならない');
-  assert.ok(await page.getByRole('textbox', { name: '段落タイトル', exact: true }).isVisible(), '段落タイトルの欄が出ない');
+  assert.ok(await page.getByRole('textbox', { name: '段落の見出し', exact: true }).isVisible(), '段落タイトルの欄が出ない');
   await page.keyboard.press('Control+Enter');
   await page.waitForTimeout(600);
   assert.equal(await rowWith(page, 'paragraph', '育つ一行目').count(), 1, '段落に置かれていない');

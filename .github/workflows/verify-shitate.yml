@@ -40,8 +40,8 @@ jobs:
             sleep 1
           done
           status=0
-          # amuは作った段階の項目だけを流す(P1のPRではP1。段階が進むたびに広げる)
-          if [ "${{ matrix.phase }}" = P1 ]; then
+          # amuは作った段階の項目だけを流す(P2のPRではP1・P2。段階が進むたびに広げる)
+          if [ "${{ matrix.phase }}" = P1 ] || [ "${{ matrix.phase }}" = P2 ]; then
             QA_TARGET=app QA_PHASES=${{ matrix.phase }} BASE_URL=http://127.0.0.1:4173/ node docs/amu/qa.mjs || status=1
           fi
           QA_PHASES=${{ matrix.phase }} BASE_URL=http://127.0.0.1:4173/ node docs/outline/qa.mjs || status=1
@@ -58,7 +58,7 @@ jobs:
         if: matrix.phase == 'P3' && always()
         uses: actions/upload-artifact@v4
         with:
-          name: kakidas-v0.7.0-screenshots
+          name: kakidas-amu-screenshots
           path: /tmp/togu-shots/
           if-no-files-found: warn
 
@@ -144,7 +144,7 @@ jobs:
           echo "::error::対象コミットのVercel本番反映が確認できない"
           exit 1
       - name: 本番amu受け入れ確認(作った段階の項目)
-        if: matrix.phase == 'P1'
+        if: matrix.phase == 'P1' || matrix.phase == 'P2'
         timeout-minutes: 15
         env:
           QA_TARGET: app

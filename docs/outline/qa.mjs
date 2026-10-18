@@ -81,13 +81,11 @@ check('P2','兄弟を移動し、直前の移動を取り消せる',async(page)=
 });
 check('P2','作成・位置指定・再読込で重複しない',async(page)=>{
   await put(page,'先頭');await put(page,'末尾');
-  await row(page,'先頭').getByRole('button',{name:'項目の詳細'}).click();
-  await row(page,'先頭').getByRole('button',{name:'項目の詳細'}).click();
+  // v0.8.0: 行を選んで直し、Enterで次の一行へ。そこへ書くと、直した行の直後に入る(行の下書きと項目の詳細は無くなった)
   await row(page,'先頭').focus();await page.keyboard.press('Enter');
   const edit=page.getByRole('textbox',{name:'アウトラインの本文を編集'});
   await edit.fill('先頭改訂');await edit.press('Enter');
-  const draft=page.getByRole('textbox',{name:'新しいアウトライン項目'});
-  await draft.fill('途中');await draft.press('Enter');
+  await page.keyboard.type('途中');await page.keyboard.press('Enter');
   await row(page,'途中').waitFor();
   await page.reload();
   const persisted=await outline(page).locator('.outline__content').allTextContents();

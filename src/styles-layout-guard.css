@@ -181,7 +181,7 @@
   /* 1行の操作は一つの「⋯」。他の操作はシートの内側に収容する。 */
   .entry-column--sentence .outline__item {
     display: grid;
-    grid-template-columns: 36px minmax(0,1fr) 44px;
+    grid-template-columns: 36px minmax(0,1fr) auto 44px;
     align-items: center;
     gap: 0;
     width: 100%;
@@ -221,28 +221,7 @@
   }
 }
 @media (max-width: 560px) {
-  /* 書き口の3択とタグ・備考・リンクを別行にする。重ねるのではなく並べる。 */
-  .entry-composer--desk > form.entry-composer {
-    grid-template-columns: minmax(0,1fr);
-    grid-template-areas: "fields" "note" "dest" "meta";
-    row-gap: 5px;
-    column-gap: 0;
-  }
-  .entry-composer--desk .entry-composer__control-row,
-  .entry-composer--desk .entry-composer__desk-fields,
-  .entry-composer--desk .entry-composer__meta-row {
-    min-width: 0;
-    width: 100%;
-  }
-  .entry-composer--desk .entry-composer__meta-row {
-    justify-self: stretch;
-    justify-content: flex-end;
-    gap: 6px;
-  }
-  .entry-composer--desk .entry-composer__meta-controls {
-    min-width: 0;
-    max-width: 100%;
-  }
+  /* 書き口は棚の下の流れの中(styles-amu.css)。ここでは棚の幅だけ整える。 */
   .editor-tabs, .editor-tab {
     min-width: 0;
   }

@@ -40,17 +40,31 @@ export const DEFAULT_ENTRY_LIST_DISPLAY_MODE: EntryListDisplayMode = "tag_groupe
  */
 export const DEFAULT_ENTRY_TAG_ORDER_LOCKED = true;
 
+/**
+ * 段落は文書の順で組むため、まとめ方の保存名を新しくし、既定を「まとめない」にする(v0.8.0)。
+ * 旧い保存名は開くたびに既定値が書き込まれ、本人の選択と区別できないため引き継がない。
+ */
+function getDisplayModeStorageKey(kind: EntryKind): string {
+  return kind === "paragraph"
+    ? `${DISPLAY_MODE_STORAGE_PREFIX}.v2.paragraph`
+    : `${DISPLAY_MODE_STORAGE_PREFIX}.${kind}`;
+}
+
+function getDefaultDisplayMode(kind: EntryKind): EntryListDisplayMode {
+  return kind === "paragraph" ? "plain" : DEFAULT_ENTRY_LIST_DISPLAY_MODE;
+}
+
 export function readEntryListDisplayMode(kind: EntryKind): EntryListDisplayMode {
   try {
-    const saved = window.localStorage.getItem(`${DISPLAY_MODE_STORAGE_PREFIX}.${kind}`);
+    const saved = window.localStorage.getItem(getDisplayModeStorageKey(kind));
 
     if (saved === "plain" || saved === "tag_grouped") {
       return saved;
     }
 
-    return DEFAULT_ENTRY_LIST_DISPLAY_MODE;
+    return getDefaultDisplayMode(kind);
   } catch {
-    return DEFAULT_ENTRY_LIST_DISPLAY_MODE;
+    return getDefaultDisplayMode(kind);
   }
 }
 
@@ -59,7 +73,7 @@ export function writeEntryListDisplayMode(
   mode: EntryListDisplayMode,
 ): void {
   try {
-    window.localStorage.setItem(`${DISPLAY_MODE_STORAGE_PREFIX}.${kind}`, mode);
+    window.localStorage.setItem(getDisplayModeStorageKey(kind), mode);
   } catch {
     // 保存できない場合も、その場の表示切替を優先する。
   }

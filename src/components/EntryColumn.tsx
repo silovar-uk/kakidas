@@ -1,7 +1,9 @@
-import { OutlineList } from "./OutlineList";
+import { OutlineList, type OutlineHandle } from "./OutlineList";
+import { EntryInspector, type EntryActions, type RowMove, type RowMoveState } from "./EntryInspector";
+import { EntryMetaCard, type EntryMetaKind } from "./EntryMetaCard";
 import { fetchReferenceTitle } from "../lib/referenceTitle";
 import { MoreIcon, CopyIcon } from "./icons";
-import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { type FormEvent, type ReactNode, type RefObject, useEffect, useMemo, useRef, useState } from "react";
 import {
   EntryComposer,
   type EntryComposerHandle,
@@ -68,6 +70,22 @@ type EntryColumnProps = {
   addAtBottom?: boolean;
   onAutoFocusHandled?: () => void;
   disabled?: boolean;
+  /** 書き口の置き場所(いる欄では書き口が、いない欄では入口が入る)。 */
+  deskNode?: ReactNode;
+  /** アウトラインの欄。次の一行の手(書き口が使う)を、ページへ渡す。 */
+  outlineRef?: RefObject<OutlineHandle | null>;
+  /** スマホで、書きかけがあるとき一覧の次の一行に「ここに入ります」を灯す。 */
+  ghostOn?: boolean;
+  onRowSelected?: () => void;
+  /** アウトラインの次の一行が入る場所の説明(書き口の読み上げ用)。 */
+  onCaretDescribed?: (description: string) => void;
+  /** 書き口を、アウトラインの欄へ運んでフォーカスする。 */
+  onFocusDesk?: () => void;
+  /** 段落の書き口は、この段落の後ろに入る。null=末尾、"^"=先頭。 */
+  paragraphAfterId?: string | null;
+  onSelectParagraph?: (entryId: string) => void;
+  /** 並びが手動のときだけ、段落を上・下へ移せる。 */
+  manualOrder?: boolean;
   onCreate: (
     kind: EntryKind,
     content: string,
@@ -94,6 +112,7 @@ type EntryColumnProps = {
   onCreateMemoFromEntry: (entryId: string) => Promise<unknown>;
   isCopying?: boolean;
   onMoveToKind: (entryId: string, targetKind: EntryKind) => Promise<unknown>;
+  /** アウトラインの行と、親のない段落(手動の順)を動かす。 */
   onRelocateOutline?: (id: string, parentId: string | null, index: number) => Promise<void>;
   /** タグでまとめる見出しから、現在の区分にある同名タグを一括変更する。 */
   onRenameTag: (currentTag: string, nextTag: string) => Promise<unknown>;
@@ -142,6 +161,15 @@ export function EntryColumn({
   tagSuggestions,
   addAtBottom = false,
   disabled = false,
+  deskNode,
+  outlineRef,
+  ghostOn = false,
+  onRowSelected,
+  onCaretDescribed,
+  onFocusDesk,
+  paragraphAfterId = null,
+  onSelectParagraph,
+  manualOrder = false,
   onCreate,
   onUpdate,
   onDelete,
@@ -157,10 +185,11 @@ export function EntryColumn({
   onRelocateOutline,
   onRenameTag,
 }: EntryColumnProps) {
-  const [structureEntryId, setStructureEntryId] = useState<string | null>(null);
+  /** PCの項目の詳細(行のそばの小窓)。 */
+  const [inspector, setInspector] = useState<{ entryId: string; anchor: HTMLElement } | null>(null);
   const [mobileActionEntryId, setMobileActionEntryId] = useState<string | null>(null);
-  const [mobileOutlineDetailsRequestId, setMobileOutlineDetailsRequestId] = useState<string | null>(null);
-  const [editRequest,setEditRequest]=useState<{entryId:string;target:"note"|"link"|"tag"}|null>(null);
+  /** スマホで、気持ち・リンク・タグを書く、画面の上半分のカード。 */
+  const [metaCard, setMetaCard] = useState<{ entryId: string; kind: EntryMetaKind } | null>(null);
   const [isHeaderMenuOpen, setIsHeaderMenuOpen] = useState(false);
   useEffect(() => {
     if (!isHeaderMenuOpen) return;
@@ -217,6 +246,12 @@ export function EntryColumn({
 
   const mobileActionEntry = mobileActionEntryId
     ? entries.find((entry) => entry.id === mobileActionEntryId) ?? null
+    : null;
+  const inspectorEntry = inspector
+    ? entries.find((entry) => entry.id === inspector.entryId) ?? null
+    : null;
+  const metaCardEntry = metaCard
+    ? entries.find((entry) => entry.id === metaCard.entryId) ?? null
     : null;
 
   const legacyWordEntries = kind === "word"
@@ -385,7 +420,7 @@ export function EntryColumn({
   useEffect(() => {
     if (!isActiveOnMobile) {
       setMobileActionEntryId(null);
-      setStructureEntryId(null);
+      setMetaCard(null);
       setIsHeaderMenuOpen(false);
       setTagGroupComposerState(null);
     }
@@ -395,18 +430,15 @@ export function EntryColumn({
   useEffect(() => {
     if (!compactView) return;
 
-    setStructureEntryId(null);
+    setInspector(null);
     setMobileActionEntryId(null);
     setIsHeaderMenuOpen(false);
     setTagGroupComposerState(null);
   }, [compactView]);
 
   useEffect(() => {
-    if (
-      structureEntryId &&
-      !entries.some((entry) => entry.id === structureEntryId)
-    ) {
-      setStructureEntryId(null);
+    if (inspector && !entries.some((entry) => entry.id === inspector.entryId)) {
+      setInspector(null);
     }
 
     if (
@@ -415,7 +447,11 @@ export function EntryColumn({
     ) {
       setMobileActionEntryId(null);
     }
-  }, [entries, mobileActionEntryId, structureEntryId]);
+
+    if (metaCard && !entries.some((entry) => entry.id === metaCard.entryId)) {
+      setMetaCard(null);
+    }
+  }, [entries, inspector, metaCard, mobileActionEntryId]);
 
 
   useEffect(() => {
@@ -468,14 +504,15 @@ export function EntryColumn({
     return () => window.cancelAnimationFrame(frame);
   }, [tagRenameState?.stateKey]);
 
+  /** スマホの「この項目の操作」(下からのシート)。 */
   const openStructureActions = (entryId: string) => {
-    if (isMobileViewport()) {
-      setMobileActionEntryId(entryId);
-      setStructureEntryId(null);
-      return;
-    }
+    setMobileActionEntryId(entryId);
+    setInspector(null);
+  };
 
-    setStructureEntryId((current) => (current === entryId ? null : entryId));
+  /** PCの「項目の詳細」(行のそばの小窓)。もう一度押すと閉じる。 */
+  const openDetails = (entryId: string, anchor: HTMLElement) => {
+    setInspector((current) => (current?.entryId === entryId ? null : { entryId, anchor }));
   };
 
   const enrichReferenceTitle = async (entryId: string, url: string) => {
@@ -508,34 +545,6 @@ export function EntryColumn({
     }
 
     return updated;
-  };
-
-  const handleCreate = async (
-    content: string,
-    metadata: EntryCreateMetadata,
-    draftId: string,
-  ) => {
-    const created = await onCreate(
-      kind,
-      content,
-      metadata,
-      null,
-      addAtBottom ? "bottom" : "top",
-      draftId,
-    );
-
-    if (
-      kind === "word" &&
-      metadata.link_url &&
-      created &&
-      typeof created === "object" &&
-      "id" in created &&
-      typeof created.id === "string"
-    ) {
-      void enrichReferenceTitle(created.id, metadata.link_url);
-    }
-
-    return created;
   };
 
   /** タグ見出しからの追加は、見出しのタグを固定して保存する。 */
@@ -602,7 +611,7 @@ export function EntryColumn({
 
     if (!copied) return false;
 
-    setStructureEntryId(null);
+    setInspector(null);
     setMobileActionEntryId(null);
     return true;
   };
@@ -615,7 +624,7 @@ export function EntryColumn({
 
     try {
       await onCreateMemoFromEntry(entryId);
-      setStructureEntryId(null);
+      setInspector(null);
       setMobileActionEntryId(null);
       return true;
     } catch {
@@ -639,7 +648,7 @@ export function EntryColumn({
 
     const deletion = await onDelete(entryId);
 
-    setStructureEntryId(null);
+    setInspector(null);
     setMobileActionEntryId(null);
     openUndo(deletion);
   };
@@ -683,7 +692,7 @@ export function EntryColumn({
 
     try {
       await onDeleteAll(kind);
-      setStructureEntryId(null);
+      setInspector(null);
       setMobileActionEntryId(null);
       clearUndo();
     } finally {
@@ -714,7 +723,7 @@ export function EntryColumn({
     }
 
     await onMoveToKind(entryId, targetKind);
-    setStructureEntryId(null);
+    setInspector(null);
     setMobileActionEntryId(null);
     return true;
   };
@@ -724,38 +733,92 @@ export function EntryColumn({
     if (!target) return;
 
     await onUpdate(entryId, { is_completed: !target.is_completed });
-    setStructureEntryId(null);
+    setInspector(null);
     setMobileActionEntryId(null);
+  };
+
+  /** 段落を上・下へ移す(手動の順のとき)。 */
+  const moveParagraph = (entryId: string, direction: -1 | 1) => {
+    if (!onRelocateOutline || disabled) return;
+    const index = primaryEntries.findIndex((entry) => entry.id === entryId);
+    const target = index + direction;
+    if (index < 0 || target < 0 || target >= primaryEntries.length) return;
+    void onRelocateOutline(entryId, null, target);
   };
 
   const renderEntry = (
     entry: EntryTreeNode,
     tagPresentation: EntryTagPresentation = "meta",
     displayNumber = getEntryDisplayNumber(entry),
-  ) => (
-    <EntryItem
-      key={entry.id}
-      entry={entry}
-      kind={kind}
-      isStructureOpen={structureEntryId === entry.id}
-      isMobileActionOpen={mobileActionEntryId === entry.id}
-      showCreatedAt={showCreatedAt}
-      showEntryNumbers={showEntryNumbers}
-      displayNumber={displayNumber}
-      compactView={compactView}
-      tagSuggestions={tagSuggestions}
-      tagPresentation={tagPresentation}
-      disabled={disabled || isDeletingAll}
-      editRequest={editRequest?.entryId===entry.id?editRequest.target:null}
-      onEditRequestHandled={()=>setEditRequest(null)}
-      onOpenStructure={openStructureActions}
-      onMoveToKind={requestMoveToKind}
-      onCopy={requestCopyEntry}
-      onCreateMemoFromEntry={requestCreateMemoFromEntry}
-      onUpdate={handleUpdateEntry}
-      onDelete={requestDelete}
-    />
-  );
+  ) => {
+    const index = primaryEntries.findIndex((item) => item.id === entry.id);
+    return (
+      <EntryItem
+        key={entry.id}
+        entry={entry}
+        kind={kind}
+        isMobileActionOpen={mobileActionEntryId === entry.id}
+        isSelected={kind === "paragraph" && paragraphAfterId === entry.id}
+        onSelect={kind === "paragraph" ? onSelectParagraph : undefined}
+        onMove={kind === "paragraph" && manualOrder ? moveParagraph : undefined}
+        canMoveUp={index > 0}
+        canMoveDown={index >= 0 && index < primaryEntries.length - 1}
+        onOpenDetails={openDetails}
+        showCreatedAt={showCreatedAt}
+        showEntryNumbers={showEntryNumbers}
+        displayNumber={displayNumber}
+        compactView={compactView}
+        tagPresentation={tagPresentation}
+        disabled={disabled || isDeletingAll}
+        onOpenStructure={openStructureActions}
+        onUpdate={handleUpdateEntry}
+      />
+    );
+  };
+
+  /** 項目の詳細・スマホのシートが使う、項目への操作。 */
+  const rowMoveStateOf = (entry: EntryTreeNode): RowMoveState => {
+    const siblings = entries
+      .filter((item) => item.parent_id === entry.parent_id)
+      .sort((a, b) => a.sort_order - b.sort_order || a.created_at.localeCompare(b.created_at));
+    const index = siblings.findIndex((item) => item.id === entry.id);
+    return {
+      indent: index > 0,
+      outdent: entry.parent_id !== null,
+      up: index > 0,
+      down: index >= 0 && index < siblings.length - 1,
+    };
+  };
+  const actionsFor = (entry: EntryTreeNode): EntryActions => ({
+    onUpdate: handleUpdateEntry,
+    onToggleCompleted: toggleCompleted,
+    onMoveRow: kind === "sentence" ? (id: string, action: RowMove) => outlineRef?.current?.moveRow(id, action) : undefined,
+    moveState: kind === "sentence" ? rowMoveStateOf(entry) : undefined,
+    onZoom: kind === "sentence" ? (id: string) => outlineRef?.current?.zoomTo(id) : undefined,
+    // P2は今の「段落に複製」のまま。P3で「段落にする」に置き換える。
+    onGrow: kind === "sentence" ? (id: string) => {
+      const source = entries.find((item) => item.id === id);
+      return source ? onCreate("paragraph", source.content, {}, null, "bottom") : undefined;
+    } : undefined,
+    onCopy: requestCopyEntry,
+    onCreateMemoFromEntry: requestCreateMemoFromEntry,
+    onMoveToKind: requestMoveToKind,
+    onDelete: requestDelete,
+  });
+
+    /** 通常表示の未完了項目。段落は、書き口が入る位置(選んだ段落の後ろ。なければ末尾)に入口を挟む。 */
+  const renderOpenEntries = () => {
+    if (kind !== "paragraph") return openEntries.map((entry) => renderEntry(entry));
+
+    const at = paragraphAfterId === "^"
+      ? 0
+      : paragraphAfterId
+        ? openEntries.findIndex((entry) => entry.id === paragraphAfterId) + 1 || openEntries.length
+        : openEntries.length;
+    const nodes = openEntries.map((entry) => renderEntry(entry));
+    nodes.splice(at, 0, <div key="desk-slot" className="entry-list__desk-slot">{deskNode}</div>);
+    return nodes;
+  };
 
   const toggleTagGroup = (stateKey: string, defaultExpanded: boolean) => {
     const currentExpanded = expandedTagGroups[stateKey] ?? defaultExpanded;
@@ -1142,48 +1205,60 @@ export function EntryColumn({
 
       <div className="entry-list" aria-live="polite">
         {kind === "sentence" && onRelocateOutline ? (
-          <OutlineList entries={primaryEntries} disabled={disabled || isDeletingAll} dense={outlineDense}
-            onCreate={async (content, parentId, index) => onCreate("sentence", content, {}, parentId, "bottom", undefined, undefined, index) as Promise<import("../types/memo").EntryRow>}
+          <OutlineList ref={outlineRef} entries={primaryEntries} disabled={disabled || isDeletingAll} dense={outlineDense}
             onRelocate={onRelocateOutline}
             onOpenActions={openStructureActions}
-            mobileDetailsRequestId={mobileOutlineDetailsRequestId}
-            onMobileDetailsHandled={() => setMobileOutlineDetailsRequestId(null)}
+            onOpenDetails={openDetails}
             onToggleCompleted={toggleCompleted}
             onUpdate={handleUpdateEntry}
-            onGrow={(entry) => onCreate("paragraph", entry.content, {}, null, "bottom")}
-            renderDetails={(entry) => renderEntry(entry)} />
-        ) : primaryEntries.length === 0 ? (
-          <p className="entry-list__empty">
-            {kind === "word" ? "書き口にURLを貼ると、ここに並びます。" : "まだありません。書き口から置けます。"}
-          </p>
-        ) : compactView ? (
-          isTagGrouped
-            ? renderTagGroupedEntries(primaryEntries, "compact")
-            : primaryEntries.map((entry) => renderEntry(entry))
-        ) : isTagGrouped ? (
-          renderTagGroupedEntries(primaryEntries, "grouped")
+            deskNode={deskNode}
+            ghostOn={ghostOn}
+            onCaretDescribed={onCaretDescribed}
+            onRowSelected={() => onRowSelected?.()}
+            onFocusDesk={() => onFocusDesk?.()} />
         ) : (
           <>
-            {openEntries.map((entry) => renderEntry(entry))}
+            {kind === "word" ? <div className="entry-list__desk-slot">{deskNode}</div> : null}
+            {primaryEntries.length === 0 ? (
+              <>
+                {kind === "paragraph" ? <div className="entry-list__desk-slot">{deskNode}</div> : null}
+                <p className="entry-list__empty">
+                  {kind === "word" ? "URLを貼ると、ここに集まります。どこで貼っても入ります。" : "まだありません。「＋ 段落を書く」から、またはアウトラインの行の ¶ から書き始められます。"}
+                </p>
+              </>
+            ) : compactView ? (
+              isTagGrouped
+                ? renderTagGroupedEntries(primaryEntries, "compact")
+                : primaryEntries.map((entry) => renderEntry(entry))
+            ) : isTagGrouped ? (
+              <>
+                {kind === "paragraph" ? <div className="entry-list__desk-slot">{deskNode}</div> : null}
+                {renderTagGroupedEntries(primaryEntries, "grouped")}
+              </>
+            ) : (
+              <>
+                {renderOpenEntries()}
 
-            {completedEntries.length > 0 ? (
-              <section className="entry-list__completed-section" aria-label="完了済み">
-                <button
-                  type="button"
-                  className="entry-list__completed-toggle"
-                  onClick={() => setIsCompletedCollapsed((collapsed) => !collapsed)}
-                  aria-expanded={!isCompletedCollapsed}
-                >
-                  <span>完了 {completedEntries.length}件</span>
-                  <span aria-hidden="true">{isCompletedCollapsed ? "›" : "⌄"}</span>
-                </button>
-                {!isCompletedCollapsed ? (
-                  <div className="entry-list__completed-items">
-                    {completedEntries.map((entry) => renderEntry(entry))}
-                  </div>
+                {completedEntries.length > 0 ? (
+                  <section className="entry-list__completed-section" aria-label="完了済み">
+                    <button
+                      type="button"
+                      className="entry-list__completed-toggle"
+                      onClick={() => setIsCompletedCollapsed((collapsed) => !collapsed)}
+                      aria-expanded={!isCompletedCollapsed}
+                    >
+                      <span>完了 {completedEntries.length}件</span>
+                      <span aria-hidden="true">{isCompletedCollapsed ? "›" : "⌄"}</span>
+                    </button>
+                    {!isCompletedCollapsed ? (
+                      <div className="entry-list__completed-items">
+                        {completedEntries.map((entry) => renderEntry(entry))}
+                      </div>
+                    ) : null}
+                  </section>
                 ) : null}
-              </section>
-            ) : null}
+              </>
+            )}
           </>
         )}
 
@@ -1209,15 +1284,43 @@ export function EntryColumn({
             mobileActionEntry ? getEntryDisplayNumber(mobileActionEntry) : undefined
           }
           disabled={disabled || isDeletingAll}
+          tagSuggestions={tagSuggestions}
+          actions={mobileActionEntry ? actionsFor(mobileActionEntry) : {
+            onUpdate: handleUpdateEntry,
+            onToggleCompleted: toggleCompleted,
+            onCopy: requestCopyEntry,
+            onCreateMemoFromEntry: requestCreateMemoFromEntry,
+            onMoveToKind: requestMoveToKind,
+            onDelete: requestDelete,
+          }}
           onClose={() => setMobileActionEntryId(null)}
-          onToggleCompleted={toggleCompleted}
-          onUpdate={handleUpdateEntry}
-          onRequestEdit={(entryId,target)=>setEditRequest({entryId,target})}
-          onRequestOutlineDetails={(entryId)=>{setMobileActionEntryId(null);setMobileOutlineDetailsRequestId(entryId);}}
-          onMoveToKind={requestMoveToKind}
-          onCopy={requestCopyEntry}
-          onCreateMemoFromEntry={requestCreateMemoFromEntry}
-          onDelete={requestDelete}
+          onRequestMeta={(entryId, meta) => setMetaCard({ entryId, kind: meta })}
+        />
+      ) : null}
+
+      {!isMobileViewport() && !compactView && inspectorEntry && inspector ? (
+        <EntryInspector
+          entry={inspectorEntry}
+          kind={kind}
+          anchor={inspector.anchor}
+          showEntryNumbers={showEntryNumbers}
+          displayNumber={getEntryDisplayNumber(inspectorEntry)}
+          disabled={disabled || isDeletingAll}
+          tagSuggestions={tagSuggestions}
+          actions={actionsFor(inspectorEntry)}
+          onClose={() => setInspector(null)}
+        />
+      ) : null}
+
+      {isMobileViewport() && isActiveOnMobile && metaCardEntry && metaCard ? (
+        <EntryMetaCard
+          key={`${metaCard.entryId}:${metaCard.kind}`}
+          kind={metaCard.kind}
+          entry={metaCardEntry}
+          tagSuggestions={tagSuggestions}
+          layout="card"
+          onApply={(patch) => handleUpdateEntry(metaCardEntry.id, patch)}
+          onClose={() => setMetaCard(null)}
         />
       ) : null}
 
