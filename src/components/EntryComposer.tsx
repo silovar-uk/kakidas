@@ -17,6 +17,7 @@ import {
   type EntryCreateMetadata,
   type EntryKind,
   ENTRY_KIND_LABEL,
+  ENTRY_KIND_ORDER,
   ENTRY_KIND_PLACEHOLDER,
   getLinkHostname,
   getReferenceUrlKey,
@@ -151,6 +152,9 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
     const hasNote = noteValue.trim().length > 0;
     const hasLink = linkValue.trim().length > 0;
     const canSubmit = value.trim().length > 0 && !disabled;
+    /** 書きかけがあるときだけ、添える道具(気持ち・リンク・タグ)を出すための印。フォーカスでは変えない。 */
+    const hasDraft = canSubmit || headingValue.trim().length > 0 || hasNote || hasLink
+      || Boolean(selectedTag) || activeMetaPicker !== null;
     const existingReferenceUrlKeys = useMemo(
       () =>
         new Set(
@@ -320,6 +324,11 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
           });
         }
 
+        // キー操作の中で呼ばれたときは同期でフォーカスする(iOSでキーボードを閉じさせない)。
+        if (delay === 0) {
+          inputRef.current?.focus({ preventScroll: !scroll });
+          return;
+        }
         window.setTimeout(() => inputRef.current?.focus(), delay);
       },
     }));
@@ -770,7 +779,9 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
     const commonProps = {
       value,
       disabled,
-      placeholder: isDesk ? "ここに書く。Enterで置く" : ENTRY_KIND_PLACEHOLDER[kind],
+      placeholder: isDesk
+        ? isParagraph ? "段落を書く(Ctrl+Enterで置く)" : "書く(Enterで置く)"
+        : ENTRY_KIND_PLACEHOLDER[kind],
       onChange: handleChange,
       onKeyDown: handleKeyDown,
       onCompositionStart: handleCompositionStart,
@@ -779,7 +790,8 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
 
 
     return (
-      <section aria-label={isDesk ? "書き口" : undefined} className={isDesk ? "entry-composer entry-composer--desk" : undefined}>
+      <section aria-label={isDesk ? "書き口" : undefined} className={isDesk ? "entry-composer entry-composer--desk" : undefined}
+        data-draft={isDesk ? String(hasDraft) : undefined}>
       <form
         aria-label={isDesk ? "書き口" : undefined}
         className={`entry-composer ${isDesk ? "entry-composer--desk-inner" : ""} ${compact ? "entry-composer--tag-group" : ""} ${
@@ -813,7 +825,7 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
 
         {isDesk ? (
           <div className="entry-composer__destinations" role="radiogroup" aria-label="置き先">
-            {(["word", "sentence", "paragraph"] as EntryKind[]).map((target) => (
+            {ENTRY_KIND_ORDER.map((target) => (
               <button key={target} type="button" role="radio" aria-label={ENTRY_KIND_LABEL[target]}
                 aria-checked={kind === target} onClick={() => { setChosenKind(target); inputRef.current?.focus(); }}>
                 {ENTRY_KIND_LABEL[target]}
@@ -1039,7 +1051,30 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
                   hasLink ? "entry-composer__meta-trigger--active" : ""
                 }`}
                 disabled={disabled}
-                onClick={() => openMetaPicker("link")}
+                onClick={() => {
+                  const isOpening = activeMetaPicker !== "link";
+                  openMetaPicker("link");
+
+                  // スマホで空のリンクを開くときは、クリップボードのURLを確認用に仮入力する。
+                  const canReadClipboard =
+                    isOpening &&
+                    !hasLink &&
+                    window.matchMedia("(max-width: 920px)").matches &&
+                    Boolean(navigator.clipboard?.readText);
+
+                  if (canReadClipboard) {
+                    void navigator.clipboard.readText()
+                      .then((clipboardText) => {
+                        const pastedLink = clipboardText.trim();
+                        if (!pastedLink) return;
+                        setLinkDraft(pastedLink);
+                        setLinkError(null);
+                      })
+                      .catch(() => {
+                        // 権限がない場合も、空欄を開いて手入力できる。
+                      });
+                  }
+                }}
                 aria-expanded={activeMetaPicker === "link"}
                 aria-label={hasLink ? "リンクを変更" : "リンクを付ける"}
                 title={hasLink ? "リンクを変更" : "リンクを付ける"}

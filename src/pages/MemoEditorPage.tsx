@@ -40,6 +40,7 @@ import {
   type MemoWithEntries,
   ENTRY_KINDS,
   ENTRY_KIND_LABEL,
+  ENTRY_KIND_ORDER,
   formatDefaultMemoTitle,
   getEntryTree,
 } from "../types/memo";
@@ -75,16 +76,17 @@ type EditorNavigationState = {
 function getNavigationKind(state: EditorNavigationState | null): EntryKind {
   return state?.activeKind && ENTRY_KINDS.includes(state.activeKind)
     ? state.activeKind
-    : "word";
+    : "sentence";
 }
 
-const ENTRY_TIMESTAMP_VISIBILITY_STORAGE_KEY = "kakidas.show-entry-timestamps";
+// 旧い保存名は開くたびに既定値(true)が書き込まれ、本人の選択と区別できないため引き継がない。
+const ENTRY_TIMESTAMP_VISIBILITY_STORAGE_KEY = "kakidas.show-entry-timestamps.v2";
 const ENTRY_NUMBER_VISIBILITY_STORAGE_KEY = "kakidas.show-entry-numbers";
 const HIDE_COMPLETED_ENTRIES_STORAGE_KEY = "kakidas.hide-completed-entries";
 const ADD_ENTRIES_AT_BOTTOM_STORAGE_KEY = "kakidas.add-entries-at-bottom";
 const COMPACT_ENTRY_VIEW_STORAGE_KEY = "kakidas.compact-entry-view";
 const COLLAPSED_ENTRY_COLUMNS_STORAGE_KEY = "kakidas.collapsed-entry-columns.v1";
-const WORKSPACE_KINDS: EntryKind[] = ["sentence", "paragraph", "word"];
+const WORKSPACE_KINDS = ENTRY_KIND_ORDER;
 
 type CollapsedEntryColumns = Record<EntryKind, boolean>;
 
@@ -119,10 +121,10 @@ function readCollapsedEntryColumns(): CollapsedEntryColumns {
 
 function readEntryTimestampVisibility(): boolean {
   try {
-    return window.localStorage.getItem(ENTRY_TIMESTAMP_VISIBILITY_STORAGE_KEY) !== "false";
+    return window.localStorage.getItem(ENTRY_TIMESTAMP_VISIBILITY_STORAGE_KEY) === "true";
   } catch {
-    // ストレージが使えないブラウザでも、従来どおり日時を表示する。
-    return true;
+    // ストレージが使えないブラウザでは、既定どおり日時を隠す。
+    return false;
   }
 }
 
@@ -210,6 +212,8 @@ export function MemoEditorPage() {
 
   const [title, setTitle] = useState("");
   const titleInputRef = useRef<HTMLInputElement | null>(null);
+  const titleCaretTimersRef = useRef<number[]>([]);
+  useEffect(() => () => titleCaretTimersRef.current.forEach((timer) => window.clearTimeout(timer)), []);
   // 画面を離れる直前にも、最新の入力値を判断できるようにする。
   const latestTitleRef = useRef(title);
   const latestMemoRef = useRef<MemoWithEntries | null>(memo);
@@ -218,6 +222,24 @@ export function MemoEditorPage() {
   const [activeKind, setActiveKind] = useState<EntryKind>(
     () => getNavigationKind(initialNavigationState),
   );
+  const activeKindRef = useRef(activeKind);
+  activeKindRef.current = activeKind;
+  /** スマホで、いまの棚と違う欄へ置いたときの受け取り表示。一覧に重ねて出し、押し下げない。 */
+  const [receipt, setReceipt] = useState<{ kind: EntryKind; at: number } | null>(null);
+  /** 棚の数字を弾ませる合図。atが変わるたびに動きをやり直す。 */
+  const [bumped, setBumped] = useState<{ kind: EntryKind; at: number } | null>(null);
+  const receiptTimerRef = useRef<number | null>(null);
+  const handlePlaced = useCallback((kind: EntryKind) => {
+    if (!window.matchMedia("(max-width: 920px)").matches) return;
+    setBumped({ kind, at: Date.now() });
+    if (kind === activeKindRef.current) return;
+    setReceipt({ kind, at: Date.now() });
+    if (receiptTimerRef.current !== null) window.clearTimeout(receiptTimerRef.current);
+    receiptTimerRef.current = window.setTimeout(() => setReceipt(null), 4000);
+  }, []);
+  useEffect(() => () => {
+    if (receiptTimerRef.current !== null) window.clearTimeout(receiptTimerRef.current);
+  }, []);
   // 移動先の保存に成功した場合だけ、スマホの表示タブも切り替える。
   const handleMoveEntryToKind = useCallback(
     async (entryId: string, targetKind: EntryKind): Promise<void> => {
@@ -481,6 +503,16 @@ export function MemoEditorPage() {
       input.focus({ preventScroll: true });
       input.setSelectionRange(caretPosition, caretPosition);
       setShouldFocusNewMemoTitle(false);
+
+      // iPhone Safariはキーボード表示中にカーソルを末尾へ戻すことがある。
+      // 値が変わらず題にフォーカスがある間だけ、位置を直す。
+      titleCaretTimersRef.current.forEach((timer) => window.clearTimeout(timer));
+      titleCaretTimersRef.current = [60, 180, 360, 560].map((delay) =>
+        window.setTimeout(() => {
+          if (input.value !== defaultTitle || document.activeElement !== input) return;
+          input.setSelectionRange(caretPosition, caretPosition);
+        }, delay),
+      );
     });
 
     return () => window.cancelAnimationFrame(frame);
@@ -920,8 +952,6 @@ export function MemoEditorPage() {
   };
   const handleDeskCreate=async(content:string,metadata:import('../types/memo').EntryCreateMetadata,draftId:string,kind:EntryKind='sentence',entryId?:string)=>{
     const created=await createEntry(kind,content,metadata,null,addEntriesAtBottom?'bottom':'top',draftId,entryId);
-    // 保存成功直後にスマホの棚を切り替える。演出の完了は待たない。
-    if (window.matchMedia("(max-width: 920px)").matches) setActiveKind(kind);
     if(kind==='word'&&metadata.link_url){
       void fetchReferenceTitle(metadata.link_url).then(result=>{
         if(result)return updateEntry(created.id,{content:result});
@@ -1008,6 +1038,13 @@ export function MemoEditorPage() {
         <div className="editor-header__title">
           <input ref={titleInputRef} className="memo-title-input" aria-label="メモのタイトル" value={title}
             onChange={e=>{latestTitleRef.current=e.target.value;setTitle(e.target.value)}}
+            onKeyDown={e=>{
+              // 変換確定のEnterは題の確定に使わない。フォーカスは同期で移し、iOSのキーボードを閉じさせない。
+              if(e.nativeEvent.isComposing||e.nativeEvent.keyCode===229||e.key==='Process'||e.key!=='Enter')return;
+              e.preventDefault();
+              void saveTitle(title);
+              deskRef.current?.focus({scroll:false,delay:0});
+            }}
             onBlur={()=>void saveTitle(title)} />
           <MemoTagControl tag={memo.tag} suggestions={tagSuggestions} disabled={isSaving} onSave={handleSaveTag}/>
         </div>
@@ -1058,7 +1095,11 @@ export function MemoEditorPage() {
             onClick={() => setActiveKind(kind)}
           >
             <span>{ENTRY_KIND_LABEL[kind]}</span>
-            <span className="editor-tab__count" aria-hidden="true">
+            <span
+              key={bumped?.kind === kind ? bumped.at : "idle"}
+              className={bumped?.kind === kind ? "editor-tab__count bump" : "editor-tab__count"}
+              aria-hidden="true"
+            >
               {openEntryCountsByKind[kind]}
             </span>
           </button>
@@ -1075,7 +1116,15 @@ export function MemoEditorPage() {
         memoUpdatedAt={memo.updated_at} tagSuggestions={entryTagSuggestions}
         mobileKind={activeKind} disabled={isUploading}
         existingReferenceUrls={memo.entries.filter(e=>e.kind==='word'&&e.link_url).map(e=>e.link_url)}
-        onSubmit={handleDeskCreate} onPlaced={setActiveKind}/>
+        onSubmit={handleDeskCreate} onPlaced={handlePlaced}/>
+      <div className="editor-receipt-anchor">
+        {receipt ? <div className="editor-receipt" role="status" key={receipt.at}>
+          <span>{ENTRY_KIND_LABEL[receipt.kind]}に置きました</span>
+          <button type="button" onClick={() => { setActiveKind(receipt.kind); setReceipt(null); }}>
+            {ENTRY_KIND_LABEL[receipt.kind]}を見る
+          </button>
+        </div> : null}
+      </div>
 
       <section
         className="editor-grid"

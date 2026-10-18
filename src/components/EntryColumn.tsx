@@ -121,6 +121,7 @@ type TagGroupComposerState = {
 };
 
 const UNDO_WINDOW_MS = 5_500;
+const OUTLINE_DENSITY_KEY = "kakidas.outline-density.v1";
 
 function isMobileViewport() {
   return window.matchMedia("(max-width: 920px)").matches;
@@ -175,6 +176,13 @@ export function EntryColumn({
     return () => window.removeEventListener("keydown", onEscape);
   }, [isHeaderMenuOpen, kind]);
 
+  /** アウトラインの高密度表示。端末ごとに記憶し、既定は高密度。 */
+  const [outlineDense, setOutlineDense] = useState(() => {
+    try { return window.localStorage.getItem(OUTLINE_DENSITY_KEY) !== "normal"; } catch { return true; }
+  });
+  useEffect(() => {
+    try { window.localStorage.setItem(OUTLINE_DENSITY_KEY, outlineDense ? "dense" : "normal"); } catch { /* 端末設定が保存できなくても操作可能 */ }
+  }, [outlineDense]);
   const [isCompletedCollapsed, setIsCompletedCollapsed] = useState(false);
   const [isDeletingAll, setIsDeletingAll] = useState(false);
   const [pendingUndo, setPendingUndo] = useState<PendingUndo | null>(null);
@@ -1121,6 +1129,7 @@ export function EntryColumn({
             <button type="button" className="entry-column__more" aria-label={`${ENTRY_KIND_LABEL[kind]}の操作`}
               aria-expanded={isHeaderMenuOpen} onClick={() => setIsHeaderMenuOpen(o => !o)}><MoreIcon /></button>
             {isHeaderMenuOpen ? <div className="entry-column__menu" role="menu">
+              {kind === "sentence" ? <button role="menuitemcheckbox" aria-checked={outlineDense} onClick={() => {setOutlineDense((current) => !current);setIsHeaderMenuOpen(false)}}>高密度で表示</button> : null}
               <button role="menuitemcheckbox" aria-checked={isTagGrouped} onClick={() => {changeDisplayMode(isTagGrouped ? "plain" : "tag_grouped");setIsHeaderMenuOpen(false)}}>タグでまとめる</button>
               {isTagGrouped ? <button role="menuitemcheckbox" aria-checked={isTagOrderLocked} onClick={() => {toggleTagOrderLock();setIsHeaderMenuOpen(false)}}>順番固定</button> : null}
               <button role="menuitem" onClick={() => {void handleCopy();setIsHeaderMenuOpen(false)}}><CopyIcon />{ENTRY_KIND_LABEL[kind]}をコピー</button>
@@ -1133,7 +1142,7 @@ export function EntryColumn({
 
       <div className="entry-list" aria-live="polite">
         {kind === "sentence" && onRelocateOutline ? (
-          <OutlineList entries={primaryEntries} disabled={disabled || isDeletingAll}
+          <OutlineList entries={primaryEntries} disabled={disabled || isDeletingAll} dense={outlineDense}
             onCreate={async (content, parentId, index) => onCreate("sentence", content, {}, parentId, "bottom", undefined, undefined, index) as Promise<import("../types/memo").EntryRow>}
             onRelocate={onRelocateOutline}
             onOpenActions={openStructureActions}

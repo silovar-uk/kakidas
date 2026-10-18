@@ -9,6 +9,7 @@ import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
 import { resolve } from 'node:path';
 import { writeFileSync, mkdirSync } from 'node:fs';
+import { selectKind, openMargin } from '../../amu/kinds.mjs';
 
 const { chromium } = createRequire(process.env.PW_FROM ? pathToFileURL(resolve(process.env.PW_FROM) + '/').href : import.meta.url)('playwright');
 const URL0 = process.env.BASE_URL || 'https://kakidas-3gqw.vercel.app/';
@@ -28,7 +29,9 @@ const SAMPLE = {
 
 const desk = page => page.getByRole('textbox', { name: '書く', exact: true });
 async function write(page, kind, text, { heading = '', tag = '', note = '' } = {}) {
-  await page.getByRole('radio', { name: LABEL[kind], exact: true }).click();
+  await selectKind(page, kind);
+  // スマホは、添える道具を書きかけがあるときだけ出す。先に本文を打つ。
+  await desk(page).fill(text);
   if (tag) {
     try {
       await page.getByRole('button', { name: 'タグを付ける', exact: true }).click();
@@ -44,7 +47,6 @@ async function write(page, kind, text, { heading = '', tag = '', note = '' } = {
     } catch (e) { console.log('note失敗', e.message.split('\n')[0]); }
   }
   if (heading) await page.getByRole('textbox', { name: '段落タイトル', exact: true }).fill(heading);
-  await desk(page).fill(text);
   await desk(page).press(kind === 'paragraph' ? 'Control+Enter' : 'Enter');
   await page.waitForTimeout(350);
 }
@@ -259,7 +261,7 @@ try {
     try { await page.locator('.outline__item-wrap').filter({ hasText: SAMPLE.sentences[1] }).first().getByRole('button', { name: 'この項目の操作', exact: true }).click(); await page.waitForTimeout(500); await shot(page, 'se-04-action-sheet.png'); results.seSheet = await page.evaluate(MEASURE); await page.keyboard.press('Escape'); await page.waitForTimeout(300); } catch (e) { console.log('シート失敗', e.message.split('\n')[0]); }
     try { await page.getByRole('button', { name: 'メモの操作', exact: true }).click(); await page.waitForTimeout(400); await shot(page, 'se-05-memo-menu.png'); await page.keyboard.press('Escape'); await page.waitForTimeout(300); } catch (e) { console.log('メニュー失敗', e.message.split('\n')[0]); }
     try { const b = page.locator('.memo-actions__backdrop'); if (await b.count() && await b.isVisible()) await b.click(); } catch {}
-    try { await page.getByRole('button', { name: '余白を開く', exact: true }).click(); await page.waitForTimeout(500); await shot(page, 'se-06-yohaku.png'); await page.keyboard.press('Escape'); await page.waitForTimeout(300); } catch (e) { console.log('余白失敗', e.message.split('\n')[0]); }
+    try { await openMargin(page); await page.waitForTimeout(500); await shot(page, 'se-06-yohaku.png'); await page.keyboard.press('Escape'); await page.waitForTimeout(300); } catch (e) { console.log('余白失敗', e.message.split('\n')[0]); }
     try { await page.reload({ waitUntil: 'networkidle' }); await page.waitForTimeout(600); await page.getByRole('button', { name: '清書にする', exact: true }).click(); await page.getByRole('article', { name: '清書', exact: true }).waitFor({ state: 'visible', timeout: 5000 }); await page.waitForTimeout(1200); await shot(page, 'se-07-seisho.png'); await shot(page, 'se-08-seisho-full.png', { fullPage: true }); } catch (e) { console.log('清書失敗', e.message.split('\n')[0]); }
     await page.goto(URL0, { waitUntil: 'networkidle' }); await page.waitForTimeout(600);
     await shot(page, 'se-09-list.png');

@@ -18,6 +18,7 @@
   .outline__breadcrumbs button { white-space:nowrap; text-overflow:ellipsis; overflow:hidden; }
   .outline__item { display:flex; min-height:29px; align-items:center; gap:0; padding:0 2px 0 calc(var(--outline-depth,0) * 15px); border-radius:5px; outline:0; }
   .outline--normal .outline__item { min-height:39px; }
+  .outline__item--completed .outline__content { color: var(--color-ink-3); text-decoration: line-through; text-decoration-color: var(--color-line-strong); }
   .outline__item:focus-visible { outline:2px solid var(--color-ink-2); outline-offset:-2px; }
   .outline__item:hover { background:var(--color-hover); }
   .outline__item--selected { background:var(--color-shu-wash); }
@@ -64,6 +65,14 @@
     .outline__new textarea { min-height:44px; font-size:16px; }
     .outline__structure-actions button { min-height:44px; }
   }
+  /* スマホで別の欄へ置いたときの受け取り。一覧に重ね、一覧を押し下げない(指の下で押す場所がずれない)。 */
+  .editor-receipt-anchor { position:relative; height:0; z-index:6; }
+  .editor-receipt { position:absolute; left:8px; right:8px; top:6px; display:flex; align-items:center; justify-content:space-between; gap:8px; padding:8px 12px; border-radius:var(--radius-m); font-size:var(--text-xs); color:var(--color-shu-ink); background:var(--color-shu-wash); box-shadow:var(--shadow-2); animation:amu-receipt-in var(--dur-2) var(--ease); }
+  .editor-receipt button { min-height:36px; border:0; background:none; color:inherit; font-size:var(--text-xs); text-decoration:underline; padding:4px 8px; cursor:pointer; }
+  .editor-tab__count.bump { display:inline-block; animation:amu-bump .26s var(--ease); }
+  @keyframes amu-receipt-in { from { opacity:0; transform:translateY(-4px); } }
+  @keyframes amu-bump { 40% { transform:scale(1.25); color:var(--color-shu); } }
+  @media (prefers-reduced-motion:reduce) { .editor-receipt, .editor-tab__count.bump { animation:none; } }
   @media (prefers-reduced-motion:reduce) { .outline *, .editor-grid { transition:none !important; animation:none !important; }
     .outline__item.entry-item--fresh .outline__content { color: var(--color-ink) !important; }
   }

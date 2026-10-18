@@ -14,6 +14,7 @@ import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
 import { resolve } from 'node:path';
 import { readFileSync } from 'node:fs';
+import { selectKind, openMargin } from '../amu/kinds.mjs';
 
 const base = process.env.PW_FROM ? pathToFileURL(resolve(process.env.PW_FROM) + '/').href : import.meta.url;
 const { chromium } = createRequire(base)('playwright');
@@ -43,7 +44,9 @@ const SAMPLE = {
 const LABEL = { url: '参考URL', sentence: 'アウトライン', paragraph: '段落' };
 const deskOf = page => page.getByRole('textbox', { name: '書く', exact: true });
 async function write(page, kind, text, { heading = '', tag = '', note = '' } = {}) {
-  await page.getByRole('radio', { name: LABEL[kind], exact: true }).click();
+  await selectKind(page, kind);
+  // スマホは、添える道具(気持ち・リンク・タグ)を書きかけがあるときだけ出す。先に本文を打つ。
+  await deskOf(page).fill(text);
   if (tag) {
     await page.getByRole('button', { name: 'タグを付ける', exact: true }).click();
     const tagField = page.getByRole('textbox', { name: '項目タグ', exact: true });
@@ -57,7 +60,6 @@ async function write(page, kind, text, { heading = '', tag = '', note = '' } = {
     await noteField.press('Control+Enter');
   }
   if (heading) await page.getByRole('textbox', { name: '段落タイトル', exact: true }).fill(heading);
-  await deskOf(page).fill(text);
   await deskOf(page).press(kind === 'paragraph' ? 'Control+Enter' : 'Enter');
   await page.waitForTimeout(450);
 }
@@ -255,7 +257,7 @@ check('P1', 'P1-9', '清書の落款は、2文字とも印の枠の中に収ま�
 });
 check('P1', 'P1-10', '余白の呼び名がそろい、スマホでキー操作の案内を出さない', async ({ pc, se }) => {
   for (const [where, page] of [['PC', pc.page], ['スマホ', se.page]]) {
-    await page.getByRole('button', { name: '余白を開く', exact: true }).click(); await page.waitForTimeout(400);
+    await openMargin(page); await page.waitForTimeout(400);
     const r = await page.evaluate(() => { const layer = document.querySelector('.temporary-memo-layer') || document.body;
       const labels = [...layer.querySelectorAll('[aria-label]')].map(e => e.getAttribute('aria-label')).join(' ');
       const after = getComputedStyle(document.querySelector('.temporary-memo-panel__footer'), '::after').content;

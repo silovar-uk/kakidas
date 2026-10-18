@@ -85,6 +85,16 @@ kakidasは、考えを「単語」「文」「段落」の粒度で、整える�
 - 検証は `docs/togu/qa.mjs` の新規30項目と、`docs/shitate/qa.mjs` の既存29項目。GitHub Actionsの `verify-shitate.yml` でP1〜P3別にプレビューとVercel本番を確認する。PC 1366×633・スマホ375×667の撮影は `docs/togu/proto/shots.mjs` を使う。
 - 利用していなかった `styles-mobile-word-compact.css`、`styles-mobile-word-single-row.css`、`styles-cloud-upload-header.css` は削除した。
 
+## v0.7.2「並べずに、編む」P1 守(揃える)
+
+- 計画は `docs/amu/PLAN.md`、依頼書は `docs/amu/HANDOFF-sonnet.md`、動く完成形は `docs/amu/mock.html`、受け入れ確認は `docs/amu/qa.mjs`(35項目。段階は `QA_PHASES`)。
+- 変えたもの: 欄の順(`ENTRY_KIND_ORDER`)、スマホの字下げ・完了の見え方・1行の帯・受け取り表示、下書きが入る位置、新しいメモの道(題→Enter→書き口)、日時の既定、ビルド時の置き換えの撤去。
+- 変えていないもの: データの形と保存先(新しい列・表・ストアなし)、メモ一覧・タグ管理・クラウドの各ダイアログ、書き口が1つであること。
+- 既定の変更: 項目の日時はオフ(保存名 `kakidas.show-entry-timestamps.v2`)。戻し方は「メモの操作」→「項目の日時を表示」。
+- スマホの書き口は、置き先の3択を出さず(棚が行き先)、添える道具は書きかけがあるときだけ出す。PCの3択はP2でなくなる。
+- 旧台本は、置き先の選択に `docs/amu/kinds.mjs` の `selectKind`(PCはCtrl+Shift+1/2/3、スマホは棚)を使う。
+- 未確認: iPhone SE実機(題→Enterでキーボードが閉じない、題の「」の中のカーソル)。
+
 ## 2. 技術構成と起動方法
 
 | 項目 | 内容 |

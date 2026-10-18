@@ -31,7 +31,7 @@ jobs:
         run: |
           npm install --no-save --package-lock=false playwright
           npx playwright install --with-deps chromium
-      - name: P1〜P3 29項目の受け入れ確認
+      - name: 受け入れ確認(amu・outline・shitate・togu)
         timeout-minutes: 15
         run: |
           npm run preview -- --host 127.0.0.1 --port 4173 > /tmp/kakidas-preview.log 2>&1 &
@@ -40,6 +40,10 @@ jobs:
             sleep 1
           done
           status=0
+          # amuは作った段階の項目だけを流す(P1のPRではP1。段階が進むたびに広げる)
+          if [ "${{ matrix.phase }}" = P1 ]; then
+            QA_TARGET=app QA_PHASES=${{ matrix.phase }} BASE_URL=http://127.0.0.1:4173/ node docs/amu/qa.mjs || status=1
+          fi
           QA_PHASES=${{ matrix.phase }} BASE_URL=http://127.0.0.1:4173/ node docs/outline/qa.mjs || status=1
           QA_TARGET=app QA_PHASES=${{ matrix.phase }} BASE_URL=http://127.0.0.1:4173/ node docs/shitate/qa.mjs || status=1
           QA_PHASES=${{ matrix.phase }} BASE_URL=http://127.0.0.1:4173/ node docs/togu/qa.mjs || status=1
@@ -139,6 +143,14 @@ jobs:
           done
           echo "::error::対象コミットのVercel本番反映が確認できない"
           exit 1
+      - name: 本番amu受け入れ確認(作った段階の項目)
+        if: matrix.phase == 'P1'
+        timeout-minutes: 15
+        env:
+          QA_TARGET: app
+          QA_PHASES: ${{ matrix.phase }}
+          BASE_URL: https://kakidas-3gqw.vercel.app/
+        run: node docs/amu/qa.mjs
       - name: 本番アウトライン専用受け入れ確認
         timeout-minutes: 15
         env:
