@@ -11,3 +11,4 @@ export function KeyboardIcon(){return <Icon><rect x="2" y="5" width="20" height=
 export function BackIcon(){return <Icon><path d="m14 5-7 7 7 7"/></Icon>}
 export function UpIcon(){return <Icon><path d="M12 19V5"/><path d="m6 11 6-6 6 6"/></Icon>}
 export function DownIcon(){return <Icon><path d="M12 5v14"/><path d="m6 13 6 6 6-6"/></Icon>}
+export function PullIcon(){return <Icon><path d="M19 5 8 16"/><path d="M8 8v8h8"/></Icon>}

@@ -987,6 +987,32 @@ class IndexedDbMemoRepository implements MemoRepository {
 
     entryStore.put(next);
 
+    // アウトラインの文を直したときは、結ばれた段落の見出しも同じ文へ直す(結び目を切らない)。
+    // 直す前と同じ文の行がほかにあるときは、どちらと結ばれていたか分からないので触らない。
+    if (current.kind === "sentence" && content && content !== current.content) {
+      const previousText = current.content.trim();
+      const memoEntries = await this.getEntriesForMemo(entryStore, current.memo_id);
+      const otherRowsWithSameText = memoEntries.filter(
+        (entry) =>
+          entry.deleted_at === null &&
+          entry.kind === "sentence" &&
+          entry.id !== current.id &&
+          entry.content.trim() === previousText,
+      );
+      if (previousText && otherRowsWithSameText.length === 0) {
+        memoEntries
+          .filter(
+            (entry) =>
+              entry.deleted_at === null &&
+              entry.kind === "paragraph" &&
+              entry.heading.trim() === previousText,
+          )
+          .forEach((paragraph) =>
+            entryStore.put({ ...paragraph, heading: content, updated_at: timestamp } satisfies EntryRow),
+          );
+      }
+    }
+
     await this.touchMemoWithinTransaction(memoStore, current.memo_id, timestamp);
     await this.markMemoChangedWithinTransaction(
       syncMetaStore,

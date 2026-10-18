@@ -1,4 +1,4 @@
-import { NoteIcon, LinkIcon, MoreIcon, UpIcon, DownIcon } from "./icons";
+import { NoteIcon, LinkIcon, MoreIcon, UpIcon, DownIcon, PullIcon } from "./icons";
 import {
   type ChangeEvent,
   type CSSProperties,
@@ -51,6 +51,15 @@ type EntryItemProps = {
   canMoveDown?: boolean;
   /** PCの「項目の詳細」(行のそばの小窓)。 */
   onOpenDetails: (entryId: string, anchor: HTMLElement) => void;
+  /** 段落: 見出しが同じ文のアウトラインの行(結び目)。「↖ 2.2」で行へ飛ぶ。 */
+  boundRow?: { id: string; content: string; number: string } | null;
+  onJumpToRow?: (rowId: string) => void;
+  /** 参考URL: 「アウトラインに引く」と、アウトラインで引用されている行の数。 */
+  onPull?: (entryId: string) => void;
+  citationCount?: number;
+  onJumpToCitation?: (entryId: string) => void;
+  /** 結び目を灯している(1.6秒)。 */
+  isLens?: boolean;
   showCreatedAt: boolean;
   /** 表示に振り番を含めるか。 */
   showEntryNumbers: boolean;
@@ -75,6 +84,12 @@ export function EntryItem({
   kind,
   isMobileActionOpen,
   isSelected = false,
+  isLens = false,
+  boundRow = null,
+  onJumpToRow,
+  onPull,
+  citationCount = 0,
+  onJumpToCitation,
   onSelect,
   onMove,
   canMoveUp = true,
@@ -730,7 +745,7 @@ export function EntryItem({
       <article
       data-entry-id={entry.id} className={`entry-item ${completionClassName} ${satisfactionClassName} ${numberVisibilityClassName} ${
         isHierarchical ? "entry-item--hierarchical" : ""
-      } ${entry.depth > 0 ? "entry-item--nested" : ""} ${isMobileActionOpen ? "entry-item--mobile-action-open" : ""} ${isSelected ? "entry-item--selected" : ""} ${
+      } ${entry.depth > 0 ? "entry-item--nested" : ""} ${isMobileActionOpen ? "entry-item--mobile-action-open" : ""} ${isSelected ? "entry-item--selected" : ""} ${isLens ? "entry-item--lens" : ""} ${
         mobileParagraphEditorFocus ? "entry-item--mobile-paragraph-editing" : ""
       } ${isReferenceUrl ? "entry-item--reference-url" : ""} ${
         isLegacyWord ? "entry-item--legacy-word" : ""
@@ -751,15 +766,27 @@ export function EntryItem({
           ) : null}
 
           {isParagraph && entry.heading ? (
-            <button
-              type="button"
-              className="entry-item__heading"
-              onClick={beginHeadingEdit}
-              disabled={disabled}
-              aria-label={`段落タイトル「${entry.heading}」を編集`}
-            >
-              {entry.heading}
-            </button>
+            <div className="entry-item__heading-row">
+              {boundRow ? (
+                <button
+                  type="button"
+                  className="entry-item__bind"
+                  onClick={(event) => { event.stopPropagation(); onJumpToRow?.(boundRow.id); }}
+                  aria-label={`アウトラインの「${boundRow.content}」へ`}
+                  title={`アウトライン ${boundRow.number} と結ばれています`}
+                >
+                  ↖ {boundRow.number}
+                </button>
+              ) : null}
+              {/* 見出しを押しても、本文と同じ編集欄が開く。キーボードでは本文のボタンから入れるので、見出しは操作の数に入れない。 */}
+              <h3
+                className="entry-item__heading entry-item__heading--click"
+                onClick={disabled ? undefined : beginHeadingEdit}
+                title="見出しを編集"
+              >
+                {entry.heading}
+              </h3>
+            </div>
           ) : null}
 
           {isReferenceUrl && openableLinkUrl ? (
@@ -803,6 +830,16 @@ export function EntryItem({
                   >
                     <span aria-hidden="true">✎</span>
                   </button>
+                  {citationCount > 0 ? (
+                    <button
+                      type="button"
+                      className="entry-item__cite"
+                      onClick={(event) => { event.stopPropagation(); onJumpToCitation?.(entry.id); }}
+                      aria-label={`アウトラインで引用 ${citationCount}件`}
+                    >
+                      引用 {citationCount}
+                    </button>
+                  ) : null}
                 </div>
               </div>
             </div>
@@ -903,6 +940,19 @@ export function EntryItem({
 
         {entry.satisfaction>0?<small className="entry-item__satisfaction-mark" aria-label={`満足度${entry.satisfaction}`}>{entry.satisfaction}</small>:null}
         <div data-entry-actions="" className={`entry-item__quick-actions ${isReferenceUrl ? "entry-item__quick-actions--reference" : ""}`}>
+          {isReferenceUrl && onPull ? (
+            <button
+              type="button"
+              className="icon-button entry-item__quick-action entry-item__pull-button"
+              onClick={() => onPull(entry.id)}
+              disabled={disabled}
+              aria-label="アウトラインに引く"
+              title="アウトラインに引く(次の一行へ)"
+            >
+              <PullIcon />
+            </button>
+          ) : null}
+
           {onMove && isParagraph ? (
             <>
               <button

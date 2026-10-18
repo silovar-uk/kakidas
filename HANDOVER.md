@@ -107,6 +107,17 @@ kakidasは、考えを「単語」「文」「段落」の粒度で、整える�
 - 旧台本の置き先の選択は `docs/amu/kinds.mjs`。`MobileInteractionMotion` は、置いた行が弾む動きが列の外の書き口では出ないが、棚の切り替え・数字が弾む動きに使うため残した。
 - 未確認: iPhone SE実機(U1〜U3)。
 
+## v0.8.1「並べずに、編む」P3 離(編み上げる)
+
+- 結び目は `src/lib/outlineBinding.ts` の `getOutlineBindings(entries)` が、段落の見出し=アウトラインの行の文(前後の空白だけを除いて完全一致。同じ文の行が2つ以上なら結ばない)から毎回求める。保存データは増えていない。
+- 「段落にする」(`MemoEditorPage.growRow`): 結ばれていなければ、段落の挿入位置をアウトラインの順で決め(`paragraphAfterId`)、書き口の見出しに行の文を入れて段落の欄へ運ぶ。結ばれていれば、その段落へ送って灯す(`lensIds`、1.6秒)。
+- 「アウトラインに引く」(`pullToOutline`): `outlineRef.insertPosition()` の位置へ、題名とリンク付きで作り、`advance(createdId)` する。参考URLの行の「引用 N」は、同じURL(`getReferenceUrlKey`)のアウトラインの行の数。
+- `memoRepository.updateEntry`: アウトラインの文が変わったとき、直す前と同じ文のほかの行がなければ、同じメモの段落の見出しを新しい文に直す(同じトランザクション)。
+- 清書(`SeishoView`)は、要点の各行の直後に結ばれた段落を `li.seisho__knit` で編み込み、本文には結ばれていない段落だけを並べる。
+- 移り変わり: `withViewTransition(update, { scoped: true })` が、始める前に `<html>` へ `amu-vt` を付け、終わったら外す。`src/styles-layout-guard.css` の「動きを止める規則」は `:root:not(.amu-vt)` の中だけに効く。使うのは、清書の切り替え・段落にする・アウトラインに引くだけ。「置く」は使わない(残像がボタンの上に乗る)。移り変わりの更新の中で `requestAnimationFrame` を待たない。
+- PCの「置く」は、書きかけがあるときだけ見せる(台本 P2-16「PCの最初の画面で見える操作は30個以下」を満たすため)。段落の見出しは、操作の数に入れない `h3` にした(キーボードでは本文のボタンから編集欄へ入れる)。
+- 未確認: iPhone SE実機(U1〜U3)。
+
 ## 2. 技術構成と起動方法
 
 | 項目 | 内容 |

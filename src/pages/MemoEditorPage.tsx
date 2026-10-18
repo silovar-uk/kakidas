@@ -1,11 +1,12 @@
 import {SeishoView} from "../components/SeishoView";
 import {BackIcon} from "../components/icons";
-import {withViewTransition} from "../lib/viewTransition";
+import {waitForCreatedEntry,withViewTransition} from "../lib/viewTransition";
 import {EntryComposer,type EntryComposerHandle} from "../components/EntryComposer";
 import {DeskSlot} from "../components/DeskSlot";
 import {type OutlineHandle} from "../components/OutlineList";
 import {releaseDeskFocus,restoreDeskFocus,trackDeskFocus} from "../lib/deskFocus";
 import {createPortal,flushSync} from "react-dom";
+import {getOutlineBindings} from "../lib/outlineBinding";
 import {MemoActionsMenu} from "../components/MemoActionsMenu";
 import {fetchReferenceTitle} from "../lib/referenceTitle";
 import {useCloudMemos} from "../hooks/useCloudMemos";
@@ -246,18 +247,30 @@ export function MemoEditorPage() {
   const activeKindRef = useRef(activeKind);
   activeKindRef.current = activeKind;
   /** スマホで、いまの棚と違う欄へ置いたときの受け取り表示。一覧に重ねて出し、押し下げない。 */
-  const [receipt, setReceipt] = useState<{ kind: EntryKind; at: number } | null>(null);
+  const [receipt, setReceipt] = useState<{ kind: EntryKind; at: number; text: string; targetId?: string } | null>(null);
   /** 棚の数字を弾ませる合図。atが変わるたびに動きをやり直す。 */
   const [bumped, setBumped] = useState<{ kind: EntryKind; at: number } | null>(null);
   const receiptTimerRef = useRef<number | null>(null);
-  const handlePlaced = useCallback((kind: EntryKind) => {
-    if (!window.matchMedia("(max-width: 920px)").matches) return;
-    setBumped({ kind, at: Date.now() });
-    if (kind === activeKindRef.current) return;
-    setReceipt({ kind, at: Date.now() });
+  /** スマホの受け取り表示。4秒、一覧に重ねて出す。 */
+  const announce = useCallback((kind: EntryKind, text: string, targetId?: string) => {
+    setReceipt({ kind, at: Date.now(), text, targetId });
     if (receiptTimerRef.current !== null) window.clearTimeout(receiptTimerRef.current);
     receiptTimerRef.current = window.setTimeout(() => setReceipt(null), 4000);
   }, []);
+  const handlePlaced = useCallback((kind: EntryKind, createdId?: string) => {
+    if (!window.matchMedia("(max-width: 920px)").matches) return;
+    setBumped({ kind, at: Date.now() });
+    const text = `${ENTRY_KIND_LABEL[kind]}に置きました`;
+    if (kind !== activeKindRef.current) { announce(kind, text, createdId); return; }
+    // 今の棚でも、置いた行が画面の外(長い一覧の下など)なら知らせる。
+    if (!createdId) return;
+    window.requestAnimationFrame(() => {
+      const el = document.querySelector<HTMLElement>(`[data-entry-id="${CSS.escape(createdId)}"]`);
+      if (!el) return;
+      const box = el.getBoundingClientRect();
+      if (box.top < 0 || box.bottom > window.innerHeight) announce(kind, text, createdId);
+    });
+  }, [announce]);
   useEffect(() => () => {
     if (receiptTimerRef.current !== null) window.clearTimeout(receiptTimerRef.current);
   }, []);
@@ -307,6 +320,17 @@ export function MemoEditorPage() {
   /** 段落の書き口は、この段落の後ろに入る。null=末尾、"^"=先頭。 */
   const [paragraphAfterId, setParagraphAfterId] = useState<string | null>(null);
   const [deskDraft, setDeskDraft] = useState(false);
+  /** 書き口の行き先(URLだけを書くと、いる欄に関わらず参考URL)。参考URLの入口の灯りに使う。 */
+  const [deskRoute, setDeskRoute] = useState<EntryKind>("sentence");
+  /** 結び目を灯している項目(1.6秒)。 */
+  const [lensIds, setLensIds] = useState<Set<string>>(() => new Set());
+  const lensTimerRef = useRef<number | null>(null);
+  const lens = useCallback((...ids: string[]) => {
+    setLensIds(new Set(ids));
+    if (lensTimerRef.current !== null) window.clearTimeout(lensTimerRef.current);
+    lensTimerRef.current = window.setTimeout(() => setLensIds(new Set()), 1_600);
+  }, []);
+  useEffect(() => () => { if (lensTimerRef.current !== null) window.clearTimeout(lensTimerRef.current); }, []);
   const [caretDescription, setCaretDescription] = useState("");
   const effectiveSlot: EntryKind = isMobile ? activeKind : deskSlot;
   useEffect(() => trackDeskFocus(deskHost), [deskHost]);
@@ -945,6 +969,30 @@ export function MemoEditorPage() {
     };
   }, [entrySortMode, hideCompletedEntries, memo?.entries]);
 
+  /** 結び目: 段落の見出しが、アウトラインの1行と同じ文なら結ぶ。データは変えず、毎回求める。 */
+  const bindings = useMemo(() => getOutlineBindings(memo?.entries ?? []), [memo?.entries]);
+  const rowNumberById = useMemo(() => {
+    const numbers = new Map<string, string>();
+    getEntryTree(memo?.entries ?? [], "sentence", "manual").forEach((row) => numbers.set(row.id, row.outline_number));
+    return numbers;
+  }, [memo?.entries]);
+  /** 参考URLごとの、アウトラインで引用している行(同じURL)。 */
+  const citationRowIds = useMemo(() => {
+    const rows = (memo?.entries ?? []).filter((entry) => entry.deleted_at === null && entry.kind === "sentence" && entry.link_url.trim());
+    const byKey = new Map<string, string[]>();
+    rows.forEach((row) => {
+      const key = getReferenceUrlKey(row.link_url);
+      if (key) byKey.set(key, [...(byKey.get(key) ?? []), row.id]);
+    });
+    const result = new Map<string, string[]>();
+    (memo?.entries ?? []).forEach((entry) => {
+      if (entry.deleted_at !== null || entry.kind !== "word" || !entry.link_url.trim()) return;
+      const ids = byKey.get(getReferenceUrlKey(entry.link_url));
+      if (ids?.length) result.set(entry.id, ids);
+    });
+    return result;
+  }, [memo?.entries]);
+
   const cloudUploadTarget = useMemo<CloudUploadTarget[]>(() => {
     if (!memo) return [];
 
@@ -1101,14 +1149,119 @@ export function MemoEditorPage() {
     return()=>document.removeEventListener('paste',onPaste);
   },[]);
 
+  /** 画面の先頭60行ぶんの行の文に、清書の紙と同じ名前を付ける(行が紙へ収まる移り変わり用)。 */
+  const nameOutlineRows=()=>{
+    document.querySelectorAll<HTMLElement>('.outline__item[data-outline-id]').forEach((row,index)=>{
+      if(index>=60)return;
+      const text=row.querySelector<HTMLElement>('.outline__content');
+      if(text)text.style.viewTransitionName=`e-${row.dataset.outlineId}`;
+    });
+  };
+  const clearOutlineRowNames=()=>{
+    document.querySelectorAll<HTMLElement>('.outline__content').forEach(text=>{text.style.viewTransitionName='';});
+  };
   const toggleSeisho=(next:boolean)=>{
+    // 行と紙の項目に同じ名前を付けておき、移り変わりで行が紙へ収まる。戻るときは、描き直した行へ付け直す。
+    if(next)nameOutlineRows();
     void withViewTransition(()=>{
       setSearchParams(previous=>{
         const params=new URLSearchParams(previous);
         if(next)params.set('view','seisho');else params.delete('view');
         return params;
       },{replace:false});
-    });
+      if(!next)return Promise.resolve().then(nameOutlineRows);
+    },{scoped:true}).finally(clearOutlineRowNames);
+  };
+
+  /** 結ばれた段落へ送る。両方を朱の淡色で灯す。 */
+  const jumpToParagraph=(paragraphId:string,rowId:string)=>{
+    if(window.matchMedia("(max-width: 920px)").matches)setActiveKind('paragraph');
+    lens(paragraphId,rowId);
+    window.requestAnimationFrame(()=>window.requestAnimationFrame(()=>{
+      document.querySelector<HTMLElement>(`[data-entry-id="${CSS.escape(paragraphId)}"]`)
+        ?.scrollIntoView({block:'center',behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'});
+    }));
+  };
+  /** 結ばれた行を選んで見せる。 */
+  const jumpToRow=(rowId:string)=>{
+    if(window.matchMedia("(max-width: 920px)").matches)setActiveKind('sentence');
+    lens(rowId,...(bindings.paragraphsByRowId.get(rowId)??[]).map(paragraph=>paragraph.id));
+    window.requestAnimationFrame(()=>window.requestAnimationFrame(()=>outlineRef.current?.revealRow(rowId)));
+  };
+  const jumpToCitation=(refId:string)=>{
+    const rowId=citationRowIds.get(refId)?.[0];
+    if(!rowId)return;
+    jumpToRow(rowId);
+    lens(rowId,refId);
+  };
+
+  /**
+   * 行を見出しにして、段落の書き口で書き始める(「段落にする」)。結ばれていれば、その段落へ送る。
+   * 段落は、アウトラインの順に並ぶ位置へ入る(前の行に結ばれた最後の段落の後ろ、なければ後の行の最初の段落の前、なければ末尾)。
+   */
+  const growRow=async(rowId:string)=>{
+    if(!memo)return;
+    const row=memo.entries.find(entry=>entry.id===rowId&&entry.deleted_at===null&&entry.kind==='sentence');
+    if(!row)return;
+    const bound=bindings.paragraphsByRowId.get(rowId)?.[0];
+    if(bound){jumpToParagraph(bound.id,rowId);return;}
+    if(deskRef.current&&!deskRef.current.isEmpty()){setNotice("書きかけを先に置いてください。");return;}
+    const rowOrder=getEntryTree(memo.entries,'sentence','manual').map(entry=>entry.id);
+    const myIndex=rowOrder.indexOf(rowId);
+    const paragraphs=getEntryTree(memo.entries,'paragraph','manual');
+    let after:string|null=null;
+    let before:string|null=null;
+    for(const paragraph of paragraphs){
+      const bindRow=bindings.rowByParagraphId.get(paragraph.id);
+      if(!bindRow)continue;
+      const index=rowOrder.indexOf(bindRow.id);
+      if(index<myIndex)after=paragraph.id;
+      else if(index>myIndex&&!before)before=paragraph.id;
+    }
+    let nextAfter:string|null=null;
+    if(after)nextAfter=after;
+    else if(before){const at=paragraphs.findIndex(paragraph=>paragraph.id===before);nextAfter=at>0?paragraphs[at-1].id:'^';}
+    const source=document.querySelector<HTMLElement>(`[data-outline-id="${CSS.escape(rowId)}"] .outline__content`);
+    if(source)source.style.viewTransitionName='amu-grow';
+    await withViewTransition(()=>{
+      if(source)source.style.viewTransitionName='';
+      setParagraphAfterId(nextAfter);
+      moveDeskTo('paragraph',{focus:false});
+      deskRef.current?.prefillParagraph(row.content);
+      // 描き直した後に、見出しの欄へ同じ名前を付け替える(行の文が見出しへ飛ぶ)
+      return Promise.resolve().then(()=>{
+        const heading=deskHost.querySelector<HTMLElement>('.entry-composer__paragraph-title');
+        if(heading)heading.style.viewTransitionName='amu-grow';
+      });
+    },{scoped:true});
+    deskHost.querySelector<HTMLElement>('.entry-composer__paragraph-title')?.style.removeProperty('view-transition-name');
+    deskRef.current?.focus({scroll:false,delay:0});
+    deskHost.scrollIntoView({block:'nearest'});
+  };
+
+  /** 参考URLを、アウトラインの次の一行へ(リンク付きで)引く。 */
+  const pullToOutline=async(refId:string)=>{
+    const word=memo?.entries.find(entry=>entry.id===refId&&entry.deleted_at===null&&entry.kind==='word');
+    if(!word||!word.link_url)return;
+    const position=outlineRef.current?.insertPosition();
+    const newId=crypto.randomUUID();
+    const source=document.querySelector<HTMLElement>(`[data-entry-id="${CSS.escape(refId)}"] .entry-item__reference-link`);
+    if(source)source.style.viewTransitionName='amu-pull';
+    try{
+      await withViewTransition(async()=>{
+        if(source)source.style.viewTransitionName='';
+        await createEntry('sentence',word.content,{link_url:word.link_url},position?.parentId??null,'bottom',undefined,newId,position?.index);
+        outlineRef.current?.advance(newId);
+        await waitForCreatedEntry(newId,300);
+        const text=document.querySelector<HTMLElement>(`[data-outline-id="${CSS.escape(newId)}"] .outline__content`);
+        if(text)text.style.viewTransitionName='amu-pull';
+      },{scoped:true});
+    }catch(error){
+      setNotice(error instanceof Error?error.message:"アウトラインに引けませんでした。");
+    }finally{
+      document.querySelectorAll<HTMLElement>('.outline__content').forEach(text=>{if(text.style.viewTransitionName==='amu-pull')text.style.viewTransitionName='';});
+    }
+    if(window.matchMedia("(max-width: 920px)").matches)announce('sentence','アウトラインに引きました');
   };
   const copySeisho=()=>{
     const article=paperRef.current;
@@ -1256,8 +1409,16 @@ export function MemoEditorPage() {
       {isMobile ? <DeskSlot active host={deskHost} label="書き口" onActivate={()=>undefined} className="editor-mobile-desk" /> : null}
       <div className="editor-receipt-anchor">
         {receipt ? <div className="editor-receipt" role="status" key={receipt.at}>
-          <span>{ENTRY_KIND_LABEL[receipt.kind]}に置きました</span>
-          <button type="button" onClick={() => { setActiveKind(receipt.kind); setReceipt(null); }}>
+          <span>{receipt.text}</span>
+          <button type="button" onClick={() => {
+            const { kind, targetId } = receipt;
+            setActiveKind(kind);
+            setReceipt(null);
+            if (targetId) window.requestAnimationFrame(() => window.requestAnimationFrame(() => {
+              document.querySelector<HTMLElement>(`[data-entry-id="${CSS.escape(targetId)}"]`)
+                ?.scrollIntoView({ block: "center", behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+            }));
+          }}>
             {ENTRY_KIND_LABEL[receipt.kind]}を見る
           </button>
         </div> : null}
@@ -1301,6 +1462,15 @@ export function MemoEditorPage() {
             paragraphAfterId={paragraphAfterId}
             onSelectParagraph={setParagraphAfterId}
             manualOrder={entrySortMode==='manual'}
+            bindings={bindings}
+            rowNumberById={rowNumberById}
+            lensIds={lensIds}
+            onGrowRow={growRow}
+            onJumpToRow={jumpToRow}
+            onPullToOutline={pullToOutline}
+            citationRowIds={citationRowIds}
+            onJumpToCitation={jumpToCitation}
+            routeToWord={!isMobile&&deskSlot!=='word'&&deskRoute==='word'}
             onCreate={createEntry}
             onUpdate={(entryId, patch) => updateEntry(entryId, patch)}
             onDelete={deleteEntry}
@@ -1338,7 +1508,8 @@ export function MemoEditorPage() {
           onExit={()=>{releaseDeskFocus();(document.activeElement as HTMLElement|null)?.blur?.();}}
           showDepthButtons={isMobile&&effectiveSlot==='sentence'}
           caretDescription={caretDescription}
-          onDraftChange={setDeskDraft}/>,
+          onDraftChange={setDeskDraft}
+          onRouteChange={setDeskRoute}/>,
         deskHost,
       )}
 
