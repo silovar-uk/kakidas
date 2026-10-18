@@ -59,7 +59,7 @@ async function write(page, kind, text, { heading = '', tag = '', note = '' } = {
     await noteField.fill(note);
     await noteField.press('Control+Enter');
   }
-  if (heading) await page.getByRole('textbox', { name: '段落タイトル', exact: true }).fill(heading);
+  if (heading) await page.getByRole('textbox', { name: '段落の見出し', exact: true }).fill(heading);
   await deskOf(page).press(kind === 'paragraph' ? 'Control+Enter' : 'Enter');
   await page.waitForTimeout(450);
 }
@@ -282,7 +282,7 @@ check('P1', 'P1-11', '一覧の検索欄の案内が切れず、「すべて・�
 });
 
 // P2 破「囲わない」:線と箱をやめ、余白と背骨で並べる
-check('P2', 'P2-1', `題・書き口の背骨は${LIMIT.spine}px以内、3領域の文字は列幅からはみ出さない`, async ({ pc }) => {
+check('P2', 'P2-1', `題・アウトラインの見出しの背骨は${LIMIT.spine}px以内、3領域の文字は列幅からはみ出さない`, async ({ pc }) => {
   const r = await pc.page.evaluate(() => {
     const { textLeft, inputTextLeft } = window.__qa;
     const cols = [...document.querySelectorAll('.editor-grid .entry-column')];
@@ -296,9 +296,10 @@ check('P2', 'P2-1', `題・書き口の背骨は${LIMIT.spine}px以内、3領域
         rowRight: content ? content.getBoundingClientRect().right : null };
     });
     return { title: inputTextLeft(document.querySelector('.memo-title-input')),
-      desk: inputTextLeft(document.querySelector('.entry-composer--desk textarea')), parts };
+      // v0.8.0: 書き口は欄の中(次の一行)へ移ったため、題とそろえる相手は、アウトラインの欄の見出しの字
+      desk: textLeft(document.querySelector('.entry-column--sentence .entry-column__header h2')), parts };
   });
-  assert.ok(Math.abs(r.title-r.desk)<=LIMIT.spine,`題${r.title}・書き口${r.desk}のずれ`);
+  assert.ok(Math.abs(r.title-r.desk)<=LIMIT.spine,`題${r.title}・アウトラインの見出し${r.desk}のずれ`);
   for(const p of r.parts) {
     assert.ok(p.head>=p.x-1 && p.head<=p.right,`${p.column}:見出しが列外`);
     if(p.row!==null)assert.ok(p.row>=p.x-1 && p.rowRight<=p.right+1,`${p.column}:本文が列外`);
@@ -354,12 +355,8 @@ check('P2', 'P2-6', 'スマホの行の操作は枠なしで、44px四方の押�
   assert.equal(r.border, 0, '操作ボタンに枠がある');
   assert.ok(r.w >= 44 && r.h >= 44, `${Math.round(r.w)}×${Math.round(r.h)}px`);
 });
-check('P2', 'P2-7', '書き口は2段(書く/置き先と気持ち・リンク・タグ)で、高さ112px以内(PC)', async ({ pc }) => {
-  const r = await pc.page.evaluate(() => { const d = document.querySelector('.entry-composer--desk'); const a = d.querySelector('.entry-composer__destinations').getBoundingClientRect(); const m = d.querySelector('.entry-composer__meta-controls').getBoundingClientRect();
-    return { h: d.getBoundingClientRect().height, dy: Math.abs((a.top + a.bottom) / 2 - (m.top + m.bottom) / 2) }; });
-  assert.ok(r.dy <= 6, `置き先と気持ち・リンク・タグが別の段(${Math.round(r.dy)}pxずれ)`);
-  assert.ok(r.h <= 112, `書き口の高さ${Math.round(r.h)}px`);
-});
+// P2-7「書き口は2段で、高さ112px以内(PC)」は、上の箱がなくなったため(v0.8.0)、
+// docs/amu/qa.mjs の P2-2(書き口がアウトラインの欄の中・最初の行が上から140px以内)で確かめる。
 check('P2', 'P2-8', '列の間は縦線でなく余白(24px以上)', async ({ pc }) => {
   const r = await pc.page.evaluate(() => { const c = [...document.querySelectorAll('.editor-grid .entry-column')].map(x => ({ rect: x.getBoundingClientRect(), bl: parseFloat(getComputedStyle(x).borderLeftWidth), br: parseFloat(getComputedStyle(x).borderRightWidth) }));
     return { gaps: [c[1].rect.left - c[0].rect.right, c[2].rect.left - c[1].rect.right], lines: c.reduce((n, x) => n + x.bl + x.br, 0) }; });

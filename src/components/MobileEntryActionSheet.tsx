@@ -1,14 +1,10 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { lockBodyScroll } from "../lib/bodyScrollLock";
-import {NoteIcon,LinkIcon,TagIcon} from "./icons";
-import {
-  type EntryKind,
-  type EntryUpdate,
-  type EntryTreeNode,
-  ENTRY_KIND_LABEL,
-  ENTRY_KIND_MOVE_TARGETS,
-} from "../types/memo";
+import { EntryActionsPanel, type EntryActions } from "./EntryInspector";
+import type { EntryMetaKind } from "./EntryMetaCard";
+import type { EntryTagSummary } from "../lib/memoTags";
+import { type EntryKind, type EntryTreeNode } from "../types/memo";
 
 type MobileEntryActionSheetProps = {
   entry: EntryTreeNode | null;
@@ -18,26 +14,16 @@ type MobileEntryActionSheetProps = {
   /** タグでまとめる表示では、親のグループ内番号を受け取る。 */
   displayNumber?: string;
   disabled?: boolean;
+  tagSuggestions: EntryTagSummary[];
+  actions: EntryActions;
   onClose: () => void;
-  onToggleCompleted: (entryId: string) => Promise<unknown> | unknown;
-  onUpdate: (entryId: string, patch: EntryUpdate) => Promise<unknown> | unknown;
-  onRequestEdit: (entryId:string, target:"note"|"link"|"tag")=>void;
-  onRequestOutlineDetails?: (entryId: string) => void;
-  /** falseを返した場合は、確認を取り消したものとしてシートを閉じない。 */
-  onMoveToKind: (
-    entryId: string,
-    targetKind: EntryKind,
-  ) => Promise<unknown | false> | unknown | false;
-  /** 「…」から本文をそのままコピーする。 */
-  onCopy: (entryId: string) => Promise<unknown | false> | unknown | false;
-  /** 元の項目を残したまま、新しいメモの起点として複製する。 */
-  onCreateMemoFromEntry: (entryId: string) => Promise<unknown | false> | unknown | false;
-  onDelete: (entryId: string) => Promise<unknown> | unknown;
+  /** 気持ち・リンク・タグは、シートを閉じてから画面の上半分のカードで書く。 */
+  onRequestMeta: (entryId: string, meta: EntryMetaKind) => void;
 };
 
 /**
- * 単語 / 文 / 段落のモバイル操作シート。
- * 「…」から本文を個別コピーできる。コピー後はシートを閉じる。
+ * アウトライン / 段落 / 参考URLのスマホ操作シート。
+ * 項目の詳細(PCの小窓)と同じ中身・同じ順番で、「動かす」を一番上に置く。
  */
 export function MobileEntryActionSheet({
   entry,
@@ -45,27 +31,17 @@ export function MobileEntryActionSheet({
   showEntryNumbers,
   displayNumber,
   disabled = false,
+  tagSuggestions,
+  actions,
   onClose,
-  onToggleCompleted,
-  onUpdate,
-  onRequestEdit,
-  onRequestOutlineDetails,
-  onMoveToKind,
-  onCopy,
-  onCreateMemoFromEntry,
-  onDelete,
+  onRequestMeta,
 }: MobileEntryActionSheetProps) {
-  const [isWorking, setIsWorking] = useState(false);
   const dialogRef = useRef<HTMLElement | null>(null);
   const onCloseRef = useRef(onClose);
 
   useEffect(() => {
     onCloseRef.current = onClose;
   }, [onClose]);
-
-  useEffect(() => {
-    setIsWorking(false);
-  }, [entry?.id]);
 
   useEffect(() => {
     if (!entry) return;
@@ -99,38 +75,13 @@ export function MobileEntryActionSheet({
       document.removeEventListener("visibilitychange", onVisibilityChange);
       desktopMediaQuery.removeEventListener("change", onViewportChange);
     };
-  }, [entry]);
+  }, [entry?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!entry || typeof document === "undefined") return null;
 
-  const isReferenceUrl = kind === "word" && Boolean(entry.link_url.trim());
-  const moveTargets = ENTRY_KIND_MOVE_TARGETS[kind];
   const visibleNumber = displayNumber ?? entry.outline_number;
   const titleText = kind === "paragraph" && entry.heading ? entry.heading : entry.content;
   const close = () => onCloseRef.current();
-
-  const run = async (
-    action: () => Promise<unknown | false> | unknown | false,
-    { keepOpen = false }: { keepOpen?: boolean } = {},
-  ) => {
-    if (disabled || isWorking) return;
-
-    setIsWorking(true);
-
-    let shouldClose = !keepOpen;
-
-    try {
-      const result = await action();
-      // 確認をキャンセルした場合は、操作内容を見直せるようシートを残す。
-      shouldClose = !keepOpen && result !== false;
-    } catch {
-      // 保存・削除処理側のエラー表示を妨げない。
-      shouldClose = false;
-    } finally {
-      if (shouldClose) close();
-      setIsWorking(false);
-    }
-  };
 
   const sheet = (
     <div className="mobile-action-sheet" role="presentation">
@@ -169,81 +120,16 @@ export function MobileEntryActionSheet({
           </button>
         </header>
 
-        <div role="group" aria-label="満足度" className="mobile-action-sheet__satisfaction">
-          {[0,1,2,3,4,5].map(value=><button key={value} type="button" aria-pressed={entry.satisfaction===value}
-            disabled={disabled||isWorking} onClick={()=>void run(()=>onUpdate(entry.id,{satisfaction:value}),{keepOpen:true})}>{value}</button>)}
-        </div>
-        {!isReferenceUrl ? (
-          <button
-            type="button"
-            className={`mobile-action-sheet__complete ${
-              entry.is_completed ? "mobile-action-sheet__complete--active" : ""
-            }`}
-            onClick={() => void run(() => onToggleCompleted(entry.id))}
-            disabled={disabled || isWorking}
-          >
-            <span aria-hidden="true">✓</span>
-            {entry.is_completed ? "未完了に戻す" : "完了にする"}
-          </button>
-        ) : null}
-
-        {kind === "sentence" && onRequestOutlineDetails ? (
-          <button role="menuitem" type="button" onClick={() => {onRequestOutlineDetails(entry.id); close();}}>↳ 階層・段落の操作</button>
-        ) : null}
-        <button role="menuitem" type="button" onClick={()=>{onRequestEdit(entry.id,"note");close()}}><NoteIcon />気持ち・備考を書く</button>
-        <button role="menuitem" type="button" onClick={()=>{onRequestEdit(entry.id,"link");close()}}><LinkIcon />{entry.link_url.trim()?"リンクを編集":"リンクを付ける"}</button>
-        <button role="menuitem" type="button" onClick={()=>{onRequestEdit(entry.id,"tag");close()}}><TagIcon />タグを変える</button>
-        <button
-          type="button"
-          className="mobile-action-sheet__copy"
-          onClick={() => void run(() => onCopy(entry.id))}
-          disabled={disabled || isWorking}
-        >
-          <span aria-hidden="true">⧉</span>
-          コピー
-        </button>
-
-        {!isReferenceUrl ? (
-          <button
-            type="button"
-            className="mobile-action-sheet__derive"
-            onClick={() => void run(() => onCreateMemoFromEntry(entry.id))}
-            disabled={disabled || isWorking}
-          >
-            <span aria-hidden="true">↗</span>
-            新しいメモにする
-          </button>
-        ) : null}
-
-        {moveTargets.length > 0 ? (
-          <section className="mobile-action-sheet__section" aria-label="区分を移動">
-            <p className="mobile-action-sheet__section-label">移動先</p>
-            <div className="mobile-action-sheet__grid">
-              {moveTargets.map((targetKind) => (
-                <button
-                  key={targetKind}
-                  type="button"
-                  className={`mobile-action-sheet__tile mobile-action-sheet__tile--kind mobile-action-sheet__tile--kind-${targetKind}`}
-                  onClick={() =>
-                    void run(() => onMoveToKind(entry.id, targetKind))
-                  }
-                  disabled={disabled || isWorking}
-                >
-                  {ENTRY_KIND_LABEL[targetKind]}へ移動
-                </button>
-              ))}
-            </div>
-          </section>
-        ) : null}
-
-        <button
-          type="button"
-          className="mobile-action-sheet__delete"
-          onClick={() => void run(() => onDelete(entry.id))}
-          disabled={disabled || isWorking}
-        >
-          削除
-        </button>
+        <EntryActionsPanel
+          entry={entry}
+          kind={kind}
+          variant="sheet"
+          disabled={disabled}
+          tagSuggestions={tagSuggestions}
+          actions={actions}
+          onClose={close}
+          onRequestMeta={onRequestMeta}
+        />
 
         <button
           type="button"

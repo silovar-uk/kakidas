@@ -27,25 +27,33 @@ export function writeCopyIncludeCompleted(value: boolean): void {
  * 項目の見え方とコピー順に使う、端末ごとの並び順設定。
  * メモ本文やクラウド同期データには保存しない。
  */
-export const ENTRY_SORT_MODE_STORAGE_KEY = "kakidas.entry-sort-mode";
+export const ENTRY_SORT_MODE_STORAGE_KEY = "kakidas.entry-sort-mode.v2";
+/** v0.8.0より前の保存名。開くたびに既定値(新しい順)が書き込まれたため、本人の選択と区別できる値だけ読む。 */
+const LEGACY_ENTRY_SORT_MODE_STORAGE_KEY = "kakidas.entry-sort-mode";
 
 export function readEntrySortMode(): EntrySortMode {
   try {
     const value = window.localStorage.getItem(ENTRY_SORT_MODE_STORAGE_KEY);
 
     if (
+      value === "manual" ||
       value === "created_asc" ||
       value === "created_desc" ||
       value === "satisfaction_desc"
     ) {
       return value;
     }
+
+    // 未設定なら旧い保存名を読む。既定以外(古い順・評価順)を選んでいた人だけ引き継ぐ。
+    const legacy = window.localStorage.getItem(LEGACY_ENTRY_SORT_MODE_STORAGE_KEY);
+    if (legacy === "created_asc" || legacy === "satisfaction_desc") return legacy;
   } catch {
     // ストレージが使えなくても、初期値で画面とコピーは動く。
   }
 
-  // 項目を先頭に追加する現在の初期挙動に合わせ、新しい順を既定にする。
-  return "created_desc";
+  // 段落は書いた順に文書として組むため、手動の順を既定にする。
+  // 段落は先頭へ足してきたので、最初の見え方は新しい順のまま変わらない。
+  return "manual";
 }
 
 export function writeEntrySortMode(value: EntrySortMode): void {

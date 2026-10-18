@@ -95,6 +95,18 @@ kakidasは、考えを「単語」「文」「段落」の粒度で、整える�
 - 旧台本は、置き先の選択に `docs/amu/kinds.mjs` の `selectKind`(PCはCtrl+Shift+1/2/3、スマホは棚)を使う。
 - 未確認: iPhone SE実機(題→Enterでキーボードが閉じない、題の「」の中のカーソル)。
 
+## v0.8.0「並べずに、編む」P2 破(そこで書く)
+
+- 書き口(`EntryComposer` の desk)は **ひとつだけ作り、作り直さない**。`MemoEditorPage` が箱(`deskHost`)を作ってポータルで描き、置き場所 `DeskSlot` がいる欄へ箱を運ぶ。運んだ・描き直した後に外れたフォーカスは `src/lib/deskFocus.ts` が戻す(人が別の場所を押したら戻さない)。Esc・↑で離れるときは `releaseDeskFocus()` を先に呼ぶ。
+- アウトラインの「次の一行」は `OutlineList` が持つ(`OutlineHandle`: `insertPosition`・`advance`・`indentCaret`…)。位置は描き直しを待たず `caretRef` に持ち、続けて置いても前後しないよう、`EntryComposer` の「置く」とTab・矢印は列に並べて順に効かせる。
+- 置く位置: アウトラインは次の一行、段落は選んだ段落の後ろ(`paragraphAfterId`。null=末尾)、参考URLは先頭(「参考URLを下に足す」で末尾)。`memoRepository.createEntry` の挿入位置と `relocateOutlineEntry` は、親のない段落(手動の順)にも効く。
+- 項目の詳細は `EntryInspector.tsx`(PCの小窓)と `MobileEntryActionSheet.tsx`(スマホのシート)が、同じ中身 `EntryActionsPanel` を使う。気持ち・リンク・タグ・URLの入力は `EntryMetaCard.tsx`(PCは詳細の中、スマホは画面の上半分のカード)。
+- PCは921px以上で、編集画面を `height: 100dvh` にし、欄ごとに流す(`src/styles-amu.css`、`@layer amu`)。清書(`?view=seisho`)のときだけページが流れる(`.editor-page--seisho`)。
+- 既定の変更: 並び順は手動順(`kakidas.entry-sort-mode.v2`)、段落のまとめ方は「まとめない」(`kakidas.entry-list-display-mode.v2.paragraph`)。戻し方は「メモの操作」の並び順、段落の欄の「…」。
+- 削除したもの: `ParagraphTitleTagAssist`(役目はタグ候補の先頭へ移した。見出しの装飾番号 01… は出さなくなった)、アウトラインの上の帯・下の帯・行の下書き・行の詳細(`.outline__details`)。
+- 旧台本の置き先の選択は `docs/amu/kinds.mjs`。`MobileInteractionMotion` は、置いた行が弾む動きが列の外の書き口では出ないが、棚の切り替え・数字が弾む動きに使うため残した。
+- 未確認: iPhone SE実機(U1〜U3)。
+
 ## 2. 技術構成と起動方法
 
 | 項目 | 内容 |

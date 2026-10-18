@@ -1,5 +1,5 @@
 /* 旧スタイルをlegacy層に、新しい仕上げをtogu層に集約する。 */
-@layer legacy, togu, outline;
+@layer legacy, togu, outline, amu;
 @import "./styles-tokens.css" layer(legacy);
 @import "./styles.css" layer(legacy);
 @import "./styles-paragraph-heading.css" layer(legacy);
@@ -21,6 +21,7 @@
 @import "./styles-togu.css";
 
 @import "./styles-outline.css";
+@import "./styles-amu.css";
 
 /* 最終段で各ブレークポイントの重なりを防ぐ（非レイヤーで仕上げの後に評価）。 */
 @import "./styles-layout-guard.css";

@@ -28,6 +28,8 @@ for(const width of widths){
    await selectKind(page,{'アウトライン':'sentence','段落':'paragraph','参考URL':'word'}[label]);await desk.fill(value);await desk.press('Enter');await page.waitForTimeout(160);
   }
   if(mobile)await page.getByRole('tab',{name:/^アウトライン/}).first().click();
+  // v0.8.0: 置き先の3択はなくなった。添える道具と「置く」が重ならないことを、書きかけの状態で測る
+  await selectKind(page,'sentence');await desk.fill('書きかけの文');
   const m=await page.evaluate(()=>{
    const R=e=>{const b=e.getBoundingClientRect();return {x:b.x,y:b.y,right:b.right,bottom:b.bottom,width:b.width,height:b.height}};
    const valid=e=>{if(!e)return false;const r=R(e),s=getComputedStyle(e);return r.width>0&&r.height>0&&s.visibility!=='hidden'&&s.display!=='none'&&+s.opacity>0.1};
@@ -37,7 +39,7 @@ for(const width of widths){
    const name=e=>e.getAttribute('aria-label')||e.textContent.trim().slice(0,15);
    const overlap=[];
    for(let i=0;i<header.length;i++)for(let j=i+1;j<header.length;j++)if(!header[i].contains(header[j])&&!header[j].contains(header[i])&&coll(header[i],header[j])>32)overlap.push([name(header[i]),name(header[j]),Math.round(coll(header[i],header[j]))]);
-   const dest=rects('.entry-composer--desk .entry-composer__destinations button');
+   const dest=rects('.entry-composer--desk .entry-composer__submit');
    const meta=rects('.entry-composer--desk .entry-composer__meta-controls button');
    const formOverlap=dest.flatMap(a=>meta.filter(b=>coll(a,b)>24).map(b=>[name(a),name(b)]));
    const rail=document.querySelector('.entry-column--collapsed .entry-column__collapsed-rail');
@@ -65,11 +67,18 @@ for(const width of widths){
   await page.waitForTimeout(380);
   await page.screenshot({path:resolve(out,'layout-'+width+'.png')});
   if(mobile){
-   await page.locator('.outline__item').first().getByRole('button',{name:'この項目の操作'}).click({timeout:3000});
-   const modal=page.getByRole('dialog',{name:/.+/});
-   const action=modal.getByRole('menuitem',{name:'階層・段落の操作'});
-   await action.click({timeout:3000});
-   await page.locator('.outline__details').first().waitFor({state:'visible',timeout:3000});
+   // v0.8.0: 「階層・段落の操作」は無くなり、シートの先頭に「動かす」の4つがある。「下げる」が画面内にあり、押すと深さが変わる
+   const item=page.locator('.outline__item').nth(1);
+   const before=Number(await item.getAttribute('aria-level'));
+   await item.getByRole('button',{name:'この項目の操作'}).click({timeout:3000});
+   const down=page.getByRole('dialog',{name:/.+/}).getByRole('button',{name:'下げる',exact:true});
+   await page.waitForTimeout(400); // シートが下から上がり終わるのを待つ
+   const box=await down.boundingBox();
+   if(!box||box.y+box.height>720)problems.push('シートの「下げる」が画面外 '+JSON.stringify(box));
+   await down.click({timeout:3000});
+   await page.waitForTimeout(500);
+   const after=Number(await page.locator('.outline__item').nth(1).getAttribute('aria-level'));
+   if(after!==before+1)problems.push('「下げる」で深さが変わらない '+before+'→'+after);
   }
   if(problems.length){failures++;console.error('NG',width,problems.join('; '));}
   else{passes++;console.log('OK',width,'overflow',m.scroll-m.width);}

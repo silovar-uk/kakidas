@@ -9,3 +9,5 @@ export function ChevronIcon(){return <Icon><path d="m9 6 6 6-6 6"/></Icon>}
 export function CloudIcon(){return <Icon><path d="M7 18h11a5 5 0 0 0 .4-10A7 7 0 0 0 5 10a4 4 0 0 0 2 8"/></Icon>}
 export function KeyboardIcon(){return <Icon><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M6 9h.01m4 0h.01m4 0h.01m4 0h.01M6 13h.01m4 0h.01m4 0h.01m4 0h.01M7 16h10"/></Icon>}
 export function BackIcon(){return <Icon><path d="m14 5-7 7 7 7"/></Icon>}
+export function UpIcon(){return <Icon><path d="M12 19V5"/><path d="m6 11 6-6 6 6"/></Icon>}
+export function DownIcon(){return <Icon><path d="M12 5v14"/><path d="m6 13 6 6 6-6"/></Icon>}

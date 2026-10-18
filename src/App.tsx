@@ -4,7 +4,6 @@ import { CanonicalHostNotice } from "./components/CanonicalHostNotice";
 import { EntryTagGroupDragOrder } from "./components/EntryTagGroupDragOrder";
 import { KeyboardShortcuts } from "./components/KeyboardShortcuts";
 import { MobileInteractionMotion } from "./components/MobileInteractionMotion";
-import { ParagraphTitleTagAssist } from "./components/ParagraphTitleTagAssist";
 import { TemporaryMemoDock } from "./components/TemporaryMemoDock";
 import { MemoEditorPage } from "./pages/MemoEditorPage";
 import { MemoListPage } from "./pages/MemoListPage";
@@ -22,7 +21,6 @@ export default function App() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
         <KeyboardShortcuts />
-        <ParagraphTitleTagAssist />
         <EntryTagGroupDragOrder />
         <TemporaryMemoDock />
         <MobileInteractionMotion />

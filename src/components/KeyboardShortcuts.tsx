@@ -20,8 +20,9 @@ export function KeyboardShortcuts(){
  useEffect(()=>{if(!open)return;const release=lockBodyScroll();return release},[open]);
  return open?<div className="shortcut-overlay" role="presentation" onClick={()=>setOpen(false)}>
  <section role="dialog" aria-modal="true" aria-label="ショートカット" onClick={e=>e.stopPropagation()}>
- <h2>ショートカット</h2><p>Ctrl+Shift+1：アウトライン、Ctrl+Shift+2：段落、Ctrl+Shift+3：URL（直接入力）</p>
- <p>アウトライン：Enterで編集・次の行、Tab / Shift+Tabで階層変更、Ctrl+Shift+↑↓で並べ替え。編集中のShift+Enterは改行。</p>
- <p>Ctrl+/：この説明を開く。Esc：閉じる。</p>
+ <h2>ショートカット</h2><p>Ctrl+Shift+1 / 2 / 3：書き口をアウトライン・段落・参考URLの欄へ運ぶ。</p>
+ <p>書き口(アウトライン)：Enterで次の行、Tab / Shift+Tabで入れる深さ、Shift+Enterで段落へ、空のまま↑で上の行へ戻る、Escで離れる。</p>
+ <p>選んだ行：Enterで直す、Tabで字下げ、Ctrl+Shift+↑↓で並べ替え、Ctrl+Enterで完了、←→で開閉。</p>
+ <p>段落：Ctrl+Enter（Shift+Enter）で置く。どこでも：URLを貼ると参考URLへ入る。Alt+Q：余白。Ctrl+/：この説明を開く。Esc：閉じる。</p>
  <button onClick={()=>setOpen(false)}>閉じる</button></section></div>:null;
 }

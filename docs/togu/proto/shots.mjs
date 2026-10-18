@@ -46,7 +46,7 @@ async function write(page, kind, text, { heading = '', tag = '', note = '' } = {
       await page.locator('.entry-composer__meta-apply').first().click();
     } catch (e) { console.log('note失敗', e.message.split('\n')[0]); }
   }
-  if (heading) await page.getByRole('textbox', { name: '段落タイトル', exact: true }).fill(heading);
+  if (heading) await page.getByRole('textbox', { name: '段落の見出し', exact: true }).fill(heading);
   await desk(page).press(kind === 'paragraph' ? 'Control+Enter' : 'Enter');
   await page.waitForTimeout(350);
 }
@@ -154,8 +154,12 @@ async function seedMemo(page, rich) {
   for (const [h, p] of SAMPLE.paragraphs) await write(page, 'paragraph', p, { heading: h });
   try {
     const done = page.getByRole('region', { name: 'アウトライン', exact: true }).locator('.outline__item-wrap').filter({ hasText: SAMPLE.done }).first();
+    // v0.8.0: 完了は項目の詳細(PCは行のそばの小窓、スマホは操作シート)から
+    const mobile = await page.evaluate(() => matchMedia('(max-width: 920px)').matches);
+    if (mobile) await selectKind(page, 'sentence');
     await done.hover();
-    await done.getByRole('button', { name: /^完了(にする)?$/ }).first().click({ timeout: 4000 });
+    await done.getByRole('button', { name: mobile ? 'この項目の操作' : '項目の詳細' }).click({ timeout: 4000 });
+    await (mobile ? page.getByRole('dialog') : page.getByRole('dialog', { name: '項目の詳細' })).getByRole('button', { name: /^完了(にする)?$/ }).first().click({ timeout: 4000 });
     await page.waitForTimeout(400);
   } catch (e) { console.log('完了失敗', e.message.split('\n')[0]); }
 }
@@ -196,6 +200,12 @@ try {
     await shot(page, 'pc-04-row-hover.png');
     const rb = await row.boundingBox();
     if (rb) await shot(page, 'pc-04b-row-hover-zoom.png', { clip: { x: Math.max(0, rb.x - 20), y: Math.max(0, rb.y - 20), width: Math.min(560, rb.width + 40), height: rb.height + 60 } });
+    // 項目の詳細(行のそばの小窓)
+    try {
+      await row.getByRole('button', { name: '項目の詳細' }).click(); await page.waitForTimeout(300);
+      await shot(page, 'pc-04c-inspector.png');
+      await page.keyboard.press('Escape'); await page.waitForTimeout(200);
+    } catch (e) { console.log('詳細失敗', e.message.split('\n')[0]); }
     await page.mouse.move(2, 2);
     // 書き口(段落に育てる)
     await desk(page).click();
@@ -203,7 +213,7 @@ try {
     await page.keyboard.press('Shift+Enter');
     await page.keyboard.type('二行目');
     await page.waitForTimeout(400);
-    const db = await page.locator('.entry-composer--desk').boundingBox();
+    const db = await page.locator('.entry-composer--desk').first().boundingBox();
     await shot(page, 'pc-05-desk-paragraph.png', { clip: { x: 0, y: 0, width: 1366, height: Math.min(633, (db?.y || 0) + (db?.height || 200) + 60) } });
     results.pcDeskParagraph = await page.evaluate(RECTS + `(${JSON.stringify(['.entry-composer--desk', '.entry-composer__desk-heading--open input', '.entry-composer__textarea', '.entry-composer__hint', '.entry-composer__meta-row'])})`);
     await desk(page).fill('');
