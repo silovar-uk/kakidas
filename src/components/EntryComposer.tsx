@@ -81,7 +81,7 @@ type EntryComposerProps = {
   onDraftChange?: (hasDraft: boolean) => void;
   /** 置く先(欄)が変わったときに呼ぶ。URLだけを書くと、いる欄に関わらず参考URLになる。 */
   onRouteChange?: (kind: EntryKind) => void;
-  onPlaced?: (kind: EntryKind) => void;
+  onPlaced?: (kind: EntryKind, createdId?: string) => void;
   /** 参考URLの重複判定に使う、このメモ内の既存URL。 */
   existingReferenceUrls?: string[];
   /** タグ見出しから開いた専用入力を閉じる。 */
@@ -652,7 +652,7 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
         if (waitFor) await waitFor.catch(() => undefined);
         if (isDesk) await withViewTransition(create);
         else await create();
-        onPlaced?.(kind);
+        onPlaced?.(kind, createdId);
         // 「保存しました。」は参考URLの欄にいるときだけ。ほかの欄では、置いた行が見えれば足りる。
         setReferenceNotice(isReferenceUrl && slot === "word" ? "保存しました。" : null);
         // 作成側で旧下書きを消す。続きがあれば削除後に改めて保存する。

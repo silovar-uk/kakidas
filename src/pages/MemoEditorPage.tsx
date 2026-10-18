@@ -247,21 +247,29 @@ export function MemoEditorPage() {
   const activeKindRef = useRef(activeKind);
   activeKindRef.current = activeKind;
   /** スマホで、いまの棚と違う欄へ置いたときの受け取り表示。一覧に重ねて出し、押し下げない。 */
-  const [receipt, setReceipt] = useState<{ kind: EntryKind; at: number; text: string } | null>(null);
+  const [receipt, setReceipt] = useState<{ kind: EntryKind; at: number; text: string; targetId?: string } | null>(null);
   /** 棚の数字を弾ませる合図。atが変わるたびに動きをやり直す。 */
   const [bumped, setBumped] = useState<{ kind: EntryKind; at: number } | null>(null);
   const receiptTimerRef = useRef<number | null>(null);
   /** スマホの受け取り表示。4秒、一覧に重ねて出す。 */
-  const announce = useCallback((kind: EntryKind, text: string) => {
-    setReceipt({ kind, at: Date.now(), text });
+  const announce = useCallback((kind: EntryKind, text: string, targetId?: string) => {
+    setReceipt({ kind, at: Date.now(), text, targetId });
     if (receiptTimerRef.current !== null) window.clearTimeout(receiptTimerRef.current);
     receiptTimerRef.current = window.setTimeout(() => setReceipt(null), 4000);
   }, []);
-  const handlePlaced = useCallback((kind: EntryKind) => {
+  const handlePlaced = useCallback((kind: EntryKind, createdId?: string) => {
     if (!window.matchMedia("(max-width: 920px)").matches) return;
     setBumped({ kind, at: Date.now() });
-    if (kind === activeKindRef.current) return;
-    announce(kind, `${ENTRY_KIND_LABEL[kind]}に置きました`);
+    const text = `${ENTRY_KIND_LABEL[kind]}に置きました`;
+    if (kind !== activeKindRef.current) { announce(kind, text, createdId); return; }
+    // 今の棚でも、置いた行が画面の外(長い一覧の下など)なら知らせる。
+    if (!createdId) return;
+    window.requestAnimationFrame(() => {
+      const el = document.querySelector<HTMLElement>(`[data-entry-id="${CSS.escape(createdId)}"]`);
+      if (!el) return;
+      const box = el.getBoundingClientRect();
+      if (box.top < 0 || box.bottom > window.innerHeight) announce(kind, text, createdId);
+    });
   }, [announce]);
   useEffect(() => () => {
     if (receiptTimerRef.current !== null) window.clearTimeout(receiptTimerRef.current);
@@ -1402,7 +1410,15 @@ export function MemoEditorPage() {
       <div className="editor-receipt-anchor">
         {receipt ? <div className="editor-receipt" role="status" key={receipt.at}>
           <span>{receipt.text}</span>
-          <button type="button" onClick={() => { setActiveKind(receipt.kind); setReceipt(null); }}>
+          <button type="button" onClick={() => {
+            const { kind, targetId } = receipt;
+            setActiveKind(kind);
+            setReceipt(null);
+            if (targetId) window.requestAnimationFrame(() => window.requestAnimationFrame(() => {
+              document.querySelector<HTMLElement>(`[data-entry-id="${CSS.escape(targetId)}"]`)
+                ?.scrollIntoView({ block: "center", behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+            }));
+          }}>
             {ENTRY_KIND_LABEL[receipt.kind]}を見る
           </button>
         </div> : null}
