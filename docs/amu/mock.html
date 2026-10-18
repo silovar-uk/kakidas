@@ -1,0 +1,1314 @@
+<!--
+  kakidas「並べずに、編む」試作(P1〜P3を入れた完成形)
+  - 1枚のHTMLで動く。データは localStorage(kakidas-amu-mock.v1)にだけ保存し、本物のメモやクラウドには触れない。
+  - ?new を付けると「新しいメモ」の直後(題のかぎ括弧の中にカーソル)から始まる。
+  - 右下の「試作の操作」は試作専用。受け入れ確認(qa.mjs)の数え上げから外す。
+-->
+<title>kakidas「並べずに、編む」</title>
+<style>
+:root{
+  --paper:#f4f2ed;--sheet:#fffdf9;--ink:#23211d;--ink2:#55514a;--ink3:#6c675f;--line:#e3dfd6;--line2:#c9c2b5;
+  --shu:#b24e29;--shu-ink:#943f1e;--shu-wash:#f6e8df;--danger:#ad352d;--hover:rgb(35 33 29/.055);--track:#ebe8e1;
+  --sans:"Hiragino Sans","Hiragino Kaku Gothic ProN","Noto Sans JP","BIZ UDPGothic","Yu Gothic UI",Meiryo,sans-serif;
+  --serif:"Hiragino Mincho ProN","Noto Serif JP","BIZ UDPMincho","Yu Mincho",serif;
+  --ease:cubic-bezier(.2,.8,.2,1);--shadow-2:0 0 0 1px rgb(35 33 29/.06),0 14px 36px -10px rgb(35 33 29/.24),0 2px 6px rgb(35 33 29/.05);
+  --gutter:32px;--indent:20px;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);letter-spacing:.02em;-webkit-font-smoothing:antialiased}
+button,input,textarea{font:inherit;color:inherit;letter-spacing:inherit}
+button{cursor:pointer}
+:where(button,a,[role=tab],[role=treeitem]):focus-visible{outline:2px solid var(--ink);outline-offset:2px;border-radius:6px}
+::placeholder{color:var(--ink3);opacity:1}
+.vh{position:absolute!important;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.icon{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;flex:0 0 auto}
+
+/* ---------- 画面の骨組み(PC):帯+3つの欄。ページは動かず、欄ごとに流れる ---------- */
+.app{height:100%;display:grid;grid-template-rows:auto auto 1fr;min-height:0}
+.bar{display:flex;align-items:center;gap:12px;height:52px;padding:0 var(--gutter)}
+.bar .back{display:grid;place-items:center;width:32px;height:32px;margin-left:-8px;border:0;background:none;color:var(--ink2);border-radius:8px;font-size:22px;text-decoration:none}
+.bar .title{flex:1;min-width:0;border:0;background:none;font:600 20px/1.3 var(--sans);font-feature-settings:"palt";padding:6px 0;text-overflow:ellipsis}
+.bar .title:focus{outline:none;box-shadow:inset 0 -1px 0 var(--ink)}
+.bar .memo-tag{border:0;background:none;color:var(--ink2);font-size:13px;padding:6px 4px;border-radius:6px}
+.save{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink3);white-space:nowrap}
+.save i{width:7px;height:7px;border-radius:50%;background:var(--line2);transition:background 1.6s var(--ease)}
+.save[data-state=wet] i{background:var(--shu);transition:none}
+.textbtn{border:0;background:none;color:var(--ink2);font-size:14px;padding:8px 10px;border-radius:8px;white-space:nowrap}
+.textbtn:hover{background:var(--hover)}
+.seisho-btn{color:var(--shu-ink);font-weight:600;display:flex;align-items:center;gap:6px}
+.seisho-btn b{display:inline-grid;place-items:center;width:18px;height:18px;border:1.5px solid var(--shu);color:var(--shu);font:600 9px/1 var(--serif);writing-mode:vertical-rl;letter-spacing:0;transform:rotate(-3deg)}
+.iconbtn{display:grid;place-items:center;width:32px;height:32px;border:0;background:none;color:var(--ink2);border-radius:8px}
+.iconbtn:hover{background:var(--hover)}
+.tabs{display:none}
+.mdesk{display:none}
+.receipt{display:none}
+
+.workspace{display:grid;grid-template-columns:minmax(0,42fr) minmax(0,38fr) minmax(0,20fr);gap:var(--gutter);padding:0 var(--gutter);min-height:0}
+.col{display:grid;grid-template-rows:auto 1fr;min-height:0;min-width:0;position:relative}
+.col-head{display:flex;align-items:center;gap:8px;height:40px;border-bottom:1px solid var(--ink);padding:0 4px}
+.col-head h2{margin:0;font:600 15px/1 var(--sans)}
+.col-head .count{font-size:13px;color:var(--ink3)}
+.col-head .grow{flex:1}
+.col-head .count.bump{animation:bump .26s var(--ease)}
+@keyframes bump{40%{transform:scale(1.25);color:var(--shu)}}
+.col-body{overflow-y:auto;min-height:0;padding:6px 0 24px;scrollbar-width:thin;scrollbar-gutter:stable;overscroll-behavior:contain;position:relative}
+
+/* ---------- アウトライン ---------- */
+.tree{position:relative}
+.row{--d:0;display:flex;align-items:flex-start;min-height:32px;padding:0 4px 0 calc(var(--d)*var(--indent) + 2px);border-radius:6px;position:relative;outline:0}
+.row:hover{background:var(--hover)}
+.row.sel{background:var(--shu-wash)}
+.row:focus-visible{box-shadow:inset 0 0 0 2px var(--ink)}
+.twisty{flex:0 0 20px;height:32px;display:grid;place-items:center;border:0;background:none;color:var(--ink3);font-size:11px;padding:0;transition:transform .2s var(--ease)}
+.twisty.closed{transform:rotate(-90deg)}
+.dot{flex:0 0 20px;height:32px;display:grid;place-items:center;color:var(--line2)}
+.dot::before{content:"";width:5px;height:5px;border-radius:50%;background:currentColor}
+.row .text{flex:1;min-width:0;padding:6px 4px;font-size:15px;line-height:1.45;cursor:text;overflow-wrap:anywhere;white-space:pre-wrap}
+.dense .row{min-height:28px}.dense .row .text{padding:4px 4px}.dense .twisty,.dense .dot{height:28px}
+.row.done .text{color:var(--ink3);text-decoration:line-through;text-decoration-color:var(--line2);text-decoration-thickness:1px}
+.row.fresh .text,.para.fresh,.ref.fresh .t{color:var(--shu);animation:dry 1.6s var(--ease) forwards}
+@keyframes dry{to{color:var(--ink)}}
+.marks{display:flex;align-items:center;gap:4px;padding-top:7px}
+.mark{display:inline-flex;align-items:center;gap:2px;border:0;background:none;color:var(--shu-ink);font-size:12px;padding:0 3px;border-radius:4px;text-decoration:none;line-height:18px}
+.mark:hover{background:var(--shu-wash)}
+.mark.link{color:var(--ink3)}
+.chip{font-size:12px;color:var(--ink2);padding:0 2px;white-space:nowrap}
+.num{font-size:12px;color:var(--ink3);padding:8px 4px 0 0;min-width:2em}
+.tools{display:flex;gap:2px;padding-top:2px;opacity:0;transition:opacity .12s}
+.row:hover .tools,.row.sel .tools,.row:focus-within .tools,.para:hover .tools,.para:focus-within .tools,.ref:hover .tools,.ref:focus-within .tools{opacity:1}
+.tools button{display:grid;place-items:center;width:28px;height:28px;border:0;background:none;color:var(--ink3);border-radius:6px;padding:0}
+.tools button:hover{background:var(--hover);color:var(--ink)}
+.tools .m-only{display:none}
+.row.lens,.para.lens,.ref.lens{background:var(--shu-wash);box-shadow:inset 3px 0 0 var(--shu)}
+.edit{flex:1;min-width:0;border:0;border-bottom:1px solid var(--shu);background:var(--sheet);font-size:15px;line-height:1.45;padding:6px 4px;resize:none;overflow:hidden;outline:0}
+.crumbs{display:flex;flex-wrap:wrap;gap:4px;align-items:center;font-size:12px;color:var(--ink3);padding:4px 4px 8px}
+.crumbs button{border:0;background:none;color:var(--ink2);padding:2px 4px;border-radius:4px;font-size:12px}
+.empty{color:var(--ink3);font-size:13px;line-height:1.7;padding:12px 4px}
+
+/* ---------- 書き口(ひとつだけ。いる場所へ運ばれる) ---------- */
+.slot{position:relative}
+.slot-s{--d:0;display:flex;align-items:flex-start;padding:0 4px 0 calc(var(--d)*var(--indent) + 2px);transition:padding-left .2s var(--ease)}
+.slot-s.at-end{position:sticky;bottom:-24px;padding-bottom:24px;background:linear-gradient(to bottom,transparent,var(--paper) 14px);z-index:2}
+.slot-s .plus{flex:0 0 20px;height:34px;display:grid;place-items:center;color:var(--shu);font-size:14px}
+.slotbtn{display:flex;align-items:center;gap:6px;width:100%;border:0;background:none;color:var(--ink3);font-size:13px;padding:8px 4px;border-radius:6px;text-align:left}
+.slotbtn:hover{color:var(--shu-ink);background:var(--hover)}
+.slotbtn .plus{color:var(--shu)}
+.desk{flex:1;min-width:0;display:grid;grid-template-columns:auto minmax(0,1fr) auto auto;grid-template-areas:"heading heading heading heading" "depth text meta put" "route route route route" "notet notet notet notet" "note note note note";align-items:start;gap:0 6px;position:relative;view-transition-name:amu-desk}
+.desk textarea,.desk input{border:0;background:transparent;outline:0;min-width:0}
+.desk .heading{grid-area:heading;font:600 17px/1.4 var(--sans);padding:8px 4px 2px;display:none}
+.desk[data-mode=paragraph] .heading{display:block}
+.desk .text{grid-area:text;font-size:15px;line-height:1.5;padding:6px 4px;resize:none;overflow:hidden;min-height:34px;width:100%;
+  background-image:linear-gradient(var(--ink),var(--ink));background-size:0 1px;background-repeat:no-repeat;background-position:0 100%;box-shadow:inset 0 -1px 0 var(--line);transition:background-size .32s var(--ease)}
+.desk .text:focus{background-size:100% 1px}
+.desk[data-mode=paragraph] .text{min-height:96px;line-height:1.85}
+.desk .put{grid-area:put;margin-top:3px}
+.desk .meta{grid-area:meta;display:none;gap:0;padding-top:2px}
+/* 添えるは書きかけがあるときだけ。フォーカスの出入りで段を出し入れしない(指の下で画面が動かない) */
+.desk.filled .meta{display:flex}
+.desk .meta button{display:grid;place-items:center;width:28px;height:28px;border:0;background:none;color:var(--ink3);border-radius:6px}
+.desk .meta button[aria-pressed=true]{color:var(--shu-ink)}
+.put{border:0;border-radius:999px;padding:5px 12px;font-size:13px;background:var(--track);color:var(--ink3);white-space:nowrap;transition:background .2s,color .2s}
+.desk.filled .put{background:var(--shu);color:#fff}
+.route{grid-area:route;font-size:12px;color:var(--shu-ink);padding:2px 4px 4px;display:none}
+.desk.routing .route{display:block}
+.depth{grid-area:depth;display:none}
+.note-toggle{display:none}
+.desk .note{grid-area:note;display:none;font-size:13px;line-height:1.6;padding:6px 4px;resize:none;box-shadow:inset 0 -1px 0 var(--line)}
+.desk[data-mode=word] .note-toggle{grid-area:notet;justify-self:start;display:inline-block;border:0;background:none;color:var(--ink3);font-size:12px;padding:4px}
+.desk[data-mode=word].with-note .note{display:block}
+.ghost{display:none;margin:2px 4px;padding:6px 8px;border-radius:6px;background:var(--shu-wash);color:var(--shu-ink);font-size:12px}
+.ghost.on{display:block;animation:pulse 1.2s var(--ease) infinite alternate}
+@keyframes pulse{from{opacity:.55}to{opacity:1}}
+.slot-p .desk,.slot-w .desk{padding:4px 0}
+
+/* ---------- 段落 ---------- */
+.para{position:relative;padding:12px 4px 14px;border-bottom:1px solid var(--line);border-radius:6px}
+.para:hover{background:var(--hover)}
+.para.sel{background:var(--shu-wash)}
+.para .ph{display:flex;align-items:baseline;gap:6px;padding-right:96px}
+.para h3{margin:0;font:600 17px/1.45 var(--sans);font-feature-settings:"palt"}
+.para .body{margin:4px 0 0;font-size:15px;line-height:1.85;white-space:pre-wrap;overflow-wrap:anywhere;cursor:text}
+.para.done h3,.para.done .body{color:var(--ink3)}
+.para .tools{position:absolute;right:4px;top:8px}
+.para .bind{flex:0 0 auto}
+.para .meta-row,.ref .meta-row{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px;font-size:12px;color:var(--ink2)}
+.time{font-size:12px;color:var(--ink3)}
+.para textarea.edit{display:block;width:100%;min-height:120px;line-height:1.85;margin-top:4px}
+.para input.edit{display:block;width:100%;font:600 17px/1.45 var(--sans)}
+
+/* ---------- 参考URL ---------- */
+.ref{display:grid;grid-template-columns:20px minmax(0,1fr);gap:2px 8px;padding:10px 4px;border-bottom:1px solid var(--line);position:relative;border-radius:6px}
+.ref:hover{background:var(--hover)}
+.ref .fav{width:16px;height:16px;margin-top:2px;color:var(--ink3);font-size:13px;text-align:center}
+.ref .t{color:var(--ink);text-decoration:none;font-size:14px;line-height:1.45;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;padding-right:4px}
+.ref .t:hover{text-decoration:underline}
+.ref .host{grid-column:2;font-size:12px;color:var(--ink3)}
+.ref .note{grid-column:2;font-size:12px;color:var(--ink2);line-height:1.6}
+.ref .cite{grid-column:2;justify-self:start}
+.ref .tools{grid-column:2;justify-self:end;margin-top:-26px}
+.group-h{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--shu-ink);padding:14px 4px 4px;font-weight:600}
+.group-h span{color:var(--ink3);font-weight:400}
+.ref.arrive .t{animation:dry 1.6s var(--ease) forwards;color:var(--shu)}
+
+/* ---------- 小窓(項目の詳細・メニュー) ---------- */
+.pop{position:fixed;z-index:30;width:320px;max-height:calc(100dvh - 24px);overflow:auto;background:var(--sheet);border-radius:12px;box-shadow:var(--shadow-2);padding:8px}
+.pop h4{margin:4px 8px 2px;font:600 14px/1.5 var(--sans);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pop .sub{margin:0 8px 6px;font-size:12px;color:var(--ink3)}
+.pop .sec{border-top:1px solid var(--line);padding:6px 0}
+.pop .cap{font-size:11px;color:var(--ink3);margin:4px 8px;letter-spacing:.08em}
+.pop .item{display:flex;align-items:center;gap:10px;width:100%;border:0;background:none;padding:8px;border-radius:8px;text-align:left;font-size:14px}
+.pop .item:hover{background:var(--hover)}
+.pop .item[aria-checked=true]::after{content:"✓";margin-left:auto;color:var(--shu-ink)}
+.pop .item.danger{color:var(--danger)}
+.pop .moves{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;padding:4px}
+.pop .moves button{display:grid;place-items:center;gap:2px;border:0;background:var(--track);border-radius:8px;padding:8px 2px;font-size:12px}
+.pop .moves button:hover{background:var(--line)}
+.pop .stars{display:flex;gap:4px;padding:4px 8px}
+.pop .chips{display:flex;flex-wrap:wrap;gap:6px;padding:6px 8px}
+.pop .sec.chips{padding:8px}
+.pop .chips.end{justify-content:flex-end}
+.chipbtn{display:inline-flex;align-items:center;gap:6px;border:0;background:var(--track);border-radius:999px;padding:6px 12px;font-size:13px;white-space:nowrap}
+.chipbtn:hover{background:var(--line)}
+.chipbtn .icon{width:16px;height:16px}
+.chipbtn.danger{background:transparent;color:var(--danger)}
+.pop .stars button{flex:1;border:0;background:var(--track);border-radius:6px;padding:6px 0;font-size:13px}
+.pop .stars button[aria-pressed=true]{background:var(--ink);color:#fff}
+.pop label{display:block;font-size:12px;color:var(--ink3);margin:6px 8px 2px}
+.pop .field{display:block;width:calc(100% - 16px);margin:0 8px;border:0;box-shadow:inset 0 -1px 0 var(--line2);background:transparent;padding:6px 2px;font-size:14px;outline:0;resize:vertical}
+.pop .row-actions{display:flex;justify-content:flex-end;gap:6px;padding:8px}
+.pop .row-actions button{border:0;border-radius:999px;padding:6px 14px;font-size:13px;background:var(--track)}
+.pop .row-actions .ok{background:var(--ink);color:#fff}
+.scrim{position:fixed;inset:0;z-index:29;background:transparent}
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:40;display:flex;align-items:center;gap:12px;background:var(--ink);color:#fff;border-radius:999px;padding:10px 18px;font-size:13px;box-shadow:var(--shadow-2)}
+.toast button{border:0;background:none;color:#f6c9b5;font-size:13px;padding:0}
+.help{position:fixed;inset:0;z-index:50;display:grid;place-items:center;background:rgb(35 33 29/.18)}
+.help section{background:var(--sheet);border-radius:16px;padding:20px 24px;width:min(560px,calc(100vw - 32px));box-shadow:var(--shadow-2);font-size:14px;line-height:1.9}
+.help h2{margin:0 0 8px;font-size:17px}
+.help kbd{font-family:inherit;font-size:12px;background:var(--track);border-radius:4px;padding:1px 5px}
+.margin-panel{position:fixed;top:0;right:0;bottom:0;width:min(380px,100vw);z-index:35;background:var(--sheet);box-shadow:var(--shadow-2);display:grid;grid-template-rows:auto 1fr;padding:16px}
+.margin-panel textarea{border:0;background:repeating-linear-gradient(transparent 0 31px,var(--line) 31px 32px);line-height:32px;font-size:15px;resize:none;outline:0}
+
+/* ---------- 清書(書いた紙が、乾いて一枚になる) ---------- */
+.seisho{display:none;overflow:auto;padding:0 var(--gutter) 48px;min-height:0}
+.seisho-on .workspace{display:none}.seisho-on .seisho{display:block}
+.seisho-tools{display:flex;gap:16px;justify-content:space-between;max-width:760px;margin:8px auto 12px}
+.seisho-tools button{border:0;background:none;color:var(--ink2);font-size:13px;padding:6px 0}
+.paper{position:relative;max-width:760px;margin:0 auto;background:var(--sheet);box-shadow:var(--shadow-2);padding:48px 72px 88px;font-family:var(--serif)}
+.paper .date{font:12px var(--sans);color:var(--ink3);letter-spacing:.06em}
+.paper h1{font-size:28px;margin:8px 0 28px;font-weight:600;view-transition-name:memo-title}
+.paper h2{display:flex;align-items:center;gap:12px;font:600 12px var(--sans);color:var(--shu-ink);letter-spacing:.25em;margin:28px 0 12px}
+.paper h2::after{content:"";flex:1;height:1px;background:var(--line)}
+.paper ul{list-style:none;margin:0;padding:0}
+.paper li{position:relative;padding-left:1em;line-height:1.9;font-size:16px}
+.paper li::before{content:"・";position:absolute;left:0;color:var(--shu)}
+.paper li.knit-wrap::before{content:none}
+.paper .knit{margin:2px 0 12px;font-size:15px;line-height:2;color:var(--ink);text-indent:1em}
+.paper .bp h3{font-size:17px;margin:18px 0 4px}
+.paper .bp p{margin:0;text-indent:1em;line-height:2;font-size:15px}
+.paper .refs li::before{content:"―"}
+.paper .refs small{display:block;font:12px var(--sans);color:var(--ink3)}
+.stamp{position:absolute;right:56px;bottom:40px;display:grid;place-items:center;width:46px;height:46px;border:2.5px solid var(--shu);color:var(--shu);font:600 19px/1 var(--serif);writing-mode:vertical-rl;letter-spacing:0;transform:rotate(-3deg);mix-blend-mode:multiply;opacity:.92}
+
+/* ---------- 試作の操作(受け入れ確認の対象外) ---------- */
+.proto{position:fixed;left:8px;bottom:calc(8px + env(safe-area-inset-bottom, 0px));z-index:60;font-size:12px;color:var(--ink2);max-width:min(420px,calc(100vw - 16px))}
+.proto summary{cursor:pointer;list-style:none;display:inline-block;border:1px solid var(--line2);background:var(--sheet);border-radius:999px;padding:3px 10px;color:var(--ink3)}
+.proto[open]{background:var(--sheet);border-radius:12px;box-shadow:var(--shadow-2);padding:10px 12px}
+.proto[open] summary{border:0;padding:0 0 4px;color:var(--ink)}
+.proto ol{margin:4px 0 6px;padding-left:1.4em;line-height:1.7}
+.proto p{margin:0 0 8px;color:var(--ink3)}
+.proto-actions{display:flex;gap:6px}
+.proto button{border:1px solid var(--line2);background:var(--sheet);border-radius:999px;padding:4px 10px;color:var(--ink3)}
+
+/* ---------- 中間の幅:参考URLは細いレールに畳む ---------- */
+@media (min-width:921px) and (max-width:1199px){
+  .workspace{grid-template-columns:minmax(0,1fr) minmax(0,1fr) 44px;gap:24px}
+  .col-w .col-head h2,.col-w .col-head .iconbtn,.col-w .col-body{display:none}
+  .col-w .col-head{writing-mode:vertical-rl;height:auto;border:0;padding-top:12px}
+}
+
+/* ---------- スマホ:帯1行・棚・書き口は上半分(キーボードを追いかけない) ---------- */
+@media (max-width:920px){
+  :root{--gutter:16px;--indent:16px}
+  .app{height:auto;display:block}
+  .bar{height:48px;padding:0 8px;gap:4px}
+  .bar .back{margin-left:0;width:40px;height:40px}
+  .bar .title{font-size:16px;padding:8px 0}
+  .bar .save span,.bar .margin-btn{display:none}
+  .seisho-btn b{display:none}
+  .bar .memo-tag{max-width:72px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px}
+  .bar .textbtn{padding:10px 8px}
+  .bar .iconbtn{width:44px;height:44px}
+  .tabs{display:grid;grid-template-columns:repeat(3,1fr);height:40px;border-bottom:1px solid var(--line)}
+  .tabs button{border:0;background:none;font-size:14px;color:var(--ink2);position:relative}
+  .tabs button[aria-selected=true]{color:var(--ink);font-weight:600}
+  .tabs button[aria-selected=true]::after{content:"";position:absolute;left:20%;right:20%;bottom:-1px;height:2px;background:var(--ink);border-radius:2px}
+  .tabs .c{font-weight:400;color:var(--ink3);margin-left:4px;display:inline-block}
+  .tabs .c.bump{animation:bump .26s var(--ease)}
+  .mdesk{display:block;padding:6px 16px 6px;background:var(--sheet);border-bottom:1px solid var(--line)}
+  .mdesk .desk{grid-template-areas:"heading heading heading heading" "depth text text put" "meta meta meta meta" "route route route route" "notet notet notet notet" "note note note note"}
+  .mdesk .desk .meta{justify-content:flex-end}
+  .mdesk .desk .text{font-size:16px}
+  .mdesk .desk[data-mode=paragraph] .text{min-height:72px}
+  .mdesk .desk[data-mode=sentence] .depth{display:flex}
+  .depth button{display:grid;place-items:center;width:40px;height:44px;border:0;background:none;color:var(--ink2);border-radius:8px;font-size:16px}
+  .depth button:active{background:var(--hover)}
+  .mdesk .desk .meta button{width:36px;height:36px}
+  .put{padding:8px 14px;font-size:14px}
+  .mtop{position:relative;z-index:6}
+  /* 受け取りは一覧に重ねて出す。一覧を押し下げない(押す場所がずれない) */
+  .receipt{position:absolute;left:8px;right:8px;top:calc(100% + 6px);display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 12px;border-radius:10px;font-size:12px;color:var(--shu-ink);background:var(--shu-wash);box-shadow:var(--shadow-2);opacity:0;transform:translateY(-4px);pointer-events:none;transition:opacity .2s var(--ease),transform .2s var(--ease)}
+  .receipt.on{opacity:1;transform:none;pointer-events:auto}
+  .receipt button{border:0;background:none;color:var(--shu-ink);font-size:12px;text-decoration:underline;padding:4px}
+  .workspace{display:block;padding:0}
+  .col{display:none}
+  .col.active{display:block}
+  .col-head{display:none}
+  .col-body{overflow:visible;padding:4px 16px 96px}
+  .row{min-height:44px;padding-right:0}
+  .row .text{font-size:16px;padding:11px 4px}
+  .twisty,.dot{height:44px;flex-basis:22px}
+  .tools{opacity:1}
+  .tools button{display:none}
+  .tools .m-only{display:grid;width:44px;height:44px}
+  .marks{padding-top:13px}
+  .slot-s,.slot-p,.slot-w,.slotbtn{display:none}
+  .para{padding:12px 0}
+  .para .ph{padding-right:48px}
+  .para .tools{top:4px;right:0}
+  .ref .tools{margin-top:-30px}
+  .pop.sheet{left:0!important;right:0;top:auto!important;bottom:0;width:auto;max-height:82vh;border-radius:16px 16px 0 0;padding:8px 8px calc(12px + env(safe-area-inset-bottom))}
+  .pop.sheet .item{min-height:44px;font-size:15px}
+  .pop.sheet .moves button{min-height:52px;font-size:13px}
+  .pop.sheet .chipbtn{min-height:44px;font-size:14px;padding:8px 14px}
+  .pop.card{left:8px!important;right:8px;top:56px!important;width:auto}
+  .scrim.dim{background:rgb(35 33 29/.18)}
+  .paper{padding:28px 20px 72px}
+  .seisho{padding:0 8px 48px}
+  .toast{bottom:16px;max-width:calc(100vw - 24px)}
+}
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation:none!important;transition:none!important}
+  .row.fresh .text,.para.fresh,.ref.fresh .t,.ref.arrive .t{color:var(--ink)!important}
+}
+::view-transition-group(*){animation-duration:.32s;animation-timing-function:var(--ease)}
+</style>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-note" viewBox="0 0 24 24"><path d="M5.5 4.8h13v14.4H9.3l-3.8 2.4V4.8Z"/><path d="M8.3 9h7.4M8.3 12.6h5.4"/></symbol>
+  <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></symbol>
+  <symbol id="i-tag" viewBox="0 0 24 24"><path d="M3.5 12.2V4.5h7.7l9.3 9.3-7.7 7.7-9.3-9.3Z"/><circle cx="8" cy="9" r="1.3"/></symbol>
+  <symbol id="i-more" viewBox="0 0 24 24"><circle cx="6" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="18" cy="12" r="1.2"/></symbol>
+  <symbol id="i-zoom" viewBox="0 0 24 24"><circle cx="11" cy="11" r="5.5"/><path d="m15 15 4.5 4.5"/></symbol>
+  <symbol id="i-para" viewBox="0 0 24 24"><path d="M13 4v16M17 4v16M17 4H10a4 4 0 0 0 0 8h3"/></symbol>
+  <symbol id="i-up" viewBox="0 0 24 24"><path d="M12 19V5M6 11l6-6 6 6"/></symbol>
+  <symbol id="i-down" viewBox="0 0 24 24"><path d="M12 5v14M6 13l6 6 6-6"/></symbol>
+  <symbol id="i-pull" viewBox="0 0 24 24"><path d="M19 5 8 16M8 8v8h8"/></symbol>
+  <symbol id="i-pen" viewBox="0 0 24 24"><path d="m4 16.7-.7 4 4-.7L18.7 8.6l-3.3-3.3L4 16.7Z"/><path d="m13.9 6.8 3.3 3.3"/></symbol>
+</svg>
+
+<div class="app" id="app">
+  <header class="bar">
+    <a class="back" href="#" aria-label="メモ一覧へ戻る" title="メモ一覧へ">‹</a>
+    <input class="title" id="title" aria-label="メモのタイトル" autocomplete="off">
+    <button class="memo-tag" id="memoTag" type="button" aria-label="メモのタグ">#企画</button>
+    <span class="save" id="save" data-state="dry" aria-live="polite"><i></i><span>保存済み</span></span>
+    <button class="textbtn margin-btn" id="marginBtn" type="button" aria-label="余白を開く">余白</button>
+    <button class="textbtn seisho-btn" id="seishoBtn" type="button" aria-label="清書にする"><b aria-hidden="true">書出</b>清書</button>
+    <button class="iconbtn" id="memoMenu" type="button" aria-label="メモの操作" aria-haspopup="menu"><svg class="icon"><use href="#i-more"/></svg></button>
+  </header>
+
+  <div class="mtop">
+    <div class="tabs" role="tablist" aria-label="棚" id="tabs"></div>
+    <div class="mdesk" id="mslot"></div>
+    <div class="receipt" id="receipt" role="status" aria-live="polite"><span id="receiptText"></span><button type="button" id="receiptGo">見る</button></div>
+  </div>
+
+  <main class="workspace" id="workspace" aria-label="書き出しスペース">
+    <section class="col col-s" data-kind="sentence" aria-labelledby="h-s">
+      <div class="col-head"><h2 id="h-s">アウトライン</h2><span class="count" id="cnt-s"></span><span class="grow"></span>
+        <button class="iconbtn" type="button" aria-label="アウトラインの操作" data-colmenu="sentence"><svg class="icon"><use href="#i-more"/></svg></button></div>
+      <div class="col-body" id="body-s"></div>
+    </section>
+    <section class="col col-p" data-kind="paragraph" aria-labelledby="h-p">
+      <div class="col-head"><h2 id="h-p">段落</h2><span class="count" id="cnt-p"></span><span class="grow"></span>
+        <button class="iconbtn" type="button" aria-label="段落の操作" data-colmenu="paragraph"><svg class="icon"><use href="#i-more"/></svg></button></div>
+      <div class="col-body" id="body-p"></div>
+    </section>
+    <section class="col col-w" data-kind="word" aria-labelledby="h-w">
+      <div class="col-head"><h2 id="h-w">参考URL</h2><span class="count" id="cnt-w"></span><span class="grow"></span>
+        <button class="iconbtn" type="button" aria-label="参考URLの操作" data-colmenu="word"><svg class="icon"><use href="#i-more"/></svg></button></div>
+      <div class="col-body" id="body-w"></div>
+    </section>
+  </main>
+
+  <div class="seisho" id="seisho"></div>
+</div>
+
+<!-- 書き口はひとつ。置き場所(スロット)へ運んで使う -->
+<div id="deskHome" hidden>
+  <form class="desk" id="desk" data-mode="sentence" aria-label="書き口" autocomplete="off">
+    <div class="depth" role="group" aria-label="入れる深さ">
+      <button type="button" id="caretOut" aria-label="字上げ">↰</button><button type="button" id="caretIn" aria-label="字下げ">↳</button>
+    </div>
+    <input class="heading" id="deskHeading" aria-label="段落の見出し" placeholder="見出し（任意）">
+    <textarea class="text" id="deskText" rows="1" aria-label="書く"></textarea>
+      <div class="meta" role="group" aria-label="書き添える">
+        <button type="button" data-meta="note" aria-label="気持ち・備考を付ける" aria-pressed="false"><svg class="icon"><use href="#i-note"/></svg></button>
+        <button type="button" data-meta="link" aria-label="リンクを付ける" aria-pressed="false"><svg class="icon"><use href="#i-link"/></svg></button>
+        <button type="button" data-meta="tag" aria-label="タグを付ける" aria-pressed="false"><svg class="icon"><use href="#i-tag"/></svg></button>
+      </div>
+      <button class="put" type="submit" aria-label="置く">置く</button>
+    <button type="button" class="note-toggle" id="noteToggle">＋ 備考</button>
+    <textarea class="note" id="deskNote" rows="2" aria-label="参考URLの備考" placeholder="このURLについての短いメモ"></textarea>
+    <div class="route" id="route" aria-live="polite"></div>
+  </form>
+</div>
+
+<details class="proto" aria-label="試作の操作"><summary>試作 ・ 試してほしい5つ</summary>
+  <ol>
+    <li>アウトラインの行を選んで、そのまま書いてEnter。続けてTabで字下げ</li>
+    <li>書き口にURLを貼る(どこで貼っても参考URLへ。題名はあとから届く)</li>
+    <li>一行書いてShift+Enter。書き口が段落の欄へ移る</li>
+    <li>行に触れて「¶ 段落にする」。行の文が段落の見出しになる</li>
+    <li>右上の「清書」。段落がアウトラインの行の下へ編み込まれる</li>
+  </ol>
+  <p>スマホの幅(920px以下)では、棚・上の書き口・「↰ ↳」に変わります。</p>
+  <div class="proto-actions"><button type="button" id="protoReset">見本に戻す</button>
+  <button type="button" id="protoNew">新しいメモで試す</button></div>
+</details>
+
+<script>
+(() => {
+'use strict';
+/* ====================================================================
+   データ(本物のアプリと同じ形の項目)。kind: sentence=アウトライン / paragraph=段落 / word=参考URL
+   ==================================================================== */
+const STORE = 'kakidas-amu-mock.v1';
+const KIND_LABEL = {sentence: 'アウトライン', paragraph: '段落', word: '参考URL'};
+const ORDER = ['sentence', 'paragraph', 'word'];      // 画面・棚・コピー・清書の順番は、これひとつ
+const TITLES = {
+  'https://www.w3.org/WAI/WCAG22/Understanding/target-size-minimum': 'Understanding Success Criterion 2.5.8: Target Size (Minimum) | WAI | W3C',
+  'https://developer.mozilla.org/ja/docs/Web/API/View_Transition_API': 'View Transition API - Web API | MDN',
+  'https://dynalist.io/': 'Dynalist — Your Workflowy alternative',
+  'https://workflowy.com/help/bullets/': 'Bullet list – WorkFlowy Help',
+  'https://example.com/articles/2026/10/structure-and-headings?utm_source=x': '情報の構造化と見出し設計について考える',
+};
+const WEEK = ['日', '月', '火', '水', '木', '金', '土'];
+const dayTitle = (d = new Date(), body = '') => `${d.getMonth() + 1}/${d.getDate()} ${WEEK[d.getDay()]}「${body}」`;
+let seq = 0;
+const T0 = Date.parse('2026-10-18T09:00:00+09:00');
+function seed() {
+  const E = []; let t = T0;
+  const add = (kind, content, extra = {}) => { const e = {id: 'e' + (++seq), kind, parent_id: null, content, heading: '', tag: null, note: '', link_url: '', satisfaction: 0, is_completed: false, sort_order: 0, created_at: new Date(t += 61000).toISOString(), deleted: false, ...extra}; E.push(e); return e; };
+  const o1 = add('sentence', '目的', {sort_order: 0});
+  add('sentence', '書き出した断片を、そのまま構成へ育てたい', {parent_id: o1.id, sort_order: 0});
+  add('sentence', '調べたURLを、論点のすぐ横に置きたい', {parent_id: o1.id, sort_order: 1, note: '前回の取材で困った'});
+  const o2 = add('sentence', '論点', {sort_order: 1});
+  add('sentence', '3つの列は、書く順番と合っているか', {parent_id: o2.id, sort_order: 0, tag: '要検討'});
+  const o22 = add('sentence', '段落はどこで書くのが自然か', {parent_id: o2.id, sort_order: 1});
+  add('sentence', 'アウトラインの下で、そのまま書き下ろしたい', {parent_id: o22.id, sort_order: 0});
+  add('sentence', '段落だけの画面も残したい', {parent_id: o22.id, sort_order: 1, tag: '要検討'});
+  add('sentence', 'URLの題名が長いと列が詰まる', {parent_id: o2.id, sort_order: 2, is_completed: true});
+  const o3 = add('sentence', '次にやること', {sort_order: 2});
+  add('sentence', '試作を本番に重ねて撮る', {parent_id: o3.id, sort_order: 0});
+  add('sentence', '移り変わりはView Transitionで', {parent_id: o3.id, sort_order: 1, link_url: 'https://developer.mozilla.org/ja/docs/Web/API/View_Transition_API'});
+  add('sentence', 'スマホで片手のまま書けるか確かめる', {parent_id: o3.id, sort_order: 2});
+  add('paragraph', 'アウトラインの行のすぐ下で書けると、骨組みを見ながら肉付けできる。段落だけを見る画面は、読み返すときに使う。', {heading: '段落はどこで書くのが自然か', sort_order: 0});
+  add('paragraph', '最初は単語やURLを放り込むだけでよい。並べ替えるうちに論点が見えてきて、最後に段落として書き下ろす。順番が逆になっても構わないが、書き下ろす段階では手元に骨組みが見えていてほしい。', {heading: '書き出しの順番', sort_order: 1});
+  add('paragraph', '3列を同時に見せると、どこに書けばよいか毎回迷う。迷う時間は短いが、書き始めの勢いを削ぐ。', {sort_order: 2, tag: '要検討'});
+  add('word', 'Understanding Success Criterion 2.5.8: Target Size (Minimum) | WAI | W3C', {link_url: 'https://www.w3.org/WAI/WCAG22/Understanding/target-size-minimum', note: 'タップ領域の根拠', sort_order: 3});
+  add('word', 'View Transition API - Web API | MDN', {link_url: 'https://developer.mozilla.org/ja/docs/Web/API/View_Transition_API', sort_order: 2});
+  add('word', 'Dynalist — Your Workflowy alternative', {link_url: 'https://dynalist.io/', sort_order: 1, tag: '要検討'});
+  add('word', '情報の構造化と見出し設計について考える', {link_url: 'https://example.com/articles/2026/10/structure-and-headings?utm_source=x', sort_order: 0});
+  return {memo: {title: '10/18 日「kakidasの次の一手」', tag: '企画', created_at: new Date(T0).toISOString()}, entries: E, margin: ''};
+}
+let D;
+try { D = JSON.parse(localStorage.getItem(STORE) || 'null'); } catch { D = null; }
+if (!D || !Array.isArray(D.entries)) D = seed();
+const emptyMemo = () => ({memo: {title: dayTitle(), tag: null, created_at: new Date().toISOString()}, entries: [], margin: ''});
+const wantsNew = (() => { try { return new URLSearchParams(location.search).has('new') && !sessionStorage.getItem('amu-new-done'); } catch { return false; } })();
+if (wantsNew) { D = emptyMemo(); try { sessionStorage.setItem('amu-new-done', '1'); } catch {} }
+seq = Math.max(0, ...D.entries.map((e) => Number(String(e.id).replace(/\D/g, '')) || 0));
+let E = D.entries;
+let saveTimer = 0;
+function persist() {
+  const s = $('#save'); s.dataset.state = 'wet'; s.querySelector('span').textContent = '保存中…';
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => { try { localStorage.setItem(STORE, JSON.stringify(D)); } catch {} s.dataset.state = 'dry'; s.querySelector('span').textContent = '保存済み'; }, 220);
+}
+
+/* ====================================================================
+   画面の状態(保存しない)
+   ==================================================================== */
+const mq = matchMedia('(max-width: 920px)');
+const reduce = matchMedia('(prefers-reduced-motion: reduce)');
+const S = {
+  slot: 'sentence',                // 書き口がいる欄
+  caret: {parentId: null, index: 0}, // アウトラインの「次の一行」の位置
+  paraAfter: null,                 // 段落の書き口は、この段落の後ろ(null=末尾)
+  sel: null, editing: null, zoom: null, collapsed: new Set(),
+  tab: 'sentence', paraSel: null, lens: null, dense: false,
+  showTime: false, showNum: false, copyDone: false,
+  paraSort: 'manual', refGroup: true, seisho: false, history: null,
+};
+const $ = (q, el = document) => el.querySelector(q);
+const $$ = (q, el = document) => [...el.querySelectorAll(q)];
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
+const byId = (id) => E.find((e) => e.id === id && !e.deleted) || null;
+const live = (kind) => E.filter((e) => e.kind === kind && !e.deleted);
+const byOrder = (a, b) => a.sort_order - b.sort_order || a.created_at.localeCompare(b.created_at);
+const kids = (pid) => live('sentence').filter((e) => (e.parent_id ?? null) === (pid ?? null)).sort(byOrder);
+const renumber = (list) => list.forEach((e, i) => { e.sort_order = i; });
+function depthOf(id) { let d = 0, e = byId(id); const seen = new Set(); while (e && e.parent_id && !seen.has(e.id)) { seen.add(e.id); d++; e = byId(e.parent_id); } return d; }
+const zoomDepth = () => (S.zoom ? depthOf(S.zoom) + 1 : 0);
+function newEntry(kind, content, extra = {}) {
+  return {id: 'e' + (++seq), kind, parent_id: null, content, heading: '', tag: null, note: '', link_url: '', satisfaction: 0, is_completed: false, sort_order: 0, created_at: new Date().toISOString(), deleted: false, ...extra};
+}
+const hostOf = (u) => { try { return new URL(u).hostname.replace(/^www\./, ''); } catch { return u; } };
+const urlKey = (u) => { try { const x = new URL(u); x.hash = ''; [...x.searchParams.keys()].forEach((k) => { if (/^utm_|^fbclid$|^gclid$/i.test(k)) x.searchParams.delete(k); }); x.hostname = x.hostname.toLowerCase(); x.pathname = x.pathname.replace(/\/+$/, '') || '/'; return x.href; } catch { return ''; } };
+const isUrl = (s) => /^(https?:\/\/|www\.)\S+$/i.test(s.trim());
+const normUrl = (s) => { const t = s.trim(); return /^https?:\/\//i.test(t) ? t : 'https://' + t; };
+
+/* アウトラインの振り番(1 / 1.1 / 1.1.1)。保存しない */
+function numbers() {
+  const m = new Map();
+  const walk = (pid, pre) => kids(pid).forEach((e, i) => { const n = pre ? `${pre}.${i + 1}` : String(i + 1); m.set(e.id, n); walk(e.id, n); });
+  walk(null, ''); return m;
+}
+/* 結び目:段落の見出しが、アウトラインの1行と同じ文なら結ぶ(同じ文の行が2つ以上なら結ばない) */
+function bindMap() {
+  const m = new Map();
+  for (const e of live('sentence')) { const k = e.content.trim(); m.set(k, m.has(k) ? null : e); }
+  return m;
+}
+const boundRow = (p, bm = bindMap()) => (p.heading.trim() ? bm.get(p.heading.trim()) || null : null);
+const parasOf = (rowId, bm = bindMap()) => live('paragraph').filter((p) => boundRow(p, bm)?.id === rowId);
+const citeRows = (u) => live('sentence').filter((e) => e.link_url && urlKey(e.link_url) === urlKey(u.link_url));
+
+/* ====================================================================
+   書き口(ひとつ)
+   ==================================================================== */
+const desk = $('#desk'), deskText = $('#deskText'), deskHeading = $('#deskHeading'), deskNote = $('#deskNote');
+const deskMeta = {note: '', link: '', tag: ''};
+const PLACEHOLDER = {
+  sentence: '書く(Enterで次の行・Tabで字下げ)',
+  paragraph: '段落を書く(Ctrl+Enterで置く)',
+  word: 'URLを貼る(どこで貼っても入ります)',
+};
+const PLACEHOLDER_SP = {sentence: '書く(Enterで次の行)', paragraph: '段落を書く(改行できます)', word: 'URLを貼る'};
+function deskMode() {
+  // 書き口の形は「いる欄」で決まる。アウトラインに書いたURLだけは、参考URLへ送る
+  return S.slot;
+}
+function routeOf() {
+  const v = deskText.value.trim();
+  if (S.slot !== 'word' && isUrl(v) && !v.includes('\n')) return 'word';
+  return S.slot;
+}
+function syncDesk() {
+  const mode = deskMode();
+  desk.dataset.mode = mode;
+  deskText.placeholder = (mq.matches ? PLACEHOLDER_SP : PLACEHOLDER)[mode];
+  const r = routeOf();
+  desk.classList.toggle('filled', deskText.value.trim().length > 0);
+  desk.classList.toggle('routing', r !== mode);
+  $('#route').textContent = r !== mode ? `→ ${KIND_LABEL[r]}へ置きます` : '';
+  // 送り先の欄に「ここに入る」を灯す(PC)
+  $$('.ghost[data-for]').forEach((g) => g.classList.toggle('on', r !== mode && g.dataset.for === r));
+  $$('.ghost[data-caret]').forEach((g) => g.classList.toggle('on', mq.matches && S.tab === 'sentence' && deskText.value.trim().length > 0));
+  for (const [k, b] of Object.entries({note: '[data-meta=note]', link: '[data-meta=link]', tag: '[data-meta=tag]'})) $(b, desk).setAttribute('aria-pressed', String(Boolean(deskMeta[k])));
+  autoSize(deskText);
+}
+function autoSize(t) { t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px'; }
+
+/* 書き口を、いまの置き場所へ運ぶ。欄を描き直す前に避難させ(フォーカスと選択位置を覚える)、描き直した後に戻す */
+let deskFocus = null;
+function parkDesk(body) {
+  if (body && !body.contains(desk)) return;
+  const a = document.activeElement;
+  if (a === deskText || a === deskHeading || a === deskNote) deskFocus = {el: a, s: a.selectionStart, e: a.selectionEnd};
+  $('#deskHome').appendChild(desk);
+}
+function placeDesk() {
+  const slotEl = mq.matches ? $('#mslot') : $(`[data-slot="${S.slot}"]`);
+  if (!slotEl) return;
+  const host = slotEl.id === 'mslot' ? slotEl : (slotEl.querySelector('.desk-host') || slotEl);
+  if (desk.parentElement !== host) {
+    const a = document.activeElement;
+    if (!deskFocus && (a === deskText || a === deskHeading || a === deskNote)) deskFocus = {el: a, s: a.selectionStart, e: a.selectionEnd};
+    host.appendChild(desk);
+  }
+  if (deskFocus) { const f = deskFocus; deskFocus = null; f.el.focus({preventScroll: true}); try { f.el.setSelectionRange(f.s, f.e); } catch {} }
+  syncDesk();
+}
+function moveDesk(slot, {focus = true, vt = false} = {}) {
+  const go = () => { S.slot = slot; if (mq.matches) S.tab = slot; renderAll(); if (focus) focusDesk(); };
+  if (vt) withVT(go); else go();
+}
+function focusDesk({heading = false} = {}) {
+  requestAnimationFrame(() => {
+    const t = heading ? deskHeading : deskText;
+    t.focus({preventScroll: false});
+    const n = t.value.length; try { t.setSelectionRange(n, n); } catch {}
+    if (!mq.matches) t.closest('.col-body')?.querySelector('.desk')?.scrollIntoView({block: 'nearest'});
+    syncDesk();
+  });
+}
+function clearDesk() {
+  deskText.value = ''; deskHeading.value = ''; deskNote.value = '';
+  deskMeta.note = deskMeta.link = deskMeta.tag = '';
+  desk.classList.remove('with-note');
+  syncDesk();
+}
+
+/* 置く */
+function submitDesk() {
+  const raw = deskText.value;
+  const text = raw.trim();
+  if (!text) return;
+  const r = routeOf();
+  const meta = {note: deskMeta.note, link_url: deskMeta.link, tag: deskMeta.tag || null};
+  let placed = null;
+  if (r === 'word') {
+    const urls = text.split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
+    for (const u of urls) placed = placeUrl(normUrl(u), {note: S.slot === 'word' ? deskNote.value.trim() : '', tag: meta.tag});
+  } else if (r === 'paragraph') {
+    const list = paraList();
+    const at = S.paraAfter === '^' ? 0 : S.paraAfter ? list.findIndex((p) => p.id === S.paraAfter) + 1 : list.length;
+    placed = newEntry('paragraph', text, {heading: deskHeading.value.trim(), ...meta});
+    E.push(placed); list.splice(Math.max(0, at), 0, placed); renumber(list);
+    S.paraAfter = placed.id;
+  } else {
+    placed = insertAtCaret(text, meta);
+  }
+  clearDesk();
+  persist();
+  renderAll();
+  fresh(placed);
+  if (r !== S.slot || (mq.matches && r !== S.tab)) receipt(`${KIND_LABEL[r]}に置きました`, r, placed);
+  else if (mq.matches && !inView(placed)) receipt(`${KIND_LABEL[r]}に置きました`, r, placed);
+  bump(r);
+  focusDesk({heading: S.slot === 'paragraph' && false});
+}
+function insertAtCaret(text, meta = {}) {
+  const {parentId: P, index: i} = S.caret;
+  const list = kids(P);
+  const e = newEntry('sentence', text, {parent_id: P, ...meta});
+  E.push(e); list.splice(Math.min(i, list.length), 0, e); renumber(list);
+  S.caret = {parentId: P, index: Math.min(i, list.length - 1) + 1};
+  return e;
+}
+function placeUrl(url, {note = '', tag = null} = {}) {
+  const dup = live('word').find((w) => urlKey(w.link_url) === urlKey(url));
+  if (dup) { toast('このURLはすでに参考URLにあります'); return dup; }
+  const list = live('word');
+  const e = newEntry('word', hostOf(url), {link_url: url, note, tag, sort_order: Math.min(0, ...list.map((w) => w.sort_order)) - 1});
+  E.push(e);
+  // 題名は、あとから届く
+  setTimeout(() => { if (!byId(e.id)) return; e.content = TITLES[url] || `${hostOf(url)} のページ`; persist(); renderRefs(); const el = $(`[data-id="${e.id}"]`); el?.classList.add('arrive'); }, 700);
+  return e;
+}
+const paraList = () => {
+  const list = live('paragraph');
+  if (S.paraSort === 'manual') return list.sort(byOrder);
+  if (S.paraSort === 'created_asc') return list.sort((a, b) => a.created_at.localeCompare(b.created_at));
+  if (S.paraSort === 'created_desc') return list.sort((a, b) => b.created_at.localeCompare(a.created_at));
+  return list.sort((a, b) => b.satisfaction - a.satisfaction || b.created_at.localeCompare(a.created_at));
+};
+
+/* 書き口のキー */
+deskText.addEventListener('input', () => { syncDesk(); });
+deskHeading.addEventListener('input', () => syncDesk());
+deskHeading.addEventListener('keydown', (ev) => { if (ev.isComposing || ev.keyCode === 229) return; if (ev.key === 'Enter') { ev.preventDefault(); deskText.focus(); } });
+deskText.addEventListener('focus', syncDesk);
+deskText.addEventListener('blur', () => setTimeout(syncDesk, 0));
+deskText.addEventListener('keydown', (ev) => {
+  if (ev.isComposing || ev.keyCode === 229) return;              // 日本語の変換確定のEnterは使わない
+  const empty = deskText.value.length === 0;
+  const mode = deskMode();
+  if (ev.key === 'Enter' && (ev.ctrlKey || ev.metaKey)) { ev.preventDefault(); submitDesk(); return; }
+  if (mode === 'paragraph') {
+    if (ev.key === 'Enter' && ev.shiftKey) { ev.preventDefault(); submitDesk(); return; }
+    if (ev.key === 'Escape') { ev.preventDefault(); deskText.blur(); }
+    return;
+  }
+  if (ev.key === 'Enter' && ev.shiftKey && mode === 'sentence') {
+    // 一行が段落へ育つ:改行を入れたまま、書き口ごと段落の欄へ移る
+    ev.preventDefault();
+    const p = deskText.selectionStart ?? deskText.value.length;
+    deskText.value = deskText.value.slice(0, p) + '\n' + deskText.value.slice(p);
+    moveDesk('paragraph', {vt: true});
+    return;
+  }
+  if (ev.key === 'Enter') { ev.preventDefault(); submitDesk(); return; }
+  if (mode !== 'sentence') { if (ev.key === 'Escape') { ev.preventDefault(); deskText.blur(); } return; }
+  if (ev.key === 'Tab') { ev.preventDefault(); ev.shiftKey ? caretOut() : caretIn(); return; }
+  if ((ev.key === 'ArrowUp' && empty) || ev.key === 'Escape') {
+    ev.preventDefault();
+    const above = rowAboveCaret();
+    if (above) { selectRow(above, {moveCaret: false}); focusRow(above); } else deskText.blur();
+    return;
+  }
+  if (ev.key === 'ArrowDown' && empty) {
+    const below = rowBelowCaret();
+    if (below) { ev.preventDefault(); selectRow(below, {moveCaret: false}); focusRow(below); }
+  }
+});
+desk.addEventListener('submit', (ev) => { ev.preventDefault(); submitDesk(); });
+$('#caretIn').addEventListener('click', () => { caretIn(); deskText.focus({preventScroll: true}); });
+$('#caretOut').addEventListener('click', () => { caretOut(); deskText.focus({preventScroll: true}); });
+$('#noteToggle').addEventListener('click', () => { desk.classList.toggle('with-note'); if (desk.classList.contains('with-note')) deskNote.focus(); });
+$$('[data-meta]', desk).forEach((b) => b.addEventListener('click', () => openMetaCard(b.dataset.meta)));
+deskText.addEventListener('paste', (ev) => {
+  // 複数行のURLだけを貼ったら、まとめて参考URLへ置く
+  const t = ev.clipboardData?.getData('text') ?? '';
+  const lines = t.split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
+  if (lines.length > 1 && lines.every(isUrl)) { ev.preventDefault(); let last; lines.forEach((u) => { last = placeUrl(normUrl(u)); }); persist(); renderAll(); fresh(last); toast(`参考URLに${lines.length}件置きました`); bump('word'); }
+});
+
+/* アウトラインの「次の一行」を動かす */
+function caretIn() {
+  const {parentId: P, index: i} = S.caret; const list = kids(P);
+  const prev = list[i - 1]; if (!prev) return;
+  S.collapsed.delete(prev.id);
+  S.caret = {parentId: prev.id, index: kids(prev.id).length};
+  renderOutline(); placeDesk();
+}
+function caretOut() {
+  const {parentId: P} = S.caret;
+  if (P === null || P === S.zoom) return;
+  const parent = byId(P); if (!parent) return;
+  const g = parent.parent_id ?? null;
+  S.caret = {parentId: g, index: kids(g).findIndex((e) => e.id === P) + 1};
+  renderOutline(); placeDesk();
+}
+function caretAfter(row) {
+  // 開いている親を選んだら最初の子として、そうでなければ次の兄弟として入る(見えた場所に入る)
+  if (kids(row.id).length && !S.collapsed.has(row.id)) S.caret = {parentId: row.id, index: 0};
+  else S.caret = {parentId: row.parent_id ?? null, index: kids(row.parent_id ?? null).findIndex((e) => e.id === row.id) + 1};
+}
+function resetCaret() { const P = S.zoom; S.caret = {parentId: P, index: kids(P).length}; }
+
+/* ====================================================================
+   アウトライン
+   ==================================================================== */
+function visibleRows() {
+  const out = [];
+  const walk = (pid, d) => kids(pid).forEach((e) => { if (S.hideDone && e.is_completed) return; out.push({e, d}); if (!S.collapsed.has(e.id)) walk(e.id, d + 1); });
+  walk(S.zoom, 0);
+  return out;
+}
+function caretSpot(rows) {
+  const {parentId: P, index: i} = S.caret; const list = kids(P);
+  const depth = P === null || P === S.zoom ? 0 : depthOf(P) - zoomDepth() + 1;
+  if (i < list.length) { const at = rows.findIndex((r) => r.e.id === list[i].id); if (at >= 0) return {at, depth, end: false}; }
+  if (P === null || P === S.zoom) return {at: rows.length, depth, end: true};
+  const lastIn = (id) => { const c = kids(id); return !c.length || S.collapsed.has(id) ? id : lastIn(c[c.length - 1].id); };
+  const last = lastIn(P); const at = rows.findIndex((r) => r.e.id === last) + 1;
+  return {at, depth, end: at >= rows.length};
+}
+function rowHtml({e, d}, nums, bm) {
+  const hasKids = kids(e.id).length > 0;
+  const closed = S.collapsed.has(e.id);
+  const bound = parasOf(e.id, bm).length > 0;
+  const cls = ['row', S.sel === e.id ? 'sel' : '', e.is_completed ? 'done' : '', S.lens === e.id ? 'lens' : ''].join(' ');
+  const text = S.editing === e.id
+    ? `<textarea class="edit" aria-label="アウトラインの本文を編集" rows="1">${esc(e.content)}</textarea>`
+    : `<span class="text">${esc(e.content)}</span>`;
+  return `<div class="${cls}" role="treeitem" data-id="${e.id}" aria-level="${d + 1}" aria-selected="${S.sel === e.id}" ${hasKids ? `aria-expanded="${!closed}"` : ''} tabindex="${S.sel === e.id ? 0 : -1}" style="--d:${d}">
+    ${hasKids ? `<button class="twisty ${closed ? 'closed' : ''}" type="button" tabindex="-1" aria-label="${closed ? '子を展開' : '子を折りたたむ'}">▾</button>` : '<span class="dot" aria-hidden="true"></span>'}
+    ${S.showNum ? `<span class="num">${nums.get(e.id) ?? ''}</span>` : ''}
+    ${text}
+    <span class="marks">
+      ${bound ? `<button class="mark" type="button" data-act="open-para" aria-label="段落を開く" title="この行の段落へ">¶</button>` : ''}
+      ${e.link_url ? `<a class="mark link" href="${esc(e.link_url)}" target="_blank" rel="noreferrer" aria-label="リンクを開く" title="${esc(hostOf(e.link_url))}">↗</a>` : ''}
+      ${e.note ? `<span class="mark link" title="${esc(e.note)}" aria-label="気持ち・備考あり"><svg class="icon" style="width:14px;height:14px"><use href="#i-note"/></svg></span>` : ''}
+      ${e.tag ? `<span class="chip">#${esc(e.tag)}</span>` : ''}
+    </span>
+    <span class="tools">
+      <button type="button" data-act="grow" aria-label="${bound ? '段落を開く' : '段落にする'}" title="${bound ? '段落を開く' : '段落にする(この行を見出しに)'}"><svg class="icon"><use href="#i-para"/></svg></button>
+      <button type="button" data-act="zoom" aria-label="この枝に集中" title="この枝に集中"><svg class="icon"><use href="#i-zoom"/></svg></button>
+      <button type="button" data-act="details" aria-label="項目の詳細" title="詳細と操作"><svg class="icon"><use href="#i-more"/></svg></button>
+      <button type="button" class="m-only" data-act="details" aria-label="この項目の操作"><svg class="icon"><use href="#i-more"/></svg></button>
+    </span>
+  </div>`;
+}
+function renderOutline() {
+  const body = $('#body-s');
+  parkDesk(body);                                    // 描き直す前に書き口を避難させる
+  const rows = visibleRows(); const nums = numbers(); const bm = bindMap();
+  const spot = caretSpot(rows);
+  const deskHere = !mq.matches && S.slot === 'sentence';
+  const slotHtml = `<div class="slot slot-s ${spot.end ? 'at-end' : ''}" data-slot="sentence" style="--d:${spot.depth}">${deskHere ? '<span class="plus" aria-hidden="true">＋</span><div class="desk-host" style="flex:1;min-width:0;display:flex"></div>' : '<button class="slotbtn" type="button" data-goto="sentence" aria-label="アウトラインに書く"><span class="plus">＋</span>次の一行を書く</button>'}</div>`;
+  const ghost = `<div class="ghost" data-caret style="margin-left:${spot.depth * 16 + 4}px">↳ ここに入ります</div>`;
+  let crumbs = '';
+  if (S.zoom) {
+    const chain = []; let z = byId(S.zoom); while (z) { chain.unshift(z); z = z.parent_id ? byId(z.parent_id) : null; }
+    crumbs = `<nav class="crumbs" aria-label="アウトラインのズーム位置"><button type="button" data-crumb="">全体</button>${chain.map((c) => `› <button type="button" data-crumb="${c.id}">${esc(c.content)}</button>`).join('')}</nav>`;
+  }
+  const html = rows.map((r) => rowHtml(r, nums, bm));
+  html.splice(spot.at, 0, mq.matches ? ghost : slotHtml);
+  body.innerHTML = `${crumbs}<div class="tree ${S.dense ? 'dense' : ''}" role="tree" aria-label="アウトラインの項目">${html.join('')}</div>${rows.length ? '' : '<p class="empty">一行書いて Enter。Tab で字下げ、Shift+Enter で段落へ。</p>'}`;
+  $('#cnt-s').textContent = live('sentence').filter((e) => !e.is_completed).length;
+  const ed = $('.row .edit'); if (ed) { autoSize(ed); }
+}
+function renderParas() {
+  const body = $('#body-p');
+  parkDesk(body);
+  const nums = numbers(); const bm = bindMap();
+  const list = paraList();
+  const deskHere = !mq.matches && S.slot === 'paragraph';
+  const slot = `<div class="slot slot-p" data-slot="paragraph">${deskHere ? '<div class="desk-host"></div>' : '<button class="slotbtn" type="button" data-goto="paragraph" aria-label="段落を書く"><span class="plus">＋</span>段落を書く</button>'}</div>`;
+  const ghost = '<div class="ghost" data-for="paragraph">ここに入ります</div>';
+  const items = list.map((p, i) => {
+    const row = boundRow(p, bm);
+    const editing = S.editing === p.id;
+    return `<article class="para ${S.paraSel === p.id ? 'sel' : ''} ${p.is_completed ? 'done' : ''} ${S.lens === p.id ? 'lens' : ''}" data-id="${p.id}" aria-label="段落 ${esc(p.heading || p.content.slice(0, 12))}">
+      <div class="ph">${S.showNum ? `<span class="num">${String(i + 1).padStart(2, '0')}</span>` : ''}
+        ${row ? `<button class="mark bind" type="button" data-act="to-row" aria-label="アウトラインの「${esc(row.content)}」へ" title="アウトライン ${nums.get(row.id)} と結ばれています">↖ ${nums.get(row.id)}</button>` : ''}
+        ${editing ? `<input class="edit" data-f="heading" aria-label="段落の見出しを編集" value="${esc(p.heading)}" placeholder="見出し（任意）">` : (p.heading ? `<h3>${esc(p.heading)}</h3>` : '')}</div>
+      ${editing ? `<textarea class="edit" data-f="content" aria-label="段落を編集">${esc(p.content)}</textarea>` : `<p class="body" data-act="edit-para">${esc(p.content)}</p>`}
+      ${(p.note || p.tag || S.showTime) ? `<div class="meta-row">${p.note ? `<span>気持ち　${esc(p.note)}</span>` : ''}${p.tag ? `<span>#${esc(p.tag)}</span>` : ''}${S.showTime ? `<span class="time">作成 ${new Date(p.created_at).toLocaleString('ja-JP', {month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit'})}</span>` : ''}</div>` : ''}
+      <span class="tools">
+        <button type="button" data-act="p-up" aria-label="上へ移す" title="上へ移す" ${S.paraSort !== 'manual' ? 'disabled' : ''}><svg class="icon"><use href="#i-up"/></svg></button>
+        <button type="button" data-act="p-down" aria-label="下へ移す" title="下へ移す" ${S.paraSort !== 'manual' ? 'disabled' : ''}><svg class="icon"><use href="#i-down"/></svg></button>
+        <button type="button" data-act="details" aria-label="項目の詳細" title="詳細と操作"><svg class="icon"><use href="#i-more"/></svg></button>
+        <button type="button" class="m-only" data-act="details" aria-label="この項目の操作"><svg class="icon"><use href="#i-more"/></svg></button>
+      </span></article>`;
+  });
+  const at = S.paraAfter === '^' ? 0 : S.paraAfter ? list.findIndex((p) => p.id === S.paraAfter) + 1 : list.length;
+  items.splice(at < 0 ? list.length : at, 0, slot + ghost);
+  body.innerHTML = items.join('') + (list.length ? '' : '<p class="empty">アウトラインの行の ¶ を押すと、その行を見出しにして書き始められます。</p>');
+  $('#cnt-p').textContent = live('paragraph').filter((e) => !e.is_completed).length;
+  $$('.para .edit').forEach(autoSize);
+}
+function renderRefs() {
+  const body = $('#body-w');
+  parkDesk(body);
+  const deskHere = !mq.matches && S.slot === 'word';
+  const slot = `<div class="slot slot-w" data-slot="word">${deskHere ? '<div class="desk-host"></div>' : '<button class="slotbtn" type="button" data-goto="word" aria-label="参考URLを貼る"><span class="plus">＋</span>URLを貼る</button>'}</div>`;
+  const list = live('word').filter((w) => w.link_url).sort((a, b) => b.created_at.localeCompare(a.created_at) || byOrder(a, b));
+  const card = (w) => {
+    const cites = citeRows(w).length;
+    return `<article class="ref ${S.lens === w.id ? 'lens' : ''}" data-id="${w.id}">
+      <span class="fav" aria-hidden="true">↗</span>
+      <a class="t" href="${esc(w.link_url)}" target="_blank" rel="noreferrer" aria-label="${esc(w.content)}を開く">${esc(w.content)}</a>
+      <span class="host">${esc(hostOf(w.link_url))}</span>
+      ${w.note ? `<span class="note">備考　${esc(w.note)}</span>` : ''}
+      ${cites ? `<button class="mark cite" type="button" data-act="to-cite" aria-label="アウトラインで引用 ${cites}件">引用 ${cites}</button>` : ''}
+      <span class="tools">
+        <button type="button" data-act="pull" aria-label="アウトラインに引く" title="アウトラインに引く(次の一行へ)"><svg class="icon"><use href="#i-pull"/></svg></button>
+        <button type="button" data-act="edit-url" aria-label="URLを編集" title="URLを編集"><svg class="icon"><use href="#i-pen"/></svg></button>
+        <button type="button" data-act="details" aria-label="項目の詳細" title="詳細と操作"><svg class="icon"><use href="#i-more"/></svg></button>
+        <button type="button" class="m-only" data-act="details" aria-label="この項目の操作"><svg class="icon"><use href="#i-more"/></svg></button>
+      </span></article>`;
+  };
+  let html = '';
+  if (S.refGroup) {
+    const untagged = list.filter((w) => !w.tag); const groups = new Map();
+    list.filter((w) => w.tag).forEach((w) => { if (!groups.has(w.tag)) groups.set(w.tag, []); groups.get(w.tag).push(w); });
+    html = untagged.map(card).join('') + [...groups].map(([t, ws]) => `<div class="group-h">#${esc(t)} <span>${ws.length}件</span></div>${ws.map(card).join('')}`).join('');
+  } else html = list.map(card).join('');
+  body.innerHTML = slot + '<div class="ghost" data-for="word">ここに入ります(題名はあとから届きます)</div>' + (html || '<p class="empty">URLを貼ると、ここに集まります。どこで貼っても入ります。</p>');
+  $('#cnt-w').textContent = live('word').filter((e) => !e.is_completed).length;
+}
+function renderTabs() {
+  const n = (k) => live(k).filter((e) => !e.is_completed).length;
+  $('#tabs').innerHTML = ORDER.map((k) => `<button type="button" role="tab" data-tab="${k}" aria-selected="${S.tab === k}" aria-label="${KIND_LABEL[k]}、${n(k)}件">${KIND_LABEL[k]}<span class="c" data-c="${k}">${n(k)}</span></button>`).join('');
+  $$('.col').forEach((c) => c.classList.toggle('active', c.dataset.kind === S.tab));
+}
+function renderAll() {
+  $('#app').classList.toggle('seisho-on', S.seisho);
+  parkDesk();
+  if (mq.matches && S.slot !== S.tab) S.slot = S.tab;
+  renderOutline(); renderParas(); renderRefs(); renderTabs();
+  placeDesk();
+  if (S.seisho) renderSeisho();
+}
+
+/* ====================================================================
+   行の操作
+   ==================================================================== */
+function selectRow(id, {moveCaret = true} = {}) {
+  S.sel = id; S.paraSel = null;
+  const row = byId(id);
+  if (row && moveCaret) {
+    caretAfter(row);
+    // 空の書き口は、ついてくる。書きかけは、その場に残る
+    if (S.slot !== 'sentence' && !deskText.value.trim() && !mq.matches) S.slot = 'sentence';
+  }
+  renderOutline(); placeDesk();
+}
+function focusRow(id) { requestAnimationFrame(() => $(`.row[data-id="${id}"]`)?.focus({preventScroll: false})); }
+function rowAboveCaret() { const rows = visibleRows(); const spot = caretSpot(rows); return rows[spot.at - 1]?.e.id ?? null; }
+function rowBelowCaret() { const rows = visibleRows(); const spot = caretSpot(rows); return rows[spot.at]?.e.id ?? null; }
+function startEdit(id) { S.editing = id; S.sel = id; renderOutline(); placeDesk(); requestAnimationFrame(() => { const t = $('.row .edit'); if (t) { t.focus(); t.setSelectionRange(t.value.length, t.value.length); } }); }
+function commitEdit(t, {next = false} = {}) {
+  const id = S.editing; const e = byId(id); if (!e) return;
+  const v = t.value.trim();
+  if (v && v !== e.content) {
+    // 結ばれた段落の見出しも、同じ文へ直す(同じ文の行が1つだけのとき)
+    const bm = bindMap(); const old = e.content.trim();
+    if (bm.get(old)?.id === e.id) live('paragraph').filter((p) => p.heading.trim() === old).forEach((p) => { p.heading = v; });
+    e.content = v; persist();
+  }
+  S.editing = null;
+  if (next) { caretAfter(e); S.slot = 'sentence'; renderAll(); focusDesk(); }
+  else { renderAll(); focusRow(id); }
+}
+function relocate(id, parentId, index, record = true) {
+  const e = byId(id); if (!e) return;
+  const from = {parentId: e.parent_id ?? null, index: kids(e.parent_id ?? null).findIndex((x) => x.id === id)};
+  const old = kids(e.parent_id ?? null).filter((x) => x.id !== id); renumber(old);
+  e.parent_id = parentId;
+  const list = kids(parentId).filter((x) => x.id !== id); list.splice(Math.max(0, Math.min(index, list.length)), 0, e); renumber(list);
+  persist();
+  if (record) { S.history = {id, ...from}; toast('動かしました', {label: '直前の移動を戻す', run: () => { const h = S.history; S.history = null; if (h) { relocate(h.id, h.parentId, h.index, false); renderAll(); focusRow(h.id); } }}); }
+}
+function moveRow(id, how) {
+  const e = byId(id); if (!e) return;
+  const P = e.parent_id ?? null; const sib = kids(P); const i = sib.findIndex((x) => x.id === id);
+  if (how === 'in' && i > 0) { const prev = sib[i - 1]; S.collapsed.delete(prev.id); relocate(id, prev.id, kids(prev.id).length); }
+  else if (how === 'out' && P !== null && P !== S.zoom) { const parent = byId(P); relocate(id, parent.parent_id ?? null, kids(parent.parent_id ?? null).findIndex((x) => x.id === P) + 1); }
+  else if (how === 'up' && i > 0) relocate(id, P, i - 1);
+  else if (how === 'down' && i < sib.length - 1) relocate(id, P, i + 1);
+  else return;
+  S.sel = id; renderAll(); focusRow(id);
+}
+function toggleDone(e) { e.is_completed = !e.is_completed; persist(); renderAll(); }
+function removeEntry(e) {
+  const ids = [e.id]; const walk = (pid) => kids(pid).forEach((c) => { ids.push(c.id); walk(c.id); });
+  if (e.kind === 'sentence') walk(e.id);
+  ids.forEach((id) => { const x = E.find((y) => y.id === id); if (x) x.deleted = true; });
+  if (S.sel === e.id) S.sel = null;
+  resetCaretIfGone(); persist(); renderAll();
+  toast(`「${e.heading || e.content}」${ids.length > 1 ? `と下の${ids.length - 1}件` : ''}を削除しました`, {label: '元に戻す', run: () => { ids.forEach((id) => { const x = E.find((y) => y.id === id); if (x) x.deleted = false; }); persist(); renderAll(); }});
+}
+function resetCaretIfGone() { if (S.caret.parentId && !byId(S.caret.parentId)) resetCaret(); S.caret.index = Math.min(S.caret.index, kids(S.caret.parentId).length); }
+
+/* 育てる:行を見出しにして、段落の欄で書き始める */
+function grow(rowId) {
+  const e = byId(rowId); if (!e) return;
+  const existing = parasOf(rowId)[0];
+  if (existing) { lens(existing.id, rowId); scrollToEl(existing.id); return; }
+  if (deskText.value.trim() && S.slot !== 'paragraph') { toast('書きかけの行を先に置いてください'); return; }
+  const src = $(`.row[data-id="${rowId}"] .text`);
+  if (src && !reduce.matches && document.startViewTransition) src.style.viewTransitionName = 'amu-grow';
+  withVT(() => {
+    if (src) src.style.viewTransitionName = '';
+    S.slot = 'paragraph'; if (mq.matches) S.tab = 'paragraph';
+    const bm = bindMap(); const list = paraList();
+    // 結ばれた段落は、アウトラインの順に並ぶ位置へ。なければ末尾
+    const order = visibleRowsAll(); const myIdx = order.indexOf(rowId);
+    let after = null, before = null;
+    for (const p of list) { const r = boundRow(p, bm); if (!r) continue; const ri = order.indexOf(r.id); if (ri < myIdx) after = p.id; else if (ri > myIdx && !before) before = p.id; }
+    if (after) S.paraAfter = after;
+    else if (before) { const bi = list.findIndex((p) => p.id === before); S.paraAfter = bi > 0 ? list[bi - 1].id : '^'; }
+    else S.paraAfter = list.length ? list[list.length - 1].id : null;
+    deskHeading.value = e.content; deskText.value = '';
+    renderAll();
+    deskHeading.style.viewTransitionName = 'amu-grow';
+  }).finally(() => { deskHeading.style.viewTransitionName = ''; focusDesk(); });
+}
+const visibleRowsAll = () => { const out = []; const walk = (pid) => kids(pid).forEach((e) => { out.push(e.id); walk(e.id); }); walk(null); return out; };
+
+/* 引く:参考URLを、アウトラインの次の一行として引用する */
+function pull(refId) {
+  const w = byId(refId); if (!w) return;
+  const src = $(`.ref[data-id="${refId}"] .t`);
+  if (src && !reduce.matches && document.startViewTransition) src.style.viewTransitionName = 'amu-pull';
+  let made = null;
+  withVT(() => {
+    if (src) src.style.viewTransitionName = '';
+    made = insertAtCaret(w.content, {link_url: w.link_url});
+    S.sel = made.id; persist(); renderAll();
+    const t = $(`.row[data-id="${made.id}"] .text`); if (t) t.style.viewTransitionName = 'amu-pull';
+  }).finally(() => { const t = made && $(`.row[data-id="${made.id}"] .text`); if (t) t.style.viewTransitionName = ''; if (made) fresh(made); });
+  if (mq.matches) receipt('アウトラインに引きました', 'sentence', null);
+}
+
+/* 結び目を照らす */
+function lens(a, b) {
+  S.lens = a; renderAll();
+  [a, b].forEach((id) => { const el = $(`[data-id="${id}"]`); el?.classList.add('lens'); });
+  setTimeout(() => { S.lens = null; $$('.lens').forEach((x) => x.classList.remove('lens')); }, 1600);
+}
+function scrollToEl(id) { const el = $(`[data-id="${id}"]`); if (mq.matches) { const k = byId(id)?.kind; if (k && S.tab !== k) { S.tab = k; renderAll(); } } requestAnimationFrame(() => $(`[data-id="${id}"]`)?.scrollIntoView({block: 'center', behavior: reduce.matches ? 'auto' : 'smooth'})); }
+
+/* ====================================================================
+   クリックとキー(委譲)
+   ==================================================================== */
+document.addEventListener('click', (ev) => {
+  const t = ev.target;
+  if (!(t instanceof Element)) return;
+  const goto = t.closest('[data-goto]'); if (goto) { moveDesk(goto.dataset.goto); return; }
+  const crumb = t.closest('[data-crumb]'); if (crumb) { S.zoom = crumb.dataset.crumb || null; resetCaret(); renderAll(); return; }
+  const tab = t.closest('[data-tab]'); if (tab) { S.tab = tab.dataset.tab; S.slot = S.tab; renderAll(); return; }
+  const colmenu = t.closest('[data-colmenu]'); if (colmenu) { openColMenu(colmenu.dataset.colmenu, colmenu); return; }
+  const row = t.closest('.row');
+  if (row) {
+    const id = row.dataset.id; const act = t.closest('[data-act]')?.dataset.act;
+    if (t.closest('.twisty')) { S.collapsed.has(id) ? S.collapsed.delete(id) : S.collapsed.add(id); resetCaretIfGone(); renderOutline(); placeDesk(); return; }
+    if (act === 'zoom') { S.zoom = id; S.sel = null; resetCaret(); renderAll(); return; }
+    if (act === 'details') { openInspector(id, t.closest('[data-act]')); return; }
+    if (act === 'grow' || act === 'open-para') { grow(id); return; }
+    if (t.closest('.edit') || t.closest('a')) return;
+    if (mq.matches && S.sel === id && S.editing !== id) { startEdit(id); return; }
+    // 押した行を選んでフォーカスする(Tab・Enter・Ctrl+Shift+↑↓が、その行に効く)
+    if (S.sel !== id) selectRow(id);
+    if (!mq.matches) focusRow(id);
+    return;
+  }
+  const para = t.closest('.para');
+  if (para) {
+    const id = para.dataset.id; const act = t.closest('[data-act]')?.dataset.act; const p = byId(id);
+    if (act === 'details') { openInspector(id, t.closest('[data-act]')); return; }
+    if (act === 'to-row') { const r = boundRow(p); if (r) { selectRow(r.id, {moveCaret: false}); lens(r.id, id); scrollToEl(r.id); } return; }
+    if (act === 'p-up' || act === 'p-down') { moveParagraph(id, act === 'p-up' ? -1 : 1); return; }
+    if (act === 'edit-para' && S.editing !== id) { S.editing = id; S.paraSel = id; S.paraAfter = id; renderParas(); placeDesk(); requestAnimationFrame(() => $('.para textarea.edit')?.focus()); return; }
+    if (!t.closest('.edit')) { S.paraSel = id; S.paraAfter = id; if (!deskText.value.trim() && S.slot === 'paragraph') {} renderParas(); placeDesk(); }
+    return;
+  }
+  const ref = t.closest('.ref');
+  if (ref) {
+    const id = ref.dataset.id; const act = t.closest('[data-act]')?.dataset.act;
+    if (act === 'details') { openInspector(id, t.closest('[data-act]')); return; }
+    if (act === 'pull') { pull(id); return; }
+    if (act === 'edit-url') { openMetaCard('url', id); return; }
+    if (act === 'to-cite') { const r = citeRows(byId(id))[0]; if (r) { selectRow(r.id, {moveCaret: false}); lens(r.id, id); scrollToEl(r.id); } return; }
+  }
+});
+document.addEventListener('dblclick', (ev) => { const row = ev.target instanceof Element && ev.target.closest('.row .text'); if (row && !mq.matches) startEdit(row.closest('.row').dataset.id); });
+document.addEventListener('keydown', (ev) => {
+  const t = ev.target;
+  if ((ev.ctrlKey || ev.metaKey) && ev.shiftKey && /^Digit[123]$/.test(ev.code)) {
+    ev.preventDefault(); const k = ORDER[Number(ev.code.slice(-1)) - 1];
+    if (k === 'sentence' && S.slot !== 'sentence') resetCaretIfGone();
+    moveDesk(k); return;
+  }
+  if ((ev.ctrlKey || ev.metaKey) && ev.key === '/') { ev.preventDefault(); toggleHelp(); return; }
+  if (ev.key === 'Escape') { closePop(); $('.help')?.remove(); }
+  if (!(t instanceof Element)) return;
+  // 行の編集欄
+  if (t.matches('.row .edit')) {
+    if (ev.isComposing || ev.keyCode === 229) return;
+    if (ev.key === 'Escape') { ev.preventDefault(); const id = S.editing; S.editing = null; renderAll(); focusRow(id); return; }
+    if (ev.key === 'Enter' && !ev.shiftKey) { ev.preventDefault(); commitEdit(t, {next: true}); return; }
+    if (ev.key === 'Tab') { ev.preventDefault(); const id = S.editing; commitEdit(t); moveRow(id, ev.shiftKey ? 'out' : 'in'); return; }
+    return;
+  }
+  if (t.matches('.para .edit')) {
+    if (ev.isComposing || ev.keyCode === 229) return;
+    if (ev.key === 'Escape' || (ev.key === 'Enter' && (ev.ctrlKey || ev.metaKey))) { ev.preventDefault(); commitPara(t.closest('.para'), ev.key !== 'Escape'); }
+    return;
+  }
+  // 選んだ行
+  if (t.matches('.row')) {
+    const id = t.dataset.id; if (ev.isComposing) return;
+    const rows = visibleRows(); const i = rows.findIndex((r) => r.e.id === id);
+    if ((ev.ctrlKey || ev.metaKey) && ev.shiftKey && (ev.key === 'ArrowUp' || ev.key === 'ArrowDown')) { ev.preventDefault(); moveRow(id, ev.key === 'ArrowUp' ? 'up' : 'down'); return; }
+    if ((ev.ctrlKey || ev.metaKey) && ev.key === 'Enter') { ev.preventDefault(); toggleDone(byId(id)); focusRow(id); return; }
+    if (ev.key === 'Enter') { ev.preventDefault(); startEdit(id); return; }
+    if (ev.key === 'Tab') { ev.preventDefault(); moveRow(id, ev.shiftKey ? 'out' : 'in'); return; }
+    if (ev.key === 'ArrowDown' || ev.key === 'ArrowUp') {
+      ev.preventDefault();
+      const n = rows[i + (ev.key === 'ArrowDown' ? 1 : -1)];
+      if (n) { selectRow(n.e.id); focusRow(n.e.id); }
+      else if (ev.key === 'ArrowDown') { caretAfter(byId(id)); S.slot = 'sentence'; renderAll(); focusDesk(); }
+      return;
+    }
+    if (ev.key === 'ArrowLeft') { ev.preventDefault(); const e = byId(id); if (kids(id).length && !S.collapsed.has(id)) { S.collapsed.add(id); selectRow(id); } else if (e.parent_id) { selectRow(e.parent_id); focusRow(e.parent_id); } focusRow(S.sel); return; }
+    if (ev.key === 'ArrowRight') { ev.preventDefault(); if (S.collapsed.has(id)) { S.collapsed.delete(id); selectRow(id); } else if (kids(id).length) { const c = kids(id)[0].id; selectRow(c); } focusRow(S.sel); return; }
+  }
+});
+document.addEventListener('focusout', (ev) => {
+  const t = ev.target;
+  if (t instanceof Element && t.matches('.row .edit') && S.editing) { setTimeout(() => { if (S.editing && document.activeElement !== t) commitEdit(t); }, 0); }
+  if (t instanceof Element && t.matches('.para .edit')) { const card = t.closest('.para'); setTimeout(() => { if (S.editing === card?.dataset.id && !card.contains(document.activeElement)) commitPara(card, true); }, 0); }
+});
+function commitPara(card, save) {
+  const p = byId(card.dataset.id); if (!p) return;
+  if (save) { const h = card.querySelector('[data-f=heading]').value.trim(); const c = card.querySelector('[data-f=content]').value.trim(); if (c) { p.heading = h; p.content = c; persist(); } }
+  S.editing = null; renderAll();
+}
+function moveParagraph(id, dir) {
+  const list = paraList(); const i = list.findIndex((p) => p.id === id); const j = i + dir;
+  if (i < 0 || j < 0 || j >= list.length) return;
+  [list[i], list[j]] = [list[j], list[i]]; renumber(list); persist(); S.paraSel = id; renderAll();
+  requestAnimationFrame(() => $(`.para[data-id="${id}"] [data-act="${dir < 0 ? 'p-up' : 'p-down'}"]`)?.focus());
+}
+
+/* どこで貼っても:URLは参考URLへ、ふつうの文は書き口へ */
+document.addEventListener('paste', (ev) => {
+  const a = document.activeElement;
+  if (a && (a.matches('input,textarea,[contenteditable]'))) return;
+  const text = ev.clipboardData?.getData('text') ?? '';
+  const lines = text.split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
+  if (!lines.length) return;
+  ev.preventDefault();
+  if (lines.every(isUrl)) {
+    let last; lines.forEach((u) => { last = placeUrl(normUrl(u)); });
+    persist(); renderAll(); fresh(last); bump('word');
+    receipt(lines.length > 1 ? `参考URLに${lines.length}件置きました` : '参考URLに置きました', 'word', last);
+    if (!mq.matches) toast(lines.length > 1 ? `参考URLに${lines.length}件置きました` : '参考URLに置きました');
+    return;
+  }
+  if (S.slot === 'word') S.slot = 'sentence';
+  deskText.value = text; renderAll(); focusDesk();
+});
+
+/* ====================================================================
+   小窓:項目の詳細(PCは行のそば、スマホは下からのシート)
+   ==================================================================== */
+let popEl = null;
+function closePop() { popEl?.remove(); $('.scrim')?.remove(); popEl = null; }
+function openPop(html, anchor, {sheet = mq.matches, card = false, label = '項目の詳細'} = {}) {
+  closePop();
+  const scrim = document.createElement('div'); scrim.className = 'scrim' + (sheet || card ? ' dim' : ''); scrim.addEventListener('click', closePop); document.body.appendChild(scrim);
+  popEl = document.createElement('div'); popEl.className = 'pop' + (sheet ? ' sheet' : '') + (card ? ' card' : '');
+  popEl.setAttribute('role', 'dialog'); popEl.setAttribute('aria-label', label); popEl.innerHTML = html;
+  document.body.appendChild(popEl);
+  if (!sheet && !card && anchor) {
+    const r = anchor.getBoundingClientRect(); const w = 320;
+    const left = Math.min(innerWidth - w - 12, Math.max(12, r.right - w));
+    let top = r.bottom + 6; const h = popEl.offsetHeight; if (top + h > innerHeight - 12) top = Math.max(12, r.top - h - 6);
+    popEl.style.left = left + 'px'; popEl.style.top = top + 'px';
+  }
+  popEl.querySelector('button,input,textarea')?.focus({preventScroll: true});
+  return popEl;
+}
+function openInspector(id, anchor) {
+  const e = byId(id); if (!e) return;
+  const isS = e.kind === 'sentence', isP = e.kind === 'paragraph', isW = e.kind === 'word';
+  const bound = isS && parasOf(id).length > 0;
+  const html = `
+    <h4>${esc(e.heading || e.content)}</h4><p class="sub">${KIND_LABEL[e.kind]}・作成 ${new Date(e.created_at).toLocaleString('ja-JP', {month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit'})}</p>
+    ${isS ? `<div class="sec"><p class="cap">動かす</p><div class="moves">
+      <button type="button" data-i="out" aria-label="上げる">↰<span>上げる</span></button><button type="button" data-i="in" aria-label="下げる">↳<span>下げる</span></button>
+      <button type="button" data-i="up" aria-label="上へ">↑<span>上へ</span></button><button type="button" data-i="down" aria-label="下へ">↓<span>下へ</span></button></div></div>` : ''}
+    <div class="sec chips">
+      <button class="chipbtn" type="button" data-i="done">${e.is_completed ? '未完了に戻す' : '完了にする'}</button>
+      ${isS ? `<button class="chipbtn" type="button" data-i="grow" aria-label="${bound ? '段落を開く' : '段落にする'}"><svg class="icon"><use href="#i-para"/></svg>${bound ? '段落を開く' : '段落にする'}</button><button class="chipbtn" type="button" data-i="zoom" aria-label="この枝に集中"><svg class="icon"><use href="#i-zoom"/></svg>集中</button>` : ''}
+      ${isW ? '<button class="chipbtn" type="button" data-i="pull"><svg class="icon"><use href="#i-pull"/></svg>アウトラインに引く</button>' : ''}
+    </div>
+    <div class="sec"><p class="cap">書き添える</p><div class="chips">
+      <button class="chipbtn" type="button" data-i="note" aria-label="${e.note ? '気持ち・備考を直す' : '気持ち・備考を書く'}"><svg class="icon"><use href="#i-note"/></svg>気持ち・備考</button>
+      ${isW ? '<button class="chipbtn" type="button" data-i="url" aria-label="URLを直す"><svg class="icon"><use href="#i-pen"/></svg>URL</button>' : `<button class="chipbtn" type="button" data-i="link" aria-label="${e.link_url ? 'リンクを直す' : 'リンクを付ける'}"><svg class="icon"><use href="#i-link"/></svg>リンク</button>`}
+      <button class="chipbtn" type="button" data-i="tag" aria-label="${e.tag ? `タグ #${esc(e.tag)} を変える` : 'タグを付ける'}"><svg class="icon"><use href="#i-tag"/></svg>${e.tag ? `#${esc(e.tag)}` : 'タグ'}</button></div>
+      <p class="cap">評価</p><div class="stars" role="group" aria-label="評価">${[0, 1, 2, 3, 4, 5].map((n) => `<button type="button" data-star="${n}" aria-pressed="${e.satisfaction === n}">${n}</button>`).join('')}</div>
+    </div>
+    <div class="sec chips">
+      <button class="chipbtn" type="button" data-i="copy">コピー</button>
+      ${isW ? '' : '<button class="chipbtn" type="button" data-i="derive">新しいメモにする</button>'}
+      ${isS ? '<button class="chipbtn" type="button" data-i="to-p">段落へ移動</button>' : ''}${isP ? '<button class="chipbtn" type="button" data-i="to-s">アウトラインへ移動</button>' : ''}
+    </div>
+    <div class="sec chips end"><button class="chipbtn danger" type="button" data-i="del">削除</button></div>`;
+  const pop = openPop(html, anchor);
+  pop.addEventListener('click', (ev) => {
+    const b = ev.target instanceof Element && ev.target.closest('[data-i],[data-star]'); if (!b) return;
+    if (b.dataset.star) { e.satisfaction = Number(b.dataset.star); persist(); $$('[data-star]', pop).forEach((x) => x.setAttribute('aria-pressed', String(x === b))); return; }
+    const i = b.dataset.i;
+    if (['out', 'in', 'up', 'down'].includes(i)) { moveRow(id, i); openInspector(id, $(`.row[data-id="${id}"] [data-act=details]${mq.matches ? '.m-only' : ':not(.m-only)'}`)); return; }
+    closePop();
+    if (i === 'done') toggleDone(e);
+    else if (i === 'grow') grow(id);
+    else if (i === 'zoom') { S.zoom = id; resetCaret(); renderAll(); }
+    else if (i === 'pull') pull(id);
+    else if (['note', 'link', 'tag', 'url'].includes(i)) openMetaCard(i, id);
+    else if (i === 'copy') { navigator.clipboard?.writeText(e.heading ? `${e.heading}\n${e.content}` : e.content).catch(() => {}); toast('項目をコピーしました'); }
+    else if (i === 'derive') toast('新しいメモを開きます(試作では省略)');
+    else if (i === 'to-p') { e.kind = 'paragraph'; kids(e.id).forEach((c) => { c.parent_id = e.parent_id; }); e.parent_id = null; e.sort_order = -1; renumber(paraList()); persist(); renderAll(); receipt('段落へ移しました', 'paragraph', e); }
+    else if (i === 'to-s') { e.kind = 'sentence'; e.heading = ''; e.parent_id = null; e.sort_order = -1; renumber(kids(null)); persist(); renderAll(); receipt('アウトラインへ移しました', 'sentence', e); }
+    else if (i === 'del') removeEntry(e);
+  });
+}
+/* 書き添えのカード:PCは小窓、スマホは画面の上半分(キーボードが来ても動かない場所) */
+function openMetaCard(kind, id = null) {
+  const e = id ? byId(id) : null;
+  const label = {note: '気持ち・備考', link: 'リンク', tag: 'タグ', url: 'URL'}[kind];
+  const cur = e ? {note: e.note, link: e.link_url, tag: e.tag || '', url: e.link_url}[kind] : deskMeta[kind] || '';
+  const tags = [...new Set(E.filter((x) => x.tag && !x.deleted).map((x) => x.tag))];
+  const pop = openPop(`<h4>${label}</h4>
+    ${kind === 'note' ? `<textarea class="field" rows="3" aria-label="${label}">${esc(cur)}</textarea>` : `<input class="field" aria-label="${label}" value="${esc(cur)}" ${kind === 'link' || kind === 'url' ? 'inputmode="url" placeholder="https://"' : 'placeholder="例:要検討"'}>`}
+    ${kind === 'tag' && tags.length ? `<div class="stars">${tags.map((t) => `<button type="button" data-pick="${esc(t)}">#${esc(t)}</button>`).join('')}</div>` : ''}
+    <div class="row-actions"><button type="button" data-k="clear">外す</button><button type="button" class="ok" data-k="ok">決める</button></div>`, null, {sheet: false, card: true, label});
+  const field = pop.querySelector('.field');
+  const apply = (v) => {
+    v = v.trim();
+    if (e) { if (kind === 'note') e.note = v; else if (kind === 'tag') e.tag = v || null; else { if (kind === 'url' && !v) return; e.link_url = v ? normUrl(v) : ''; } persist(); renderAll(); }
+    else { deskMeta[kind] = v; syncDesk(); }
+    closePop(); if (!e) deskText.focus();
+  };
+  pop.addEventListener('click', (ev) => { const b = ev.target instanceof Element && ev.target.closest('[data-k],[data-pick]'); if (!b) return; if (b.dataset.pick) { field.value = b.dataset.pick; return; } apply(b.dataset.k === 'clear' ? '' : field.value); });
+  field.addEventListener('keydown', (ev) => { if (ev.isComposing || ev.keyCode === 229) return; if (ev.key === 'Enter' && (kind !== 'note' || ev.ctrlKey || ev.metaKey)) { ev.preventDefault(); apply(field.value); } });
+}
+function openColMenu(kind, anchor) {
+  const items = {
+    sentence: [`<button class="item" type="button" role="menuitemcheckbox" aria-checked="${S.dense}" data-c="dense">高密度で表示</button>`, '<button class="item" type="button" data-c="copy">アウトラインをコピー</button>'],
+    paragraph: [['manual', '手動の順'], ['created_asc', '書いた順(古い順)'], ['created_desc', '書いた順(新しい順)'], ['satisfaction_desc', '評価の高い順']].map(([v, l]) => `<button class="item" type="button" role="menuitemradio" aria-checked="${S.paraSort === v}" data-sort="${v}">${l}</button>`).concat(['<button class="item" type="button" data-c="copy">段落をコピー</button>']),
+    word: [`<button class="item" type="button" role="menuitemcheckbox" aria-checked="${S.refGroup}" data-c="group">タグでまとめる</button>`, '<button class="item" type="button" data-c="copy">参考URLをコピー</button>'],
+  }[kind];
+  const pop = openPop(`<div role="menu" aria-label="${KIND_LABEL[kind]}の操作">${kind === 'paragraph' ? '<p class="cap">並び</p>' : ''}${items.join('')}<div class="sec"><button class="item" type="button" data-c="fold">畳む</button><button class="item danger" type="button" data-c="clear">${KIND_LABEL[kind]}をすべて削除</button></div></div>`, anchor, {sheet: false, label: `${KIND_LABEL[kind]}の操作`});
+  pop.addEventListener('click', (ev) => {
+    const b = ev.target instanceof Element && ev.target.closest('[data-c],[data-sort]'); if (!b) return;
+    if (b.dataset.sort) S.paraSort = b.dataset.sort;
+    else if (b.dataset.c === 'dense') S.dense = !S.dense;
+    else if (b.dataset.c === 'group') S.refGroup = !S.refGroup;
+    else if (b.dataset.c === 'copy') { navigator.clipboard?.writeText(memoText(kind)).catch(() => {}); toast(`「${KIND_LABEL[kind]}」をコピーしました`); }
+    else toast('試作では省略しています');
+    closePop(); renderAll();
+  });
+}
+$('#memoMenu').addEventListener('click', (ev) => {
+  const toggles = [['showTime', '項目の日時を表示'], ['showNum', '番号を表示'], ['hideDone', '完了を非表示'], ['copyDone', 'コピーに完了を含める']];
+  const pop = openPop(`<div role="menu" aria-label="メモの操作">
+    <p class="cap">渡す・書き出す</p>
+    <button class="item" type="button" role="menuitem" data-m="chat">ChatGPTで続きを考える</button>
+    <button class="item" type="button" role="menuitem" data-m="copy">メモをコピー</button>
+    <button class="item" type="button" role="menuitem" data-m="txt">.txtで書き出す</button>
+    <div class="sec"><p class="cap">クラウド</p><button class="item" type="button" role="menuitem" disabled>クラウドに保存</button><button class="item" type="button" role="menuitem" disabled>クラウドに合わせる</button></div>
+    <div class="sec"><p class="cap">表示</p>${toggles.map(([k, l]) => `<button class="item" type="button" role="menuitemcheckbox" aria-checked="${Boolean(S[k])}" data-t="${k}">${l}</button>`).join('')}
+    ${mq.matches ? '<button class="item" type="button" role="menuitem" data-m="margin">余白を開く</button>' : ''}
+    <button class="item" type="button" role="menuitem" data-m="help">ショートカット</button></div>
+    <div class="sec"><p class="cap">整理</p><button class="item" type="button" role="menuitem" data-m="clean">完了をまとめて削除</button><button class="item danger" type="button" role="menuitem" data-m="del">メモを削除</button></div></div>`, ev.currentTarget, {label: 'メモの操作'});
+  pop.addEventListener('click', (e2) => {
+    const b = e2.target instanceof Element && e2.target.closest('[data-m],[data-t]'); if (!b) return;
+    if (b.dataset.t) { S[b.dataset.t] = !S[b.dataset.t]; b.setAttribute('aria-checked', String(S[b.dataset.t])); renderAll(); return; }
+    closePop();
+    const m = b.dataset.m;
+    if (m === 'copy') { navigator.clipboard?.writeText(memoText()).then(() => toast('メモをコピーしました'), () => toast('コピーできませんでした')); }
+    else if (m === 'margin') openMargin();
+    else if (m === 'help') toggleHelp();
+    else toast('試作では省略しています');
+  });
+});
+
+/* コピーの文(順番は 画面と同じ アウトライン → 段落 → 参考URL) */
+function memoText(only) {
+  const keep = (e) => S.copyDone || !e.is_completed;
+  const parts = [`# ${D.memo.title}`];
+  for (const k of only ? [only] : ORDER) {
+    parts.push(`\n## ${KIND_LABEL[k]}`);
+    if (k === 'sentence') { const walk = (pid, d) => kids(pid).filter(keep).forEach((e) => { parts.push(`${'  '.repeat(d)}- ${e.content}`); walk(e.id, d + 1); }); walk(null, 0); }
+    if (k === 'paragraph') paraList().filter(keep).forEach((p) => { parts.push(p.heading ? `\n${p.heading}\n${p.content}` : `\n${p.content}`); });
+    if (k === 'word') live('word').filter(keep).sort((a, b) => b.created_at.localeCompare(a.created_at)).forEach((w) => parts.push(`- ${w.content}\n  リンク：${w.link_url}`));
+  }
+  return parts.join('\n').replace(/\n{3,}/g, '\n\n').trim() + '\n';
+}
+
+/* ====================================================================
+   清書:同じ紙が乾く。結ばれた段落は、アウトラインの行の下へ編み込む
+   ==================================================================== */
+function headline(title) { const m = title.match(/^(\d{1,2})\/(\d{1,2})\s*([^「]+)「([^」]*)」$/); return m ? {h: m[4] || title, day: `2026年${m[1]}月${m[2]}日(${m[3].trim()})`} : {h: title, day: ''}; }
+function renderSeisho() {
+  const keep = (e) => S.copyDone || !e.is_completed;
+  const bm = bindMap(); const hl = headline(D.memo.title);
+  let n = 0;
+  const vt = (id) => (n++ < 60 ? `style="view-transition-name:e-${id}"` : '');
+  const li = (e, d) => {
+    const knit = parasOf(e.id, bm).filter(keep).map((p) => `<p class="knit" ${vt(p.id)}>${esc(p.content)}</p>`).join('');
+    return `<li style="margin-left:${d * 1.25}em" ${vt(e.id)}>${esc(e.content)}</li>${knit ? `<li class="knit-wrap" style="margin-left:${d * 1.25}em">${knit}</li>` : ''}`;
+  };
+  const items = []; const walk = (pid, d) => kids(pid).filter(keep).forEach((e) => { items.push(li(e, d)); walk(e.id, d + 1); }); walk(null, 0);
+  const loose = paraList().filter(keep).filter((p) => !boundRow(p, bm));
+  const refs = live('word').filter(keep).filter((w) => w.link_url).sort((a, b) => b.created_at.localeCompare(a.created_at));
+  $('#seisho').innerHTML = `<div class="seisho-tools" aria-label="清書の道具"><button type="button" data-s="back">書き口へ戻る</button><span><button type="button" data-s="copy">書式つきでコピー</button>　<button type="button" data-s="print">印刷・PDF</button></span></div>
+  <article class="paper" aria-label="清書"><div class="date">${hl.day}${D.memo.tag ? `　#${esc(D.memo.tag)}` : ''}</div><h1>${esc(hl.h)}</h1>
+    ${items.length ? `<section><h2>要点</h2><ul>${items.join('')}</ul></section>` : ''}
+    ${loose.length ? `<section><h2>本文</h2>${loose.map((p) => `<div class="bp" ${vt(p.id)}>${p.heading ? `<h3>${esc(p.heading)}</h3>` : ''}<p>${esc(p.content)}</p></div>`).join('')}</section>` : ''}
+    ${refs.length ? `<section><h2>参考</h2><ul class="refs">${refs.map((w) => `<li ${vt(w.id)}><a href="${esc(w.link_url)}" target="_blank" rel="noreferrer">${esc(w.content)}</a><small>${esc(hostOf(w.link_url))}</small></li>`).join('')}</ul></section>` : ''}
+    <span class="stamp" aria-label="落款">書出</span></article>`;
+}
+$('#seishoBtn').addEventListener('click', () => toggleSeisho(!S.seisho));
+$('#seisho').addEventListener('click', (ev) => {
+  const b = ev.target instanceof Element && ev.target.closest('[data-s]'); if (!b) return;
+  if (b.dataset.s === 'back') toggleSeisho(false);
+  if (b.dataset.s === 'copy') toast('清書を書式つきでコピーしました');
+  if (b.dataset.s === 'print') toast('印刷・PDFは本物のアプリで開きます(試作では省略)');
+});
+function toggleSeisho(on) {
+  // 行と紙の項目に同じ名前を付けておき、移り変わりで行が紙へ収まる
+  $$('.row').slice(0, 60).forEach((r) => { r.querySelector('.text')?.style.setProperty('view-transition-name', on ? `e-${r.dataset.id}` : ''); });
+  $$('.para').slice(0, 30).forEach((p) => p.style.setProperty('view-transition-name', on ? `e-${p.dataset.id}` : ''));
+  withVT(() => { S.seisho = on; $('#seishoBtn').setAttribute('aria-label', on ? '書き口へ戻る' : '清書にする'); renderAll(); if (!on) $$('.row .text').slice(0, 60).forEach((t) => t.style.setProperty('view-transition-name', `e-${t.closest('.row').dataset.id}`)); })
+    .finally(() => { $$('.row .text,.para').forEach((x) => x.style.removeProperty('view-transition-name')); });
+}
+
+/* ====================================================================
+   小物:移り変わり・朱が乾く・受け取り・トースト・余白・ショートカット
+   ==================================================================== */
+window.__vtCalls = 0;
+function withVT(update) {
+  if (!document.startViewTransition || reduce.matches) { update(); return Promise.resolve(); }
+  window.__vtCalls++;
+  const vt = document.startViewTransition(() => { update(); });
+  return vt.finished.catch(() => {});
+}
+function fresh(e) { if (!e) return; requestAnimationFrame(() => { const el = $(`[data-id="${e.id}"]`); if (!el) return; el.classList.add('fresh'); setTimeout(() => el.classList.remove('fresh'), 1800); }); }
+function inView(e) { const el = e && $(`[data-id="${e.id}"]`); if (!el) return false; const r = el.getBoundingClientRect(); return r.top >= 0 && r.bottom <= innerHeight; }
+let receiptTimer = 0;
+function receipt(text, kind, e) {
+  if (!mq.matches) return;
+  const box = $('#receipt'); $('#receiptText').textContent = text;
+  const go = $('#receiptGo');
+  go.onclick = () => { box.classList.remove('on'); if (kind && S.tab !== kind) { S.tab = kind; S.slot = kind; renderAll(); } if (e) scrollToEl(e.id); };
+  go.textContent = kind && S.tab !== kind ? `${KIND_LABEL[kind]}を見る` : '見る';
+  box.classList.add('on'); clearTimeout(receiptTimer); receiptTimer = setTimeout(() => box.classList.remove('on'), 4000);
+}
+function bump(kind) { requestAnimationFrame(() => [$(`#cnt-${kind[0]}`), $(`.tabs [data-c="${kind}"]`)].forEach((c) => { if (!c) return; c.classList.remove('bump'); void c.offsetWidth; c.classList.add('bump'); })); }
+let toastTimer = 0;
+function toast(text, action) {
+  $('.toast')?.remove(); clearTimeout(toastTimer);
+  const el = document.createElement('div'); el.className = 'toast'; el.setAttribute('role', 'status'); el.textContent = text;
+  if (action) { const b = document.createElement('button'); b.type = 'button'; b.textContent = action.label === '直前の移動を戻す' ? '戻す' : action.label; b.setAttribute('aria-label', action.label); b.onclick = () => { el.remove(); action.run(); }; el.appendChild(b); }
+  document.body.appendChild(el); toastTimer = setTimeout(() => el.remove(), action ? 5500 : 2400);
+}
+function openMargin() {
+  if ($('.margin-panel')) { $('.margin-panel').remove(); return; }
+  const p = document.createElement('section'); p.className = 'margin-panel'; p.setAttribute('role', 'dialog'); p.setAttribute('aria-label', '余白');
+  p.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center"><strong>余白</strong><button class="textbtn" type="button" aria-label="余白を閉じる">閉じる</button></div><textarea aria-label="余白に書く" placeholder="まだ整理しなくていいことを、ここへ。">${esc(D.margin || '')}</textarea>`;
+  p.querySelector('button').onclick = () => p.remove();
+  p.querySelector('textarea').oninput = (e) => { D.margin = e.target.value; persist(); };
+  document.body.appendChild(p); p.querySelector('textarea').focus();
+}
+$('#marginBtn').addEventListener('click', openMargin);
+document.addEventListener('keydown', (ev) => { if (ev.altKey && !ev.ctrlKey && ev.key.toLowerCase() === 'q' && !ev.isComposing) { ev.preventDefault(); openMargin(); } });
+function toggleHelp() {
+  if ($('.help')) { $('.help').remove(); return; }
+  const h = document.createElement('div'); h.className = 'help'; h.innerHTML = `<section role="dialog" aria-label="ショートカット"><h2>ショートカット</h2>
+    <p><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>1</kbd>/<kbd>2</kbd>/<kbd>3</kbd> 書き口をアウトライン・段落・参考URLへ</p>
+    <p>書き口(アウトライン):<kbd>Enter</kbd> 次の行 · <kbd>Tab</kbd>/<kbd>Shift</kbd>+<kbd>Tab</kbd> 入れる深さ · <kbd>Shift</kbd>+<kbd>Enter</kbd> 段落へ · 空で<kbd>↑</kbd> 行へ戻る</p>
+    <p>選んだ行:<kbd>Enter</kbd> 直す · <kbd>Tab</kbd> 字下げ · <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>↑↓</kbd> 並べ替え · <kbd>Ctrl</kbd>+<kbd>Enter</kbd> 完了 · <kbd>←→</kbd> 開閉</p>
+    <p>段落:<kbd>Ctrl</kbd>+<kbd>Enter</kbd> 置く · どこでも:URLを貼ると参考URLへ · <kbd>Alt</kbd>+<kbd>Q</kbd> 余白 · <kbd>Ctrl</kbd>+<kbd>/</kbd> この案内</p>
+    <button class="textbtn" type="button">閉じる</button></section>`;
+  h.addEventListener('click', (e) => { if (e.target === h || (e.target instanceof Element && e.target.closest('button'))) h.remove(); });
+  document.body.appendChild(h);
+}
+
+/* 題:新しいメモはかぎ括弧の中から書き始め、Enterで書き口へ */
+const title = $('#title');
+title.value = D.memo.title;
+$('#memoTag').textContent = D.memo.tag ? `#${D.memo.tag}` : '＃タグ';
+title.addEventListener('input', () => { D.memo.title = title.value; persist(); });
+title.addEventListener('keydown', (ev) => { if (ev.isComposing || ev.keyCode === 229) return; if (ev.key === 'Enter') { ev.preventDefault(); S.slot = 'sentence'; S.tab = 'sentence'; resetCaret(); renderAll(); deskText.focus({preventScroll: true}); syncDesk(); } });
+$('.back').addEventListener('click', (ev) => { ev.preventDefault(); toast('メモ一覧へ(試作では省略)'); });
+// 試作の操作:ページを開き直さずに、見本へ戻す・新しいメモにする
+function loadMemo(next) {
+  D.memo = next.memo; D.margin = next.margin; E.splice(0, E.length, ...next.entries);
+  seq = Math.max(0, ...E.map((e) => Number(String(e.id).replace(/\D/g, '')) || 0));
+  Object.assign(S, {slot: 'sentence', tab: 'sentence', sel: null, editing: null, zoom: null, paraAfter: null, paraSel: null, seisho: false});
+  S.collapsed.clear(); clearDesk(); title.value = D.memo.title; $('#memoTag').textContent = D.memo.tag ? `#${D.memo.tag}` : '＃タグ';
+  resetCaret(); persist(); renderAll(); $('.proto').open = false;
+}
+$('#protoReset').addEventListener('click', () => { seq = 0; loadMemo(seed()); });
+$('#protoNew').addEventListener('click', () => { loadMemo(emptyMemo()); requestAnimationFrame(() => { title.focus(); const i = title.value.lastIndexOf('「') + 1; title.setSelectionRange(i, i); }); });
+
+mq.addEventListener('change', () => { closePop(); renderAll(); });
+resetCaret();
+renderAll();
+if (wantsNew || !E.length) {
+  requestAnimationFrame(() => { title.focus(); const i = title.value.lastIndexOf('「') + 1; title.setSelectionRange(i, i); });
+}
+window.__amu = {S, E, D, memoText, bindMap};
+})();
+</script>

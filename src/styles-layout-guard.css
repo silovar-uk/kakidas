@@ -89,17 +89,17 @@
 
 
 @media (max-width: 920px) {
-  /* 二段ヘッダー：長い題を、操作ボタンが踏みつけない。 */
+  /* 1行の帯(48px)：戻る・題+タグ・保存の点・清書・メモの操作。長い題を操作ボタンが踏みつけない。 */
   .editor-header.editor-header--shitate {
     display: grid;
-    grid-template-columns: 40px minmax(0,1fr) 48px 48px;
-    grid-template-rows: minmax(44px,auto) 40px;
+    grid-template-columns: 40px minmax(0,1fr) auto auto 44px;
+    grid-template-rows: 48px;
     align-items: center;
     column-gap: 4px;
     row-gap: 0;
-    height: auto;
-    min-height: 90px;
-    padding: 3px 8px 5px;
+    height: 48px;
+    min-height: 48px;
+    padding: 0 8px;
   }
   .editor-header--shitate .back-link {
     grid-area: 1 / 1;
@@ -109,7 +109,7 @@
     min-width: 40px;
   }
   .editor-header--shitate .editor-header__title {
-    grid-area: 1 / 2 / 2 / 4;
+    grid-area: 1 / 2;
     display: flex;
     overflow: hidden;
     gap: 2px;
@@ -125,30 +125,40 @@
     min-width: 0;
     max-width: 90px;
   }
+  /* 保存の状態は点だけ見せる(wetは朱、dryは罫の強め)。字は視覚的に隠して aria-live に残す。 */
   .editor-header--shitate .save-status {
-    grid-area: 2 / 1 / 3 / 3;
-    justify-self: start;
-    margin-left: 8px;
-    margin-right: 0;
-    min-width: 0;
-    font-size: 12px;
+    grid-area: 1 / 3;
+    position: relative;
+    display: block;
+    width: 7px;
+    height: 7px;
+    margin: 0 4px;
+    padding: 0;
+    overflow: hidden;
+    text-indent: -9999px;
+    white-space: nowrap;
+    color: var(--color-ink-3);
+    background: transparent;
   }
+  .editor-header--shitate .save-status::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    background: var(--color-line-strong);
+  }
+  .editor-header--shitate .save-status[data-state="wet"]::before { background: var(--color-shu); }
   .editor-header--shitate .editor-header__seisho {
-    grid-area: 2 / 3;
-    justify-self: stretch;
-    min-width: 0;
-    padding: 0 2px;
-    min-height: 40px;
-  }
-  .editor-header--shitate .editor-header__margin {
-    grid-area: 2 / 4;
-    justify-self: stretch;
-    min-width: 0;
-    padding: 0 2px;
-    min-height: 40px;
-  }
-  .editor-header--shitate .memo-actions {
     grid-area: 1 / 4;
+    justify-self: stretch;
+    min-width: 0;
+    padding: 0 8px;
+    min-height: 40px;
+  }
+  /* 余白はスマホでは帯に出さず、メモの操作の中から開く。 */
+  .editor-header--shitate .editor-header__margin { display: none; }
+  .editor-header--shitate .memo-actions {
+    grid-area: 1 / 5;
     justify-self: end;
     min-width: 0;
   }
@@ -156,6 +166,10 @@
     width: 40px;
     height: 40px;
   }
+
+  /* スマホは棚がそのまま行き先。置き先の3択は出さず、添える道具は書きかけがあるときだけ出す。 */
+  .entry-composer--desk .entry-composer__destinations { display: none; }
+  .entry-composer--desk[data-draft="false"] .entry-composer__meta-row { display: none; }
 
   .entry-column--sentence .entry-list,
   .entry-column--sentence .outline {
@@ -172,7 +186,7 @@
     gap: 0;
     width: 100%;
     max-width: 100%;
-    padding: 2px 0;
+    padding: 2px 0 2px calc(var(--outline-depth, 0) * 16px);
   }
   .entry-column--sentence .outline__twisty { width: 36px; min-width: 36px; }
   .entry-column--sentence .outline__actions {
@@ -219,20 +233,6 @@
   .entry-composer--desk .entry-composer__meta-row {
     min-width: 0;
     width: 100%;
-  }
-  .entry-composer--desk .entry-composer__destinations {
-    display: grid;
-    grid-template-columns: repeat(3,minmax(0,1fr));
-    justify-self: stretch;
-    width: 100%;
-    max-width: 100%;
-    min-width: 0;
-  }
-  .entry-composer--desk .entry-composer__destinations button {
-    min-width: 0;
-    white-space: nowrap;
-    padding-inline: 2px;
-    text-align: center;
   }
   .entry-composer--desk .entry-composer__meta-row {
     justify-self: stretch;

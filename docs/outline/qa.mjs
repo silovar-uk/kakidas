@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
 import { resolve } from 'node:path';
+import { selectKind, deskIsFor } from '../amu/kinds.mjs';
 const base = process.env.PW_FROM ? pathToFileURL(resolve(process.env.PW_FROM) + '/').href : import.meta.url;
 const { chromium } = createRequire(base)('playwright');
 const url = process.env.BASE_URL || 'http://127.0.0.1:4173/';
@@ -14,7 +15,7 @@ const outline = page => page.locator('.outline__tree');
 const row = (page, text) => outline(page).locator('[role="treeitem"]').filter({ has: page.locator('.outline__content', { hasText: text }) }).first();
 const entries = page => outline(page).locator('[role="treeitem"]');
 async function put(page, content) {
-  await page.getByRole('radio', { name: 'アウトライン', exact: true }).click();
+  await selectKind(page, 'sentence');
   const desk = page.getByRole('textbox', { name: '書く', exact: true });
   await desk.fill(content);
   await desk.press('Enter');
@@ -32,10 +33,11 @@ async function fresh(browser, width = 1366) {
   return { context, page };
 }
 check('P1','3領域の入力先をキーボードで選択できる',async(page)=>{
-  for(const [key,label] of [['Control+Shift+1','アウトライン'],['Control+Shift+2','段落'],['Control+Shift+3','参考URL']]){
+  for(const [key,label,kind] of [['Control+Shift+1','アウトライン','sentence'],['Control+Shift+2','段落','paragraph'],['Control+Shift+3','参考URL','word']]){
     await page.keyboard.press(key);
-    await page.waitForFunction(name=>[...document.querySelectorAll('[role="radio"]')].some(el=>el.getAttribute('aria-label')===name && el.getAttribute('aria-checked')==='true'),label);
-    assert.equal(await page.getByRole('radio',{name:label,exact:true}).getAttribute('aria-checked'),'true',key);
+    // 書き口が使う欄(v0.8.0以降は書き口が運ばれた欄、それ以前は置き先の選択)を確かめる
+    for(let i=0;i<20&&!(await deskIsFor(page,kind));i++)await page.waitForTimeout(100);
+    assert.equal(await deskIsFor(page,kind),true,label+' '+key);
     assert.equal(await page.getByRole('textbox',{name:'書く',exact:true}).evaluate(e=>document.activeElement===e),true,key+' フォーカス');
   }
 });
@@ -48,10 +50,13 @@ check('P1','アウトラインに複数の行を入力できる',async(page)=>{
   assert.deepEqual(await outline(page).locator('.outline__content').allTextContents(),before,'作成順序の再現性');
 });
 check('P1','高密度表示を切り替えられる',async(page)=>{
+  // v0.7.2: 切り替えは列のメニューの「高密度で表示」へ移った(上の帯は無くなった)
+  const toggle=async()=>{await page.getByRole('button',{name:'アウトラインの操作'}).click();await page.getByRole('menuitemcheckbox',{name:'高密度で表示'}).click();};
   assert.equal(await page.locator('.outline--dense').count(),1);
-  await page.getByRole('button',{name:'標準に戻す'}).click();
+  await toggle();
   assert.equal(await page.locator('.outline--normal').count(),1);
-  await page.getByRole('button',{name:'高密度',exact:true}).click();
+  await toggle();
+  assert.equal(await page.locator('.outline--dense').count(),1);
 });
 check('P2','字下げ・字上げは親子関係を保存する',async(page)=>{
   await put(page,'親A');await put(page,'子B');await put(page,'兄弟C');

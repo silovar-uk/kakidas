@@ -14,6 +14,9 @@ export const ENTRY_KINDS = ["word", "sentence", "paragraph"] as const;
 
 export type EntryKind = (typeof ENTRY_KINDS)[number];
 
+/** 画面・コピー・書き出しで揃える欄の順。ENTRY_KINDS は検証などで使うため変えない。 */
+export const ENTRY_KIND_ORDER: EntryKind[] = ["sentence", "paragraph", "word"];
+
 /** 新しい項目を同じ階層の先頭／末尾どちらに置くか。DBには保存しないUI設定。 */
 export type EntryInsertPosition = "top" | "bottom";
 

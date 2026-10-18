@@ -34,6 +34,7 @@ export function MemoActionsMenu(props:Props){
   {ENTRY_SORT_MODES.map(mode=><button key={mode} role="menuitemradio" aria-checked={mode===props.sortMode} onClick={()=>{props.onSort(mode);close()}}>{ENTRY_SORT_MODE_LABEL[mode]}</button>)}
   <p className="memo-actions__caption">表示</p>
   {props.options.map(option=><button role="menuitemcheckbox" key={option.label} aria-checked={option.value} onClick={()=>option.onChange(!option.value)}>{option.label}</button>)}
+  {window.matchMedia('(max-width:920px)').matches?<button role="menuitem" onClick={action(()=>window.dispatchEvent(new Event('kakidas:open-margin')))}>余白を開く</button>:null}
   <button role="menuitem" onClick={action(props.onShortcuts)}>ショートカット</button>
   <p className="memo-actions__caption">整理</p>
   <button role="menuitem" onClick={action(props.onDeleteCompleted)}>完了をまとめて削除</button>

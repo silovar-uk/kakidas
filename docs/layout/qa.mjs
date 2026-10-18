@@ -3,6 +3,7 @@ import {createRequire} from 'node:module';
 import {pathToFileURL} from 'node:url';
 import {mkdirSync} from 'node:fs';
 import {resolve} from 'node:path';
+import {selectKind} from '../amu/kinds.mjs';
 const base=process.env.PW_FROM?pathToFileURL(resolve(process.env.PW_FROM)+'/').href:import.meta.url;
 const {chromium}=createRequire(base)('playwright');
 const URL0=process.env.BASE_URL||'http://127.0.0.1:4173/';
@@ -24,7 +25,7 @@ for(const width of widths){
   await page.getByRole('textbox',{name:'メモのタイトル'}).fill('長いタイトルで操作ボタンが重ならないことを検証する');
   const desk=page.getByRole('textbox',{name:'書く',exact:true});
   for(const [label,value] of [['アウトライン','文字数が長いアウトラインと操作ボタンの重なりを確認する。'.repeat(2)],['アウトライン','二つ目のアウトライン'],['段落','本文の段落を追加する'],['参考URL','https://example.com/path/long-123456789']]){
-   await page.getByRole('radio',{name:label,exact:true}).click();await desk.fill(value);await desk.press('Enter');await page.waitForTimeout(160);
+   await selectKind(page,{'アウトライン':'sentence','段落':'paragraph','参考URL':'word'}[label]);await desk.fill(value);await desk.press('Enter');await page.waitForTimeout(160);
   }
   if(mobile)await page.getByRole('tab',{name:/^アウトライン/}).first().click();
   const m=await page.evaluate(()=>{

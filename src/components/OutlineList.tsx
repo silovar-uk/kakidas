@@ -4,6 +4,8 @@ import type { EntryRow, EntryTreeNode, EntryUpdate } from "../types/memo";
 type OutlineListProps = {
   entries: EntryTreeNode[];
   disabled?: boolean;
+  /** 高密度表示か。切り替えは列のメニュー(EntryColumn)に置く。 */
+  dense: boolean;
   onCreate: (content: string, parentId: string | null, index: number) => Promise<EntryRow>;
   onRelocate: (id: string, parentId: string | null, index: number) => Promise<void>;
   onOpenActions?: (id: string) => void;
@@ -16,20 +18,17 @@ type OutlineListProps = {
 };
 
 type MoveHistory = { id: string; parentId: string | null; index: number };
-const DENSITY_KEY = "kakidas.outline-density.v1";
 
 /** 親子構造はDBの parent_id / sort_order に保存し、このコンポーネントには一時的な開閉・選択だけを置く。 */
-export function OutlineList({ entries, disabled = false, onCreate, onRelocate, onOpenActions, mobileDetailsRequestId, onMobileDetailsHandled, onToggleCompleted, onUpdate, onGrow, renderDetails }: OutlineListProps) {
+export function OutlineList({ entries, disabled = false, dense, onCreate, onRelocate, onOpenActions, mobileDetailsRequestId, onMobileDetailsHandled, onToggleCompleted, onUpdate, onGrow, renderDetails }: OutlineListProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingValue, setEditingValue] = useState("");
-  const [draft, setDraft] = useState<{ afterId: string | null; parentId: string | null; value: string } | null>(null);
+  // 下書きは「見えた場所」に入る。anchorIdは描く場所(その行の直後)、parentId/indexは保存先。
+  const [draft, setDraft] = useState<{ anchorId: string | null; parentId: string | null; index: number | null; value: string } | null>(null);
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
   const [details, setDetails] = useState<Set<string>>(() => new Set());
   const [zoomId, setZoomId] = useState<string | null>(null);
-  const [dense, setDense] = useState(() => {
-    try { return localStorage.getItem(DENSITY_KEY) !== "normal"; } catch { return true; }
-  });
   const [history, setHistory] = useState<MoveHistory | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
@@ -83,14 +82,11 @@ export function OutlineList({ entries, disabled = false, onCreate, onRelocate, o
     onMobileDetailsHandled?.();
   }, [mobileDetailsRequestId, onMobileDetailsHandled]);
   useEffect(() => { if (editingId) editorRef.current?.focus(); }, [editingId]);
-  useEffect(() => { if (draft) draftRef.current?.focus(); }, [draft?.afterId, draft?.parentId]);
+  useEffect(() => { if (draft) draftRef.current?.focus(); }, [draft?.anchorId, draft?.parentId]);
   useEffect(() => {
     if (!selectedId || editingId) return;
     document.querySelector<HTMLElement>(`[data-outline-id="${CSS.escape(selectedId)}"]`)?.focus({ preventScroll: true });
   }, [selectedId, editingId, visible]);
-  useEffect(() => {
-    try { localStorage.setItem(DENSITY_KEY, dense ? "dense" : "normal"); } catch { /* 端末設定が保存できなくても操作可能 */ }
-  }, [dense]);
 
   const showError = (error: unknown) => setMessage(error instanceof Error ? error.message : "操作を保存できませんでした。");
   const updateText = async (id: string, content: string) => {
@@ -108,8 +104,7 @@ export function OutlineList({ entries, disabled = false, onCreate, onRelocate, o
     if (!draft || savingRef.current || !draft.value.trim()) return;
     savingRef.current = true;
     try {
-      const siblings = childrenOf(draft.parentId);
-      const index = draft.afterId ? Math.max(0, siblings.findIndex((entry) => entry.id === draft.afterId) + 1) : siblings.length;
+      const index = draft.index ?? childrenOf(draft.parentId).length;
       const row = await onCreate(draft.value.trim(), draft.parentId, index);
       setDraft(null); setSelectedId(row.id); setMessage("");
     } catch (error) { showError(error); }
@@ -155,7 +150,16 @@ export function OutlineList({ entries, disabled = false, onCreate, onRelocate, o
     const next = new Set(previous); if (next.has(id)) next.delete(id); else next.add(id); return next;
   });
   const draftAfter = (row: EntryTreeNode | null) => {
-    setDraft({ afterId: row?.id ?? null, parentId: row?.parent_id ?? zoomId, value: "" });
+    if (!row) {
+      setDraft({ anchorId: null, parentId: zoomId, index: null, value: "" });
+    } else {
+      // 開いている子を持つ行なら、その最初の子の位置へ。それ以外は兄弟の次の位置へ。
+      const opensChildren = row.has_children && !collapsed.has(row.id);
+      const siblings = childrenOf(row.parent_id);
+      setDraft(opensChildren
+        ? { anchorId: row.id, parentId: row.id, index: 0, value: "" }
+        : { anchorId: row.id, parentId: row.parent_id, index: siblings.findIndex((entry) => entry.id === row.id) + 1, value: "" });
+    }
     setEditingId(null);
   };
 
@@ -201,10 +205,6 @@ export function OutlineList({ entries, disabled = false, onCreate, onRelocate, o
   };
 
   return <div className={`outline ${dense ? "outline--dense" : "outline--normal"}`} aria-label="アウトライン編集">
-    <div className="outline__toolbar">
-      <span className="outline__hint">Enter 編集 · Tab 階層 · Ctrl+Shift+↑↓ 移動</span>
-      <button type="button" onClick={() => setDense((current) => !current)} aria-pressed={dense} title="表示密度を切り替える">{dense ? "標準に戻す" : "高密度"}</button>
-    </div>
     {zoom ? <nav className="outline__breadcrumbs" aria-label="アウトラインのズーム位置">
       <button type="button" onClick={() => setZoomId(null)}>全体</button>
       {breadcrumbs.map((item) => <span key={item.id}> › <button type="button" onClick={() => setZoomId(item.id)}>{item.content}</button></span>)}
@@ -216,7 +216,7 @@ export function OutlineList({ entries, disabled = false, onCreate, onRelocate, o
           data-outline-parent-id={row.parent_id ?? ""}
           data-outline-sort-order={row.sort_order}
           data-entry-id={row.id}
-          className={`outline__item ${selectedId === row.id ? "outline__item--selected" : ""}`}
+          className={`outline__item ${selectedId === row.id ? "outline__item--selected" : ""} ${row.is_completed ? "outline__item--completed" : ""}`}
           role="treeitem"
           aria-level={zoom ? row.depth - zoom.depth : row.depth + 1}
           aria-selected={selectedId === row.id}
@@ -256,13 +256,13 @@ export function OutlineList({ entries, disabled = false, onCreate, onRelocate, o
           </div>
           {renderDetails(row)}
         </div> : null}
-        {draft?.afterId === row.id ? <div className="outline__new" style={{"--outline-depth":row.depth} as CSSProperties}>
+        {draft?.anchorId === row.id ? <div className="outline__new" style={{"--outline-depth":draft.parentId === row.id ? row.depth + 1 : row.depth} as CSSProperties}>
           <span>＋</span><textarea rows={1} ref={draftRef} value={draft.value} placeholder="新しい項目" aria-label="新しいアウトライン項目" onChange={(event) => setDraft({ ...draft, value: event.target.value })}
           onKeyDown={(event) => { if (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229) return; if (event.key === "Escape") {event.preventDefault(); setDraft(null);} else if (event.key === "Enter" && !event.shiftKey) {event.preventDefault(); void commitDraft();} }}/>
           <button type="button" disabled={!draft.value.trim() || busy} onClick={() => void commitDraft()}>追加</button>
         </div> : null}
       </div>)}
-      {draft && !draft.afterId ? <div className="outline__new"><span>＋</span><textarea rows={1} ref={draftRef} value={draft.value} placeholder="新しい項目" aria-label="新しいアウトライン項目" onChange={(event) => setDraft({ ...draft, value: event.target.value })}
+      {draft && !draft.anchorId ?<div className="outline__new"><span>＋</span><textarea rows={1} ref={draftRef} value={draft.value} placeholder="新しい項目" aria-label="新しいアウトライン項目" onChange={(event) => setDraft({ ...draft, value: event.target.value })}
         onKeyDown={(event) => { if (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229) return; if (event.key === "Escape") {event.preventDefault();setDraft(null);} else if (event.key === "Enter" && !event.shiftKey) {event.preventDefault();void commitDraft();} }}/>
         <button type="button" disabled={!draft.value.trim() || busy} onClick={() => void commitDraft()}>追加</button></div> : null}
       {visible.length === 0 && !draft ? <p className="outline__empty">項目がありません。まず一行書いてみよう。</p> : null}

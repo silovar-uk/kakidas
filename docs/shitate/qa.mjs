@@ -15,6 +15,7 @@ import { pathToFileURL, fileURLToPath } from 'node:url';
 import { resolve, dirname } from 'node:path';
 import { readFileSync } from 'node:fs';
 import http from 'node:http';
+import { selectKind, deskIsFor, routedTo } from '../amu/kinds.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const base = process.env.PW_FROM ? pathToFileURL(resolve(process.env.PW_FROM) + '/').href : import.meta.url;
@@ -71,7 +72,7 @@ const deskOf = page => page.getByRole('textbox', { name: '書く', exact: true }
 async function write(page, kind, text, { heading = '' } = {}) {
   const desk = deskOf(page);
   if (await desk.count()) {
-    await page.getByRole('radio', { name: LABEL[kind], exact: true }).click();
+    await selectKind(page, kind);
     if (heading) await page.getByRole('textbox', { name: '段落タイトル', exact: true }).fill(heading);
     await desk.fill(text);
     await desk.press(kind === 'paragraph' ? 'Control+Enter' : 'Enter');
@@ -258,7 +259,7 @@ check('P2', 'P2-1', '書き口はひとつ(各列の入力欄はない)', async 
 check('P2', 'P2-2', 'URLを書くと参考URLに置かれる', async ({ pc }) => {
   const { page } = pc;
   await deskOf(page).fill('https://www.nngroup.com/articles/ten-usability-heuristics/');
-  assert.equal(await page.getByRole('radio', { name: '参考URL', exact: true }).getAttribute('aria-checked'), 'true', '置き先が参考URLにならない');
+  assert.equal(await routedTo(page, 'word'), true, '置き先が参考URLにならない');
   await deskOf(page).press('Enter');
   await page.waitForTimeout(600);
   assert.ok(await rowsOf(page, 'url').filter({ hasText: /nngroup\.com|QAで差し替えたタイトル/ }).count() >= 2, '参考URLに置かれていない');
@@ -270,7 +271,7 @@ check('P2', 'P2-3', 'Shift+Enterで段落へ育ち、Ctrl+Enterで段落に置�
   await page.keyboard.type('育つ一行目');
   await page.keyboard.press('Shift+Enter');
   await page.keyboard.type('二行目');
-  assert.equal(await page.getByRole('radio', { name: '段落', exact: true }).getAttribute('aria-checked'), 'true', '置き先が段落にならない');
+  assert.equal(await routedTo(page, 'paragraph'), true, '置き先が段落にならない');
   assert.ok(await page.getByRole('textbox', { name: '段落タイトル', exact: true }).isVisible(), '段落タイトルの欄が出ない');
   await page.keyboard.press('Control+Enter');
   await page.waitForTimeout(600);
@@ -279,7 +280,9 @@ check('P2', 'P2-3', 'Shift+Enterで段落へ育ち、Ctrl+Enterで段落に置�
 check('P2', 'P2-4', 'ふつうに書いてEnterなら文に置かれる', async ({ pc }) => {
   const { page } = pc;
   await deskOf(page).fill('ふつうの一文');
-  assert.equal(await page.getByRole('radio', { name: 'アウトライン', exact: true }).getAttribute('aria-checked'), 'true', '置き先が文ではない');
+  await selectKind(page, 'sentence');
+  await deskOf(page).fill('ふつうの一文');
+  assert.equal(await routedTo(page, 'sentence'), true, '置き先が文ではない');
   await deskOf(page).press('Enter');
   await page.waitForTimeout(600);
   assert.equal(await rowWith(page, 'sentence', 'ふつうの一文').count(), 1, '文に置かれていない');
@@ -291,8 +294,9 @@ check('P2', 'P2-5', 'Ctrl+Shift+1/2/3で入力先を選べる', async ({ pc }) =
   for (const [key, name] of [['Control+Shift+3', '参考URL'], ['Control+Shift+2', '段落'], ['Control+Shift+1', 'アウトライン']]) {
     await page.keyboard.press(key);
     console.log('P2キー', key, await page.evaluate(() => window.__keytrace));
-    await page.waitForFunction(name => [...document.querySelectorAll('[role="radio"]')].some(el => el.getAttribute('aria-label') === name && el.getAttribute('aria-checked') === 'true'), name, {timeout:1500});
-    assert.equal(await page.getByRole('radio', { name, exact: true }).getAttribute('aria-checked'), 'true', `${key}で${name}にならない`);
+    const kind = { '参考URL': 'word', '段落': 'paragraph', 'アウトライン': 'sentence' }[name];
+    for (let i = 0; i < 15 && !(await deskIsFor(page, kind)); i++) await page.waitForTimeout(100);
+    assert.equal(await deskIsFor(page, kind), true, `${key}で${name}にならない`);
   }
 });
 check('P2', 'P2-6', `列見出しに見える操作は${LIMIT.headerControls}個まで、設定は「…の操作」にまとまる`, async ({ pc }) => {
@@ -332,16 +336,8 @@ check('P2', 'P2-11', `スマホで書き口は${LIMIT.seDeskTop}px、最初の�
   assert.ok(d <= LIMIT.seDeskTop, `書き口が${d}px`);
   assert.ok(r <= LIMIT.seFirstEntryTop, `最初の項目が${r}px`);
 });
-check('P2', 'P2-12', 'スマホで置くと、置いた棚のタブへ移る', async ({ se }) => {
-  const { page } = se;
-  await page.getByRole('tab', { name: /^アウトライン/ }).first().click();
-  await deskOf(page).fill('スマホから段落へ');
-  await page.getByRole('radio', { name: '段落', exact: true }).click();
-  await page.getByRole('button', { name: '置く', exact: true }).click();
-  await page.waitForTimeout(700);
-  assert.equal(await page.getByRole('tab', { name: /^段落/ }).first().getAttribute('aria-selected'), 'true', '段落のタブへ移らない');
-  assert.equal(await rowWith(page, 'paragraph', 'スマホから段落へ').count(), 1, '段落に置かれていない');
-});
+// P2-12「スマホで置くと、置いた棚のタブへ移る」は、連れて行かず知らせる動きへ変えたため(計画のD4)、
+// docs/amu/qa.mjs の P1-8 で確かめる。
 check('P2', 'P2-13', '前の段落の下書きを、書き口が拾う', async ({ pc }) => {
   const { page } = pc;
   const memoId = decodeURIComponent(new URL(page.url()).pathname.split('/').pop());
@@ -357,7 +353,7 @@ check('P2', 'P2-13', '前の段落の下書きを、書き口が拾う', async (
   await page.reload({ waitUntil: 'domcontentloaded' });
   await page.waitForTimeout(1200);
   assert.equal(await deskOf(page).inputValue(), '前に書きかけた段落', '書き口に前の下書きが出ない');
-  assert.equal(await page.getByRole('radio', { name: '段落', exact: true }).getAttribute('aria-checked'), 'true', '下書きの置き先が段落にならない');
+  assert.equal(await deskIsFor(page, 'paragraph'), true, '下書きの置き先が段落にならない');
 }, 'app');
 check('P2', 'P2-14', '余白は上の帯から開く', async ({ pc }) => {
   const { page } = pc;

@@ -2,7 +2,7 @@ import {
   type EntryKind,
   type EntrySortMode,
   type MemoWithEntries,
-  ENTRY_KINDS,
+  ENTRY_KIND_ORDER,
   ENTRY_KIND_LABEL,
   getEntryTree,
   supportsHierarchy,
@@ -35,7 +35,7 @@ export function formatMemoText(
   const sourceEntries = excludeCompleted
     ? memo.entries.filter((entry) => !entry.is_completed)
     : memo.entries;
-  const kinds = onlyKind ? [onlyKind] : ENTRY_KINDS;
+  const kinds = onlyKind ? [onlyKind] : ENTRY_KIND_ORDER;
   const parts = [`# ${memo.title}`];
 
   for (const kind of kinds) {
