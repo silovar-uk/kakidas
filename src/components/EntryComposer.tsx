@@ -79,6 +79,8 @@ type EntryComposerProps = {
   caretDescription?: string;
   /** 書きかけがあるかどうかが変わったときに呼ぶ(スマホの「ここに入ります」の灯りに使う)。 */
   onDraftChange?: (hasDraft: boolean) => void;
+  /** 置く先(欄)が変わったときに呼ぶ。URLだけを書くと、いる欄に関わらず参考URLになる。 */
+  onRouteChange?: (kind: EntryKind) => void;
   onPlaced?: (kind: EntryKind) => void;
   /** 参考URLの重複判定に使う、このメモ内の既存URL。 */
   existingReferenceUrls?: string[];
@@ -151,6 +153,7 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
       showDepthButtons = false,
       caretDescription,
       onDraftChange,
+      onRouteChange,
       onPlaced,
       disabled = false,
       tagSuggestions,
@@ -208,6 +211,9 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
     useEffect(() => {
       onDraftChange?.(hasDraft);
     }, [hasDraft]); // eslint-disable-line react-hooks/exhaustive-deps
+    useEffect(() => {
+      if (isDesk) onRouteChange?.(kind);
+    }, [isDesk, kind]); // eslint-disable-line react-hooks/exhaustive-deps
     const existingReferenceUrlKeys = useMemo(
       () =>
         new Set(

@@ -40,10 +40,7 @@ jobs:
             sleep 1
           done
           status=0
-          # amuは作った段階の項目だけを流す(P2のPRではP1・P2。段階が進むたびに広げる)
-          if [ "${{ matrix.phase }}" = P1 ] || [ "${{ matrix.phase }}" = P2 ]; then
-            QA_TARGET=app QA_PHASES=${{ matrix.phase }} BASE_URL=http://127.0.0.1:4173/ node docs/amu/qa.mjs || status=1
-          fi
+          QA_TARGET=app QA_PHASES=${{ matrix.phase }} BASE_URL=http://127.0.0.1:4173/ node docs/amu/qa.mjs || status=1
           QA_PHASES=${{ matrix.phase }} BASE_URL=http://127.0.0.1:4173/ node docs/outline/qa.mjs || status=1
           QA_TARGET=app QA_PHASES=${{ matrix.phase }} BASE_URL=http://127.0.0.1:4173/ node docs/shitate/qa.mjs || status=1
           QA_PHASES=${{ matrix.phase }} BASE_URL=http://127.0.0.1:4173/ node docs/togu/qa.mjs || status=1
@@ -143,8 +140,7 @@ jobs:
           done
           echo "::error::対象コミットのVercel本番反映が確認できない"
           exit 1
-      - name: 本番amu受け入れ確認(作った段階の項目)
-        if: matrix.phase == 'P1' || matrix.phase == 'P2'
+      - name: 本番amu受け入れ確認(35項目)
         timeout-minutes: 15
         env:
           QA_TARGET: app

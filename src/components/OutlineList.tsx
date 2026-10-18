@@ -10,7 +10,7 @@ import {
   useState,
 } from "react";
 import { UndoToast } from "./UndoToast";
-import type { EntryTreeNode, EntryUpdate } from "../types/memo";
+import type { EntryRow, EntryTreeNode, EntryUpdate } from "../types/memo";
 
 /** 「次の一行」(書き口が入る場所)。parentId=null は範囲(全体か集中中の枝)の一番上の階層。 */
 type Caret = { parentId: string | null; index: number };
@@ -54,6 +54,12 @@ type OutlineListProps = {
   onUpdate: (id: string, patch: EntryUpdate) => Promise<unknown>;
   /** 書き口(置き場所)。いる欄では運ばれてきた書き口が、いない欄では入口が入る。 */
   deskNode?: ReactNode;
+  /** 行に結ばれた段落(見出しが同じ文)。結ばれていれば「¶」を見せる。 */
+  paragraphsByRowId?: Map<string, EntryRow[]>;
+  /** 結び目を灯している行(1.6秒)。 */
+  lensIds?: Set<string>;
+  /** 「段落にする」(結ばれていれば「段落を開く」)。 */
+  onGrowRow?: (rowId: string) => void;
   /** スマホで、書きかけがあるとき「ここに入ります」を灯す。 */
   ghostOn?: boolean;
   /** 次の一行の入る場所の説明が変わったとき(書き口の読み上げに使う)。 */
@@ -79,6 +85,9 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
   onToggleCompleted,
   onUpdate,
   deskNode,
+  paragraphsByRowId,
+  lensIds,
+  onGrowRow,
   ghostOn = false,
   onCaretDescribed,
   onRowSelected,
@@ -421,13 +430,14 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
 
   const rowElement = (row: EntryTreeNode) => {
     const isSelected = selectedId === row.id;
+    const isBound = (paragraphsByRowId?.get(row.id)?.length ?? 0) > 0;
     return <div key={row.id} className="outline__item-wrap">
       <div
         data-outline-id={row.id}
         data-outline-parent-id={row.parent_id ?? ""}
         data-outline-sort-order={row.sort_order}
         data-entry-id={row.id}
-        className={`outline__item ${isSelected ? "outline__item--selected" : ""} ${row.is_completed ? "outline__item--completed" : ""}`}
+        className={`outline__item ${isSelected ? "outline__item--selected" : ""} ${row.is_completed ? "outline__item--completed" : ""} ${lensIds?.has(row.id) ? "outline__item--lens" : ""}`}
         role="treeitem"
         aria-level={zoom ? row.depth - zoom.depth : row.depth + 1}
         aria-selected={isSelected}
@@ -454,12 +464,14 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
             }}
             onDoubleClick={() => startEdit(row)} title="ダブルクリックで編集 / Enterで編集">{row.content}</span>}
         <span className="outline__marks">
+          {isBound ? <button type="button" className="outline__mark outline__mark--para" aria-label="段落を開く" title="この行の段落へ" onClick={() => onGrowRow?.(row.id)}>¶</button> : null}
           {row.has_children && collapsed.has(row.id) ? <span className="outline__child-count">{row.child_count}</span> : null}
           {row.link_url.trim() ? <a className="outline__mark outline__mark--link" href={row.link_url} target="_blank" rel="noreferrer" aria-label="リンクを開く" title={row.link_url}>↗</a> : null}
           {row.note.trim() ? <span className="outline__mark outline__mark--note" title={row.note} aria-label="気持ち・備考あり">✎</span> : null}
           {row.tag ? <span className="outline__chip">#{row.tag}</span> : null}
         </span>
         <div className="outline__actions">
+          {onGrowRow ? <button type="button" className="outline__grow-action" title={isBound ? "この行の段落へ" : "段落にする(この行を見出しに)"} aria-label={isBound ? "段落を開く" : "段落にする"} onClick={() => onGrowRow(row.id)}>¶</button> : null}
           <button type="button" className="outline__zoom-action" title="この枝に集中" aria-label="この枝に集中" onClick={() => zoomTo(row.id)}>⌕</button>
           <button type="button" className="outline__details-action" title="詳細と操作" aria-label="項目の詳細" onClick={(event) => onOpenDetails(row.id, event.currentTarget)}>⋯</button>
           {onOpenActions ? <button type="button" className="outline__mobile-actions" aria-label="この項目の操作" onClick={() => onOpenActions(row.id)}>⋯</button> : null}

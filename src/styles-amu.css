@@ -271,7 +271,39 @@ a.outline__mark:hover { background: var(--color-shu-wash); color: var(--color-sh
   /* 列の見出しは、棚が名前と数を持つのでスマホでは出さない(列の操作は棚の下の一覧で) */
 }
 
+/* --------------------------------------------------------------------------
+   8. 結び目(段落の見出し=アウトラインの行の文)・引用・清書の編み込み
+   -------------------------------------------------------------------------- */
+.outline__mark--para { color: var(--color-shu-ink); font-size: 13px; }
+.outline__grow-action { display: grid; place-items: center; min-width: 23px; height: 26px; padding: 0; border: 0; background: transparent; color: var(--color-ink-3); cursor: pointer; font-size: 14px; }
+@media (max-width: 920px) { .outline__grow-action { display: none; } }
+.entry-item__heading-row { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
+.entry-item__heading-row > .entry-item__heading { min-width: 0; }
+.entry-item__heading--click { cursor: pointer; }
+.entry-item__bind, .entry-item__cite {
+  flex: 0 0 auto; padding: 0 4px; border: 0; border-radius: 4px; background: none;
+  color: var(--color-shu-ink); font: 400 var(--text-xs)/18px var(--font-sans); white-space: nowrap;
+}
+.entry-item__bind:hover, .entry-item__cite:hover { background: var(--color-shu-wash); }
+.entry-item__cite { margin-left: auto; }
+.entry-list__route-note {
+  margin: 0 var(--pad) var(--s-2); padding: 6px 8px; border-radius: var(--radius-s);
+  background: var(--color-shu-wash); color: var(--color-shu-ink);
+  font: 400 var(--text-xs)/1.4 var(--font-sans);
+  animation: amu-pulse 1.2s var(--ease) infinite alternate;
+}
+.seisho__list li.seisho__knit::before { content: none; }
+.seisho__knit { margin: 2px 0 12px; text-indent: 1em; line-height: 2; white-space: pre-wrap; color: var(--color-ink); }
+
+/* 清書の切り替え・「段落にする」・「アウトラインに引く」の移り変わり(amu-vt を付けている間だけ) */
+:root.amu-vt::view-transition-group(*) { animation-duration: var(--dur-3); animation-timing-function: var(--ease); }
+
+/* PCの「置く」は、書きかけがあるときだけ出す(Enterで置ける)。スマホは、いつも出す */
+@media (min-width: 921px) {
+  .desk-host .entry-composer--desk[data-draft="false"] .entry-composer__submit { display: none; }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .outline__caret, .outline__ghost { transition: none; animation: none; }
+  .outline__caret, .outline__ghost, .entry-list__route-note { transition: none; animation: none; }
 }
 }

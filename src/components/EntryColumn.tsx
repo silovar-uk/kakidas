@@ -1,6 +1,7 @@
 import { OutlineList, type OutlineHandle } from "./OutlineList";
 import { EntryInspector, type EntryActions, type RowMove, type RowMoveState } from "./EntryInspector";
 import { EntryMetaCard, type EntryMetaKind } from "./EntryMetaCard";
+import type { OutlineBindings } from "../lib/outlineBinding";
 import { fetchReferenceTitle } from "../lib/referenceTitle";
 import { MoreIcon, CopyIcon } from "./icons";
 import { type FormEvent, type ReactNode, type RefObject, useEffect, useMemo, useRef, useState } from "react";
@@ -86,6 +87,23 @@ type EntryColumnProps = {
   onSelectParagraph?: (entryId: string) => void;
   /** 並びが手動のときだけ、段落を上・下へ移せる。 */
   manualOrder?: boolean;
+  /** 結び目(段落の見出し=アウトラインの行の文)。行の「¶」・段落の「↖ 2.2」に使う。 */
+  bindings?: OutlineBindings;
+  /** アウトラインの行の番号(段落の「↖ 2.2」に見せる)。 */
+  rowNumberById?: Map<string, string>;
+  /** 結び目を灯している項目(1.6秒)。 */
+  lensIds?: Set<string>;
+  /** 行の「段落にする」(結ばれていれば「段落を開く」)。 */
+  onGrowRow?: (rowId: string) => void;
+  /** 段落の「↖ 2.2」。結ばれた行へ飛ぶ。 */
+  onJumpToRow?: (rowId: string) => void;
+  /** 参考URLの「アウトラインに引く」。 */
+  onPullToOutline?: (entryId: string) => void;
+  /** 参考URLごとの、アウトラインで引用している行。 */
+  citationRowIds?: Map<string, string[]>;
+  onJumpToCitation?: (entryId: string) => void;
+  /** 書き口の行き先が参考URLで、書き口が参考URLの欄にいないとき、入口の下に灯りを出す。 */
+  routeToWord?: boolean;
   onCreate: (
     kind: EntryKind,
     content: string,
@@ -170,6 +188,15 @@ export function EntryColumn({
   paragraphAfterId = null,
   onSelectParagraph,
   manualOrder = false,
+  bindings,
+  rowNumberById,
+  lensIds,
+  onGrowRow,
+  onJumpToRow,
+  onPullToOutline,
+  citationRowIds,
+  onJumpToCitation,
+  routeToWord = false,
   onCreate,
   onUpdate,
   onDelete,
@@ -746,6 +773,12 @@ export function EntryColumn({
     void onRelocateOutline(entryId, null, target);
   };
 
+  const boundRowOf = (entry: EntryTreeNode) => {
+    if (kind !== "paragraph") return null;
+    const row = bindings?.rowByParagraphId.get(entry.id);
+    return row ? { id: row.id, content: row.content, number: rowNumberById?.get(row.id) ?? "" } : null;
+  };
+
   const renderEntry = (
     entry: EntryTreeNode,
     tagPresentation: EntryTagPresentation = "meta",
@@ -759,6 +792,12 @@ export function EntryColumn({
         kind={kind}
         isMobileActionOpen={mobileActionEntryId === entry.id}
         isSelected={kind === "paragraph" && paragraphAfterId === entry.id}
+        isLens={lensIds?.has(entry.id)}
+        boundRow={boundRowOf(entry)}
+        onJumpToRow={onJumpToRow}
+        onPull={kind === "word" ? onPullToOutline : undefined}
+        citationCount={citationRowIds?.get(entry.id)?.length ?? 0}
+        onJumpToCitation={onJumpToCitation}
         onSelect={kind === "paragraph" ? onSelectParagraph : undefined}
         onMove={kind === "paragraph" && manualOrder ? moveParagraph : undefined}
         canMoveUp={index > 0}
@@ -795,11 +834,10 @@ export function EntryColumn({
     onMoveRow: kind === "sentence" ? (id: string, action: RowMove) => outlineRef?.current?.moveRow(id, action) : undefined,
     moveState: kind === "sentence" ? rowMoveStateOf(entry) : undefined,
     onZoom: kind === "sentence" ? (id: string) => outlineRef?.current?.zoomTo(id) : undefined,
-    // P2は今の「段落に複製」のまま。P3で「段落にする」に置き換える。
-    onGrow: kind === "sentence" ? (id: string) => {
-      const source = entries.find((item) => item.id === id);
-      return source ? onCreate("paragraph", source.content, {}, null, "bottom") : undefined;
-    } : undefined,
+    // 「段落にする」(結ばれていれば「段落を開く」)。見出しに行の文を入れて、段落の書き口を開く。
+    onGrow: kind === "sentence" && onGrowRow ? (id: string) => onGrowRow(id) : undefined,
+    growLabel: (bindings?.paragraphsByRowId.get(entry.id)?.length ?? 0) > 0 ? "段落を開く" : "段落にする",
+    onPull: kind === "word" && onPullToOutline ? (id: string) => onPullToOutline(id) : undefined,
     onCopy: requestCopyEntry,
     onCreateMemoFromEntry: requestCreateMemoFromEntry,
     onMoveToKind: requestMoveToKind,
@@ -1212,13 +1250,21 @@ export function EntryColumn({
             onToggleCompleted={toggleCompleted}
             onUpdate={handleUpdateEntry}
             deskNode={deskNode}
+            paragraphsByRowId={bindings?.paragraphsByRowId}
+            lensIds={lensIds}
+            onGrowRow={onGrowRow}
             ghostOn={ghostOn}
             onCaretDescribed={onCaretDescribed}
             onRowSelected={() => onRowSelected?.()}
             onFocusDesk={() => onFocusDesk?.()} />
         ) : (
           <>
-            {kind === "word" ? <div className="entry-list__desk-slot">{deskNode}</div> : null}
+            {kind === "word" ? (
+              <div className="entry-list__desk-slot">
+                {deskNode}
+                {routeToWord ? <p className="entry-list__route-note">ここに入ります(題名はあとから届きます)</p> : null}
+              </div>
+            ) : null}
             {primaryEntries.length === 0 ? (
               <>
                 {kind === "paragraph" ? <div className="entry-list__desk-slot">{deskNode}</div> : null}

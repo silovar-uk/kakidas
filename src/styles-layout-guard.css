@@ -246,13 +246,15 @@
 /*
  * 通常の「置く」で画面全体を複製した残像が、入力欄やボタンの上に乗るのを防ぐ。
  * 項目固有の動きは残し、root の旧画面と新画面は即座に入れ替える。
+ * 清書の切り替え・「段落にする」・「アウトラインに引く」だけは、始める前に <html> へ amu-vt を付けて、
+ * 名前を付けた要素の動きを戻す(withViewTransition の scoped)。
  */
 @media (prefers-reduced-motion: no-preference) {
   /* named snapshots (入力文字→項目) も古い画面へ拡大しない。朱の行アニメは維持。 */
-  ::view-transition-old(*),
-  ::view-transition-new(*),
-  ::view-transition-old(root),
-  ::view-transition-new(root) {
+  :root:not(.amu-vt)::view-transition-old(*),
+  :root:not(.amu-vt)::view-transition-new(*),
+  :root:not(.amu-vt)::view-transition-old(root),
+  :root:not(.amu-vt)::view-transition-new(root) {
     animation: none !important;
   }
 }
