@@ -1237,6 +1237,7 @@ export function EntryColumn({
             <button type="button" className="entry-column__more" aria-label={`${ENTRY_KIND_LABEL[kind]}の操作`}
               aria-expanded={isHeaderMenuOpen} onClick={() => setIsHeaderMenuOpen(o => !o)}><MoreIcon /></button>
             {isHeaderMenuOpen ? <div className="entry-column__menu" role="menu">
+              {kind === "sentence" ? <button role="menuitemcheckbox" aria-checked={showCompletedOutline} onClick={() => {onToggleShowCompletedOutline?.();setIsHeaderMenuOpen(false)}}>完了済みを表示</button> : null}
               {kind === "sentence" ? <button role="menuitemcheckbox" aria-checked={outlineDense} onClick={() => {setOutlineDense((current) => !current);setIsHeaderMenuOpen(false)}}>高密度で表示</button> : null}
               <button role="menuitemcheckbox" aria-checked={isTagGrouped} onClick={() => {changeDisplayMode(isTagGrouped ? "plain" : "tag_grouped");setIsHeaderMenuOpen(false)}}>タグでまとめる</button>
               {isTagGrouped ? <button role="menuitemcheckbox" aria-checked={isTagOrderLocked} onClick={() => {toggleTagOrderLock();setIsHeaderMenuOpen(false)}}>順番固定</button> : null}
