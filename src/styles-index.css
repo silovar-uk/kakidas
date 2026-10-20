@@ -25,3 +25,6 @@
 
 /* 最終段で各ブレークポイントの重なりを防ぐ（非レイヤーで仕上げの後に評価）。 */
 @import "./styles-layout-guard.css";
+
+/* 可動する書き口に追従した明度の階層。既存の配置・機能には触れない。 */
+@import "./styles-write-focus.css";

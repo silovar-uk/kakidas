@@ -1,0 +1,130 @@
+/*
+ * kakidas v0.8.x UX study | Write-first visual hierarchy.
+ * 役割: 書き口が「光の当たる紙」、その他の欄は読めるまま静かな背景。
+ *
+ * v0.8.1 の可動DeskSlotをそのまま利用し、色だけで入力モードを判別させない。
+ * :has(.desk-host)は書き口の実際の所在に追従する。データ・フォーカス・配置は変更しない。
+ */
+:root {
+  --write-focus-paper: #fffefa;
+  --write-focus-active-surface: #faf9f6;
+  --write-focus-rest-surface: #f6f5f2;
+  --write-focus-rest-ink: #625e57;  /* rest上で約5.9:1 */
+  --write-focus-subtle-ink: #6b675f; /* rest上で5.2:1超 */
+  --write-focus-rest-line: #e8e4dd;
+  --write-focus-edge: #d4c9bb;
+}
+
+/* 面を薄く、文字を読めるまま。書き口がいる欄だけ明度を上げる。 */
+@media (min-width: 921px) {
+  .editor-page:not(.editor-page--seisho) .editor-grid > .entry-column:not(.entry-column--collapsed) {
+    background: var(--write-focus-rest-surface);
+    border-radius: var(--radius-m);
+    box-shadow: inset 0 0 0 1px rgb(61 52 42 / .025);
+  }
+  .editor-page:not(.editor-page--seisho) .editor-grid > .entry-column:has(.desk-host) {
+    background: var(--write-focus-active-surface);
+    box-shadow: inset 0 0 0 1px rgb(61 52 42 / .07);
+  }
+  .editor-page:not(.editor-page--seisho) .editor-grid > .entry-column:not(:has(.desk-host)) .entry-column__header h2 {
+    color: var(--write-focus-rest-ink);
+  }
+  .editor-page:not(.editor-page--seisho) .editor-grid > .entry-column:not(:has(.desk-host)) :is(
+    .outline__content, .entry-item__content-text, .entry-item__heading, .entry-item__link
+  ) {
+    color: var(--write-focus-rest-ink);
+  }
+  .editor-page:not(.editor-page--seisho) .editor-grid > .entry-column:not(:has(.desk-host)) :is(
+    .outline__item:hover .outline__content, .outline__item:focus-within .outline__content,
+    .entry-item:hover .entry-item__content-text, .entry-item:focus-within .entry-item__content-text
+  ) {
+    color: var(--color-ink);
+  }
+  .editor-page:not(.editor-page--seisho) .editor-grid > .entry-column:not(:has(.desk-host)) :is(
+    .desk-slot__open, .entry-column__more, .entry-column__collapse-toggle
+  ) {
+    color: var(--write-focus-subtle-ink);
+  }
+  .editor-page:not(.editor-page--seisho) .editor-grid > .entry-column:not(:has(.desk-host)) :is(
+    .desk-slot__open:hover, .desk-slot__open:focus-visible,
+    .entry-column__more:hover, .entry-column__more:focus-visible
+  ) {
+    color: var(--color-ink);
+  }
+}
+
+.editor-page:not(.editor-page--seisho) .editor-grid .entry-column__header {
+  border-bottom-color: var(--write-focus-rest-line);
+}
+.editor-page:not(.editor-page--seisho) .editor-grid .entry-column:has(.desk-host) .entry-column__header {
+  border-bottom-color: var(--write-focus-edge);
+}
+
+/*
+ * 主役: 書く場所だけは紙として縁取り、無入力時も所在が分かる。
+ * 朱色は全体の装飾でなく、実際にフォーカスしたときの1本の目印に限定。
+ */
+.editor-page:not(.editor-page--seisho) .desk-host .entry-composer--desk {
+  box-sizing: border-box;
+  background: var(--write-focus-paper);
+  border: 0;
+  border-left: 3px solid var(--write-focus-edge);
+  border-radius: var(--radius-s);
+  padding: 6px 9px;
+  box-shadow: 0 3px 16px rgb(45 38 31 / .05);
+}
+.editor-page:not(.editor-page--seisho) .desk-host .entry-composer--desk:focus-within {
+  border-left-color: var(--color-shu);
+  box-shadow: 0 0 0 2px rgb(178 78 41 / .08), 0 4px 16px rgb(45 38 31 / .05);
+}
+.editor-page:not(.editor-page--seisho) .desk-host .entry-composer__desk-fields,
+.editor-page:not(.editor-page--seisho) .desk-host .entry-composer__textarea {
+  background: transparent;
+  color: var(--color-ink);
+}
+.editor-page:not(.editor-page--seisho) .desk-host .entry-composer__textarea::placeholder {
+  color: var(--write-focus-subtle-ink);
+  opacity: 1;
+}
+
+/* スマホは書き口が列の外へ出る。入力欄だけ紙、一覧はうすい背景に。 */
+@media (max-width: 920px) {
+  .editor-page:not(.editor-page--seisho) .editor-mobile-desk {
+    padding-block: 2px 5px;
+    background: var(--write-focus-rest-surface);
+  }
+  .editor-page:not(.editor-page--seisho) .editor-mobile-desk .desk-host .entry-composer--desk {
+    margin: 3px 8px 4px;
+    padding: 6px 8px;
+  }
+  .editor-page:not(.editor-page--seisho) .editor-grid > .entry-column:not(.entry-column--collapsed) {
+    background: var(--write-focus-rest-surface);
+  }
+  .editor-page:not(.editor-page--seisho) .editor-tab:not(.editor-tab--active) {
+    color: var(--write-focus-subtle-ink);
+  }
+}
+
+/* 空状態の案内も読める濃度にする。装飾のみを薄くし、実用情報を薄めない。 */
+.editor-page:not(.editor-page--seisho) .entry-list__empty {
+  color: var(--write-focus-subtle-ink);
+}
+
+/* 選択・完了・警告・エラー・キーボードフォーカスを薄くしない。 */
+.editor-page:not(.editor-page--seisho) :is(.outline__item--selected, .outline__item--lens, .entry-item--lens) {
+  background-color: var(--color-shu-wash);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .editor-page:not(.editor-page--seisho) .entry-column,
+  .editor-page:not(.editor-page--seisho) .desk-host .entry-composer--desk {
+    transition: background-color 140ms ease, box-shadow 140ms ease, border-color 140ms ease;
+  }
+}
+@media print, (forced-colors: active) {
+  .editor-page:not(.editor-page--seisho) .editor-grid,
+  .editor-page:not(.editor-page--seisho) .entry-column,
+  .editor-page:not(.editor-page--seisho) .desk-host .entry-composer--desk {
+    background: transparent;
+    box-shadow: none;
+  }
+}

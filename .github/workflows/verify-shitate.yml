@@ -89,6 +89,17 @@ jobs:
             sleep 1
           done
           QA_SHOTS_DIR=/tmp/kakidas-responsive node docs/layout/qa.mjs
+      - name: 書き口と周辺の明度・操作・文字の可読性を検証
+        timeout-minutes: 8
+        run: |
+          OUT=/tmp/kakidas-write-focus BASE_URL=http://127.0.0.1:4173/ node docs/write-focus/qa.mjs
+      - name: PC・スマホの書き口配色の画面写真を保存
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: kakidas-writing-focus-screenshots
+          path: /tmp/kakidas-write-focus/
+          if-no-files-found: warn
       - name: 幅別の画面写真を保存
         if: always()
         uses: actions/upload-artifact@v4
