@@ -176,8 +176,10 @@ check('P1', 'P1-4', 'スマホでも字下げが見える(子は親より12px以
   assert.ok(c - p >= LIMIT.childShift && g - c >= LIMIT.childShift, `字下げ 親${p} 子${c} 孫${g}`);
   await ctx.close();
 });
-check('P1', 'P1-5', '完了した行が見分けられる(打ち消し線、または未完了と違う文字色)', async ({open}) => {
+check('P1', 'P1-5', '完了を明示的に表示したとき打ち消し線または文字色で識別できる', async ({open}) => {
   const {ctx, page} = await open(PC);
+  // アウトラインの完了済みは初期非表示になった。表示ボタンで復帰してから文字装飾を検証する。
+  await page.getByRole('button',{name:'完了済み 1件を表示'}).click();
   const style = (t) => rowText(row(page, t)).evaluate((e) => { const s = getComputedStyle(e); return {c: s.color, d: s.textDecorationLine}; });
   const done = await style('URLの題名が長いと列が詰まる'), open1 = await style('論点');
   assert.ok(done.d.includes('line-through') || done.c !== open1.c, JSON.stringify({done, open1}));
