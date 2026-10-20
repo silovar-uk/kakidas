@@ -75,6 +75,10 @@ type EntryColumnProps = {
   deskNode?: ReactNode;
   /** アウトラインの欄。次の一行の手(書き口が使う)を、ページへ渡す。 */
   outlineRef?: RefObject<OutlineHandle | null>;
+  /** アウトライナー専用の完了表示。段落・URLの設定とは独立。 */
+  showCompletedOutline?: boolean;
+  completedOutlineCount?: number;
+  onToggleShowCompletedOutline?: () => void;
   /** スマホで、書きかけがあるとき一覧の次の一行に「ここに入ります」を灯す。 */
   ghostOn?: boolean;
   onRowSelected?: () => void;
@@ -181,6 +185,9 @@ export function EntryColumn({
   disabled = false,
   deskNode,
   outlineRef,
+  showCompletedOutline = false,
+  completedOutlineCount = 0,
+  onToggleShowCompletedOutline,
   ghostOn = false,
   onRowSelected,
   onCaretDescribed,
@@ -1230,6 +1237,7 @@ export function EntryColumn({
             <button type="button" className="entry-column__more" aria-label={`${ENTRY_KIND_LABEL[kind]}の操作`}
               aria-expanded={isHeaderMenuOpen} onClick={() => setIsHeaderMenuOpen(o => !o)}><MoreIcon /></button>
             {isHeaderMenuOpen ? <div className="entry-column__menu" role="menu">
+              {kind === "sentence" ? <button role="menuitemcheckbox" aria-checked={showCompletedOutline} onClick={() => {onToggleShowCompletedOutline?.();setIsHeaderMenuOpen(false)}}>完了済みを表示</button> : null}
               {kind === "sentence" ? <button role="menuitemcheckbox" aria-checked={outlineDense} onClick={() => {setOutlineDense((current) => !current);setIsHeaderMenuOpen(false)}}>高密度で表示</button> : null}
               <button role="menuitemcheckbox" aria-checked={isTagGrouped} onClick={() => {changeDisplayMode(isTagGrouped ? "plain" : "tag_grouped");setIsHeaderMenuOpen(false)}}>タグでまとめる</button>
               {isTagGrouped ? <button role="menuitemcheckbox" aria-checked={isTagOrderLocked} onClick={() => {toggleTagOrderLock();setIsHeaderMenuOpen(false)}}>順番固定</button> : null}
@@ -1244,6 +1252,9 @@ export function EntryColumn({
       <div className="entry-list" aria-live="polite">
         {kind === "sentence" && onRelocateOutline ? (
           <OutlineList ref={outlineRef} entries={primaryEntries} disabled={disabled || isDeletingAll} dense={outlineDense}
+            showCompletedOutline={showCompletedOutline}
+            completedOutlineCount={completedOutlineCount}
+            onToggleShowCompletedOutline={onToggleShowCompletedOutline}
             onRelocate={onRelocateOutline}
             onOpenActions={openStructureActions}
             onOpenDetails={openDetails}

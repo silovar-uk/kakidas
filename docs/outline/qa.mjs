@@ -14,6 +14,14 @@ function check(phase, name, fn) { checks.push({ phase, name, fn }); }
 const outline = page => page.locator('.outline__tree');
 const row = (page, text) => outline(page).locator('[role="treeitem"]').filter({ has: page.locator('.outline__content', { hasText: text }) }).first();
 const entries = page => outline(page).locator('[role="treeitem"]');
+async function outlineCompletedMenu(page, { toggle = false } = {}) {
+  await page.getByRole('button',{name:'アウトラインの操作'}).click();
+  const item=page.getByRole('menuitemcheckbox',{name:'完了済みを表示'});
+  const current=await item.getAttribute('aria-checked');
+  if(toggle)await item.click();
+  else await page.getByRole('button',{name:'アウトラインの操作'}).click();
+  return current;
+}
 async function put(page, content) {
   await selectKind(page, 'sentence');
   const desk = page.getByRole('textbox', { name: '書く', exact: true });
@@ -57,6 +65,54 @@ check('P1','高密度表示を切り替えられる',async(page)=>{
   assert.equal(await page.locator('.outline--normal').count(),1);
   await toggle();
   assert.equal(await page.locator('.outline--dense').count(),1);
+});
+check('P1','完了済みは既定で非表示、表示・再非表示・再読込の状態を記憶する',async(page)=>{
+  await put(page,'未完了の行');
+  await put(page,'完了にする行');
+  await row(page,'完了にする行').focus();
+  await page.keyboard.press('Control+Enter');
+  // 完了操作はIndexedDBへの非同期保存。DOMから外れたことを待って検証する。
+  await row(page,'完了にする行').waitFor({state:'detached'});
+  assert.equal(await row(page,'完了にする行').count(),0,'完了行は初期状態では表示されない');
+  assert.equal(await row(page,'未完了の行').count(),1,'未完了の行は残る');
+  assert.equal(await outlineCompletedMenu(page),'false','PCのアウトラインメニューで初期非表示');
+  await outlineCompletedMenu(page,{toggle:true});
+  assert.equal(await row(page,'完了にする行').count(),1,'表示操作で完了行が戻る');
+  await page.reload();
+  assert.equal(await row(page,'完了にする行').count(),1,'表示設定が再読込後も残る');
+  assert.equal(await outlineCompletedMenu(page),'true','表示設定が記憶されている');
+  await outlineCompletedMenu(page,{toggle:true});
+  assert.equal(await row(page,'完了にする行').count(),0,'非表示に戻せる');
+  await page.reload();
+  assert.equal(await row(page,'完了にする行').count(),0,'非表示設定も再読込後に維持する');
+});
+check('P2','完了した親を隠しても未完了の子は消えず、再表示で階層が戻る',async(page)=>{
+  await put(page,'親の作業');
+  await put(page,'子の作業');
+  await row(page,'子の作業').focus();
+  await page.keyboard.press('Tab');
+  await page.waitForFunction(()=>[...document.querySelectorAll('[role="treeitem"][aria-level="2"]')].some(e=>e.textContent.includes('子の作業')));
+  await row(page,'親の作業').focus();
+  await page.keyboard.press('Control+Enter');
+  assert.equal(await outlineCompletedMenu(page),'false');
+  assert.equal(await row(page,'親の作業').count(),0);
+  assert.equal(await row(page,'子の作業').count(),1,'未完了の子は消えない');
+  assert.equal(await row(page,'子の作業').getAttribute('aria-level'),'1','非表示の親から一時的に表示階層を持ち上げる');
+  await outlineCompletedMenu(page,{toggle:true});
+  assert.equal(await row(page,'子の作業').getAttribute('aria-level'),'2','再表示すると元の親子関係を復元');
+  await page.reload();
+  assert.equal(await row(page,'子の作業').getAttribute('aria-level'),'2','実データの親子関係は変えていない');
+});
+check('P3','スマホでも完了済みを表示・非表示できる',async(page)=>{
+  await put(page,'スマホで完了した行');
+  await row(page,'スマホで完了した行').focus();
+  await page.keyboard.press('Control+Enter');
+  await page.getByRole('button',{name:'完了済み 1件を表示'}).click();
+  assert.equal(await row(page,'スマホで完了した行').isVisible(),true);
+  await page.getByRole('button',{name:'完了済み 1件を隠す'}).click();
+  assert.equal(await row(page,'スマホで完了した行').count(),0);
+  const tap=await page.getByRole('button',{name:'完了済み 1件を表示'}).boundingBox();
+  assert.ok(tap && tap.height>=44,'スマホで押しやすい高さ '+tap?.height);
 });
 check('P2','字下げ・字上げは親子関係を保存する',async(page)=>{
   await put(page,'親A');await put(page,'子B');await put(page,'兄弟C');
