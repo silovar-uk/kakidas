@@ -71,6 +71,8 @@ check('P1','完了済みは既定で非表示、表示・再非表示・再読�
   await put(page,'完了にする行');
   await row(page,'完了にする行').focus();
   await page.keyboard.press('Control+Enter');
+  // 完了操作はIndexedDBへの非同期保存。DOMから外れたことを待って検証する。
+  await row(page,'完了にする行').waitFor({state:'detached'});
   assert.equal(await row(page,'完了にする行').count(),0,'完了行は初期状態では表示されない');
   assert.equal(await row(page,'未完了の行').count(),1,'未完了の行は残る');
   assert.equal(await outlineCompletedMenu(page),'false','PCのアウトラインメニューで初期非表示');
