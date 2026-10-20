@@ -9,7 +9,7 @@
   --write-focus-paper: #fffefa;
   --write-focus-active-surface: #faf9f6;
   --write-focus-rest-surface: #f6f5f2;
-  --write-focus-rest-ink: #625e57;  /* rest上で5.9:1超 */
+  --write-focus-rest-ink: #625e57;  /* rest上で約5.9:1 */
   --write-focus-subtle-ink: #6b675f; /* rest上で5.2:1超 */
   --write-focus-rest-line: #e8e4dd;
   --write-focus-edge: #d4c9bb;
@@ -117,7 +117,7 @@
   }
 }
 @media print, (forced-colors: active) {
-  .editor-page:not(.editor-page--seisho) .entry-grid,
+  .editor-page:not(.editor-page--seisho) .editor-grid,
   .editor-page:not(.editor-page--seisho) .entry-column,
   .editor-page:not(.editor-page--seisho) .desk-host .entry-composer--desk {
     background: transparent;
