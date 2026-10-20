@@ -42,6 +42,16 @@
   .outline__new { display:flex; align-items:center; gap:4px; margin:4px 0 4px calc(var(--outline-depth,0) * 15px + 19px); }
   .outline__new > span { color:var(--color-ink-3); }
   .outline__new button { border:0; background:var(--color-shu-wash); border-radius:4px; padding:7px; font-size:12px; color:var(--color-shu-ink); cursor:pointer; }
+  /* 完了済みの表示切替はアウトライン末尾に控えめに置き、本文の操作を邪魔しない。 */
+  .outline__completed-filter { padding: 8px 2px 16px; }
+  .outline__completed-toggle {
+    display: inline-flex; align-items: center; min-height: 36px;
+    border: 0; border-radius: var(--radius-s); background: transparent;
+    padding: 6px 10px; font: 400 13px/1.4 var(--font-sans);
+    color: var(--color-ink-2); cursor: pointer;
+  }
+  .outline__completed-toggle:hover { background: var(--color-hover); color: var(--color-ink); }
+  .outline__completed-toggle:focus-visible { outline: 2px solid var(--color-ink); outline-offset: 2px; }
   .outline__footer { display:flex; gap:14px; padding:12px 2px; }
   .outline__footer button:first-child { color:var(--color-shu-ink); }
   .outline__message { padding:8px; color:var(--color-danger); font-size:12px; }
@@ -64,6 +74,7 @@
     .outline__hint { display:none; }
     .outline__new textarea { min-height:44px; font-size:16px; }
     .outline__structure-actions button { min-height:44px; }
+    .outline__completed-toggle { min-height:44px; }
   }
   /* スマホで別の欄へ置いたときの受け取り。一覧に重ね、一覧を押し下げない(指の下で押す場所がずれない)。 */
   .editor-receipt-anchor { position:relative; height:0; z-index:6; }
