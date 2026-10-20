@@ -94,6 +94,8 @@ function getNavigationKind(state: EditorNavigationState | null): EntryKind {
 const ENTRY_TIMESTAMP_VISIBILITY_STORAGE_KEY = "kakidas.show-entry-timestamps.v2";
 const ENTRY_NUMBER_VISIBILITY_STORAGE_KEY = "kakidas.show-entry-numbers";
 const HIDE_COMPLETED_ENTRIES_STORAGE_KEY = "kakidas.hide-completed-entries";
+/** アウトラインだけの完了表示。初期値はfalseで、端末ごとに保持する。 */
+const SHOW_COMPLETED_OUTLINE_STORAGE_KEY = "kakidas.show-completed-outline.v1";
 const ADD_ENTRIES_AT_BOTTOM_STORAGE_KEY = "kakidas.add-entries-at-bottom";
 const COMPACT_ENTRY_VIEW_STORAGE_KEY = "kakidas.compact-entry-view";
 const COLLAPSED_ENTRY_COLUMNS_STORAGE_KEY = "kakidas.collapsed-entry-columns.v1";
@@ -162,10 +164,19 @@ function readEntryNumberVisibility(): boolean {
   }
 }
 
-/** 完了済みは初期状態では見せる。必要な端末だけ非表示を記憶する。 */
+/** 段落・参考URLの従来の非表示設定。アウトラインは専用設定で制御する。 */
 function readHideCompletedEntries(): boolean {
   try {
     return window.localStorage.getItem(HIDE_COMPLETED_ENTRIES_STORAGE_KEY) === "true";
+  } catch {
+    return false;
+  }
+}
+
+/** アウトライン完了項目は初期状態で非表示。明示的に表示した端末のみ記憶する。 */
+function readShowCompletedOutline(): boolean {
+  try {
+    return window.localStorage.getItem(SHOW_COMPLETED_OUTLINE_STORAGE_KEY) === "true";
   } catch {
     return false;
   }
@@ -360,6 +371,7 @@ export function MemoEditorPage() {
   const [hideCompletedEntries, setHideCompletedEntries] = useState(
     readHideCompletedEntries,
   );
+  const [showCompletedOutline, setShowCompletedOutline] = useState(readShowCompletedOutline);
   const [addEntriesAtBottom, setAddEntriesAtBottom] = useState(
     readAddEntriesAtBottom,
   );
@@ -436,6 +448,14 @@ export function MemoEditorPage() {
       // 表示設定の保存に失敗しても、その場での表示切り替えは維持する。
     }
   }, [hideCompletedEntries]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(SHOW_COMPLETED_OUTLINE_STORAGE_KEY, String(showCompletedOutline));
+    } catch {
+      // ストレージが無効でも現在のメモで切り替えられる。
+    }
+  }, [showCompletedOutline]);
 
   useEffect(() => {
     try {
@@ -954,20 +974,28 @@ export function MemoEditorPage() {
     [memo?.entries],
   );
 
+  const completedOutlineCount = useMemo(
+    () => memo?.entries.filter((entry) => entry.kind === "sentence" && entry.is_completed && entry.deleted_at === null).length ?? 0,
+    [memo?.entries],
+  );
+
   const entriesByKind = useMemo(() => {
     const allEntries = memo?.entries ?? [];
-    // 完了を隠すときは、完了項目を木の計算前に除外する。
-    // そのため未完了の下位項目は、見えない親の下にぶら下がらず安全に表示される。
-    const entries = hideCompletedEntries
+    // アウトラインだけは初期状態で完了を隠す。段落・URLの旧設定とは独立。
+    // 木に変換する前に除外し、完了した親の未完了の子も表示できるようにする。
+    const outlineEntries = showCompletedOutline
+      ? allEntries
+      : allEntries.filter((entry) => !entry.is_completed);
+    const otherEntries = hideCompletedEntries
       ? allEntries.filter((entry) => !entry.is_completed)
       : allEntries;
 
     return {
-      word: getEntryTree(entries, "word", entrySortMode),
-      sentence: getEntryTree(entries, "sentence", entrySortMode),
-      paragraph: getEntryTree(entries, "paragraph", entrySortMode),
+      word: getEntryTree(otherEntries, "word", entrySortMode),
+      sentence: getEntryTree(outlineEntries, "sentence", entrySortMode),
+      paragraph: getEntryTree(otherEntries, "paragraph", entrySortMode),
     };
-  }, [entrySortMode, hideCompletedEntries, memo?.entries]);
+  }, [entrySortMode, hideCompletedEntries, showCompletedOutline, memo?.entries]);
 
   /** 結び目: 段落の見出しが、アウトラインの1行と同じ文なら結ぶ。データは変えず、毎回求める。 */
   const bindings = useMemo(() => getOutlineBindings(memo?.entries ?? []), [memo?.entries]);
@@ -1356,7 +1384,7 @@ export function MemoEditorPage() {
             {label:'項目の日時を表示',value:showEntryTimestamps,onChange:setShowEntryTimestamps},
             {label:'番号を表示',value:showEntryNumbers,onChange:setShowEntryNumbers},
             {label:'本文だけ表示',value:compactEntryView,onChange:setCompactEntryView},
-            {label:'完了を非表示',value:hideCompletedEntries,onChange:setHideCompletedEntries},
+            {label:'段落・参考URLの完了を非表示',value:hideCompletedEntries,onChange:setHideCompletedEntries},
             {label:'参考URLを下に足す',value:addEntriesAtBottom,onChange:setAddEntriesAtBottom},
             {label:'コピーに完了を含める',value:includeCompletedInCopy,onChange:setIncludeCompletedInCopy},
           ]}/>
@@ -1452,6 +1480,9 @@ export function MemoEditorPage() {
                 onActivate={()=>moveDeskTo(kind)} />
             )}
             outlineRef={kind==='sentence'?outlineRef:undefined}
+             showCompletedOutline={showCompletedOutline}
+             completedOutlineCount={completedOutlineCount}
+             onToggleShowCompletedOutline={() => setShowCompletedOutline((current) => !current)}
             ghostOn={isMobile&&kind==='sentence'&&deskDraft}
             onCaretDescribed={kind==='sentence'?setCaretDescription:undefined}
             onRowSelected={()=>{
