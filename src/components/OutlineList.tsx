@@ -45,6 +45,10 @@ type OutlineListProps = {
   disabled?: boolean;
   /** 高密度表示か。切り替えは列のメニュー(EntryColumn)に置く。 */
   dense: boolean;
+  /** アウトライナーの完了済み項目だけを表示するか。既定は非表示。 */
+  showCompletedOutline?: boolean;
+  completedOutlineCount?: number;
+  onToggleShowCompletedOutline?: () => void;
   onRelocate: (id: string, parentId: string | null, index: number) => Promise<void>;
   /** スマホの「この項目の操作」(下からのシート)。 */
   onOpenActions?: (id: string) => void;
@@ -79,6 +83,9 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
   entries,
   disabled = false,
   dense,
+  showCompletedOutline = false,
+  completedOutlineCount = 0,
+  onToggleShowCompletedOutline,
   onRelocate,
   onOpenActions,
   onOpenDetails,
@@ -496,6 +503,20 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
       {rows}
       {visible.length === 0 && !deskNode ? <p className="outline__empty">一行書いて Enter。Tab で字下げ、Shift+Enter で段落へ。</p> : null}
     </div>
+    {completedOutlineCount > 0 && onToggleShowCompletedOutline ? (
+      <div className="outline__completed-filter">
+        <button
+          type="button"
+          className="outline__completed-toggle"
+          aria-pressed={showCompletedOutline}
+          onClick={onToggleShowCompletedOutline}
+        >
+          {showCompletedOutline
+            ? `完了済み ${completedOutlineCount}件を隠す`
+            : `完了済み ${completedOutlineCount}件を表示`}
+        </button>
+      </div>
+    ) : null}
     {message ? <p className="outline__message" role="status">{message} <button type="button" onClick={() => setMessage("")}>閉じる</button></p> : null}
     {moved ? <UndoToast
       kind="sentence"
