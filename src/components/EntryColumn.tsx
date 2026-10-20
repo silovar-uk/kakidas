@@ -75,6 +75,10 @@ type EntryColumnProps = {
   deskNode?: ReactNode;
   /** アウトラインの欄。次の一行の手(書き口が使う)を、ページへ渡す。 */
   outlineRef?: RefObject<OutlineHandle | null>;
+  /** アウトライナー専用の完了表示。段落・URLの設定とは独立。 */
+  showCompletedOutline?: boolean;
+  completedOutlineCount?: number;
+  onToggleShowCompletedOutline?: () => void;
   /** スマホで、書きかけがあるとき一覧の次の一行に「ここに入ります」を灯す。 */
   ghostOn?: boolean;
   onRowSelected?: () => void;
@@ -181,6 +185,9 @@ export function EntryColumn({
   disabled = false,
   deskNode,
   outlineRef,
+  showCompletedOutline = false,
+  completedOutlineCount = 0,
+  onToggleShowCompletedOutline,
   ghostOn = false,
   onRowSelected,
   onCaretDescribed,
@@ -1244,6 +1251,9 @@ export function EntryColumn({
       <div className="entry-list" aria-live="polite">
         {kind === "sentence" && onRelocateOutline ? (
           <OutlineList ref={outlineRef} entries={primaryEntries} disabled={disabled || isDeletingAll} dense={outlineDense}
+            showCompletedOutline={showCompletedOutline}
+            completedOutlineCount={completedOutlineCount}
+            onToggleShowCompletedOutline={onToggleShowCompletedOutline}
             onRelocate={onRelocateOutline}
             onOpenActions={openStructureActions}
             onOpenDetails={openDetails}
