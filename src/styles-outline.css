@@ -52,6 +52,8 @@
   }
   .outline__completed-toggle:hover { background: var(--color-hover); color: var(--color-ink); }
   .outline__completed-toggle:focus-visible { outline: 2px solid var(--color-ink); outline-offset: 2px; }
+  /* PCは既存の列メニューに格納し、視界に常設する操作の数を増やさない。 */
+  @media (min-width: 921px) { .outline__completed-filter { display: none; } }
   .outline__footer { display:flex; gap:14px; padding:12px 2px; }
   .outline__footer button:first-child { color:var(--color-shu-ink); }
   .outline__message { padding:8px; color:var(--color-danger); font-size:12px; }
