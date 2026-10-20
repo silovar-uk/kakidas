@@ -40,8 +40,10 @@ for(const v of tests){
     assert(luminance(evidence.outline.background)>luminance(evidence.paragraph.background),'Active column is not brighter');
     await page.getByRole('button',{name:'段落を書く',exact:true}).first().click();
     await page.locator('.entry-column--paragraph .desk-host .entry-composer--desk').waitFor({state:'visible'});
+    // 明度は140msで変わる。移動の瞬間ではなく遷移後の安定状態を測定する。
+    await page.waitForTimeout(240);
     const moved=await page.evaluate(()=>({active:getComputedStyle(document.querySelector('.entry-column--paragraph')).backgroundColor,other:getComputedStyle(document.querySelector('.entry-column--sentence')).backgroundColor}));
-    assert(luminance(moved.active)>luminance(moved.other),'Light did not follow the moved writing surface');
+    assert(luminance(moved.active)>luminance(moved.other),'Light did not follow the moved writing surface: '+JSON.stringify(moved));
   }else{
     assert(luminance(evidence.desk.background)>luminance(evidence.outline.background),'Mobile writing surface is not brighter than list');
     await page.getByRole('tab',{name:/^段落/}).first().click();
