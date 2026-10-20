@@ -28,7 +28,6 @@
   }
   .editor-page:not(.editor-page--seisho) .editor-grid > .entry-column:not(:has(.desk-host)) .entry-column__header h2 {
     color: var(--write-focus-rest-ink);
-    font-weight: 500;
   }
   .editor-page:not(.editor-page--seisho) .editor-grid > .entry-column:not(:has(.desk-host)) :is(
     .outline__content, .entry-item__content-text, .entry-item__heading, .entry-item__link
@@ -68,7 +67,7 @@
 .editor-page:not(.editor-page--seisho) .desk-host .entry-composer--desk {
   box-sizing: border-box;
   background: var(--write-focus-paper);
-  border: 1px solid var(--write-focus-edge);
+  border: 0;
   border-left: 3px solid var(--write-focus-edge);
   border-radius: var(--radius-s);
   padding: 6px 9px;
