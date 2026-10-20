@@ -10,7 +10,7 @@ const browser=await chromium.launch({headless:true});
 const tests=[{w:375,h:700,mobile:true},{w:768,h:850,mobile:true},{w:921,h:800},{w:1366,h:850}];
 let passed=0,failed=0;
 function luminance(rgb){
-  const vals=(rgb.match(/[\\d.]+/g)||[]).slice(0,3).map(Number);
+  const vals=(rgb.match(/[0-9.]+/g)||[]).slice(0,3).map(Number);
   if(vals.length!==3)throw Error('Unexpected RGB '+rgb);
   const l=vals.map(c=>{const x=c/255;return x<=.04045?x/12.92:((x+.055)/1.055)**2.4});
   return l[0]*.2126+l[1]*.7152+l[2]*.0722;
