@@ -45,6 +45,8 @@ type OutlineListProps = {
   disabled?: boolean;
   /** 高密度表示か。切り替えは列のメニュー(EntryColumn)に置く。 */
   dense: boolean;
+  /** 行頭を階層番号で描く。falseならビュレット。 */
+  numbered?: boolean;
   /** アウトライナーの完了済み項目だけを表示するか。既定は非表示。 */
   showCompletedOutline?: boolean;
   completedOutlineCount?: number;
@@ -83,6 +85,7 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
   entries,
   disabled = false,
   dense,
+  numbered = false,
   showCompletedOutline = false,
   completedOutlineCount = 0,
   onToggleShowCompletedOutline,
@@ -121,6 +124,11 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
   /** 置いたばかりで、一覧にはまだ描かれていない行の位置(Tabが続けて来ても親にできるように)。 */
   const recentRef = useRef(new Map<string, { parentId: string | null; index: number; at: number }>());
   const nodeById = useMemo(() => new Map(entries.map((row) => [row.id, row])), [entries]);
+  /** 表示切替で本文を動かさないよう、どちらのモードでも同じガターを確保する。 */
+  const markerWidth = useMemo(() => {
+    const maxLength = entries.reduce((max, row) => Math.max(max, row.outline_number.length), 0);
+    return `${Math.min(88, Math.max(40, maxLength * 6.5 + 12))}px`;
+  }, [entries]);
   const childrenOf = (parentId: string | null) => entries
     .filter((row) => row.parent_id === parentId)
     .sort((a, b) => a.sort_order - b.sort_order || a.created_at.localeCompare(b.created_at));
@@ -458,6 +466,10 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
           aria-label={collapsed.has(row.id) ? "子を展開" : "子を折りたたむ"}
           onClick={() => toggleCollapsed(row.id)}>{collapsed.has(row.id) ? "▸" : "▾"}</button>
         : <span className="outline__twisty outline__twisty--empty" aria-hidden="true">·</span>}
+        <span className={`outline__marker ${numbered ? "outline__marker--number" : "outline__marker--bullet"}`}
+          aria-hidden={!numbered} title={numbered ? row.outline_number : undefined}>
+          {numbered ? row.outline_number : "•"}
+        </span>
         {editingId === row.id ? <textarea ref={editorRef} className="outline__edit" rows={1} value={editingValue}
           aria-label="アウトラインの本文を編集" onChange={(event) => setEditingValue(event.target.value)}
           onKeyDown={(event) => onEditorKeyDown(event, row)}
@@ -494,7 +506,9 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
   });
   if (caretNode && spot.at >= visible.length) rows.push(caretNode);
 
-  return <div className={`outline ${dense ? "outline--dense" : "outline--normal"}`} aria-label="アウトライン編集">
+  return <div className={`outline ${dense ? "outline--dense" : "outline--normal"}`}
+    style={{ "--outline-marker-width": markerWidth } as CSSProperties}
+    aria-label="アウトライン編集">
     {zoom ? <nav className="outline__breadcrumbs" aria-label="アウトラインのズーム位置">
       <button type="button" onClick={() => zoomTo(null)}>全体</button>
       {breadcrumbs.map((item) => <span key={item.id}> › <button type="button" onClick={() => zoomTo(item.id)}>{item.content}</button></span>)}
