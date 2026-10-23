@@ -59,6 +59,9 @@ type EntryColumnProps = {
   showCreatedAt: boolean;
   /** 振り番を画面に含めるか。 */
   showEntryNumbers: boolean;
+  /** アウトラインのみの番号/ビュレット表示。 */
+  outlineNumbered?: boolean;
+  onOutlineNumberedChange?: (numbered: boolean) => void;
   /** 本文だけを密に眺める簡易表示か。 */
   compactView?: boolean;
   /** 現在のメモで使われている項目タグ。候補表示だけに使う。 */
@@ -179,6 +182,8 @@ export function EntryColumn({
   onToggleCollapsed,
   showCreatedAt,
   showEntryNumbers,
+  outlineNumbered = false,
+  onOutlineNumberedChange,
   compactView = false,
   tagSuggestions,
   addAtBottom = false,
@@ -811,7 +816,7 @@ export function EntryColumn({
         canMoveDown={index >= 0 && index < primaryEntries.length - 1}
         onOpenDetails={openDetails}
         showCreatedAt={showCreatedAt}
-        showEntryNumbers={showEntryNumbers}
+        showEntryNumbers={kind === "sentence" ? outlineNumbered : showEntryNumbers}
         displayNumber={displayNumber}
         compactView={compactView}
         tagPresentation={tagPresentation}
@@ -1226,6 +1231,14 @@ export function EntryColumn({
         </div>
 
         <div className="entry-column__header-actions">
+          {kind === "sentence" && onOutlineNumberedChange ? (
+            <div className="outline-marker-switch" role="group" aria-label="アウトラインの行頭表示">
+              <button type="button" aria-label="ビュレットで表示" aria-pressed={!outlineNumbered}
+                title="ビュレットで表示" onClick={() => onOutlineNumberedChange(false)}>•</button>
+              <button type="button" aria-label="階層番号で表示" aria-pressed={outlineNumbered}
+                title="階層番号で表示" onClick={() => onOutlineNumberedChange(true)}>1.</button>
+            </div>
+          ) : null}
           <span
             className="entry-column__count"
             aria-label={`未完了の${ENTRY_KIND_LABEL[kind]} ${openEntries.length}件`}
@@ -1251,7 +1264,7 @@ export function EntryColumn({
 
       <div className="entry-list" aria-live="polite">
         {kind === "sentence" && onRelocateOutline ? (
-          <OutlineList ref={outlineRef} entries={primaryEntries} disabled={disabled || isDeletingAll} dense={outlineDense}
+          <OutlineList ref={outlineRef} entries={primaryEntries} disabled={disabled || isDeletingAll} dense={outlineDense} numbered={outlineNumbered}
             showCompletedOutline={showCompletedOutline}
             completedOutlineCount={completedOutlineCount}
             onToggleShowCompletedOutline={onToggleShowCompletedOutline}
@@ -1336,7 +1349,7 @@ export function EntryColumn({
         <MobileEntryActionSheet
           entry={mobileActionEntry}
           kind={kind}
-          showEntryNumbers={showEntryNumbers}
+          showEntryNumbers={kind === "sentence" ? outlineNumbered : showEntryNumbers}
           displayNumber={
             mobileActionEntry ? getEntryDisplayNumber(mobileActionEntry) : undefined
           }
@@ -1360,7 +1373,7 @@ export function EntryColumn({
           entry={inspectorEntry}
           kind={kind}
           anchor={inspector.anchor}
-          showEntryNumbers={showEntryNumbers}
+          showEntryNumbers={kind === "sentence" ? outlineNumbered : showEntryNumbers}
           displayNumber={getEntryDisplayNumber(inspectorEntry)}
           disabled={disabled || isDeletingAll}
           tagSuggestions={tagSuggestions}

@@ -11,6 +11,8 @@ import {
 type MemoTextOptions = {
   /** 振り番を出力へ含めるか。 */
   includeEntryNumbers?: boolean;
+  /** アウトライン専用の番号切替。未指定時は従来設定を使う。 */
+  includeOutlineNumbers?: boolean;
   /** 完了済みの項目を出力から除外するか。 */
   excludeCompleted?: boolean;
   /** 特定の区分だけを出力するか。 */
@@ -27,6 +29,7 @@ export function formatMemoText(
   memo: MemoWithEntries,
   {
     includeEntryNumbers = false,
+    includeOutlineNumbers = includeEntryNumbers,
     excludeCompleted = false,
     onlyKind,
     entrySortMode = "created_desc",
@@ -51,7 +54,7 @@ export function formatMemoText(
       const indentation = supportsHierarchy(kind)
         ? "  ".repeat(entry.depth)
         : "";
-      const prefix = includeEntryNumbers
+      const prefix = (kind === "sentence" ? includeOutlineNumbers : includeEntryNumbers)
         ? `${entry.outline_number} `
         : kind === "paragraph"
           ? ""
