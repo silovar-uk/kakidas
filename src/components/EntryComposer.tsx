@@ -1047,7 +1047,7 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
           </button>
         </div>
 
-        {isDesk && slot === "sentence" && Boolean(value.trim()) && onConvertToParagraph ? (
+        {isDesk && slot === "sentence" && Boolean(value.trim() || headingValue.trim()) && onConvertToParagraph ? (
           <div className="entry-composer__route entry-composer__route--convert">
             <button type="button" className="entry-composer__convert" onClick={onConvertToParagraph}>
               段落にする <span aria-hidden="true">↗</span>
