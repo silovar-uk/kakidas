@@ -39,6 +39,8 @@ export type OutlineHandle = {
   zoomTo(rowId: string | null): void;
   /** 保存済みの直前の本文編集・構造移動を戻す。 */
   undoLast(): void;
+  /** 詳細画面から保存した本文編集も同じ履歴へ追加する。 */
+  recordExternalEdit(id: string, previous: string): void;
 };
 
 type OutlineListProps = {
@@ -315,6 +317,7 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
     },
     zoomTo: (rowId: string | null) => zoomTo(rowId),
     undoLast: () => { void undoLast(); },
+    recordExternalEdit: (id: string, previous: string) => recordUndo({ type: "edit", id, previous }),
     revealRow: (rowId: string) => {
       const row = nodeById.get(rowId);
       if (!row) return;
