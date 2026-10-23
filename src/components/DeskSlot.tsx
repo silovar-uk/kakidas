@@ -21,7 +21,9 @@ export function DeskSlot({ active, host, label, text, onActivate, className }: D
   useLayoutEffect(() => {
     const el = ref.current;
     if (!active || !el || host.parentElement === el) return;
-    el.appendChild(host);
+    // スマホでは同じ表示スロットを3つの独立した書き口が交代で使う。
+    // 前のhostは破棄せずDOMから外すだけ。入力値・選択範囲はそのまま保持する。
+    el.replaceChildren(host);
     restoreDeskFocus(host);
   });
 
