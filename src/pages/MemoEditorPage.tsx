@@ -5,7 +5,7 @@ import {EntryComposer,type EntryComposerHandle} from "../components/EntryCompose
 import {DeskSlot} from "../components/DeskSlot";
 import { buildEntryDraftId, draftRepository, hasMeaningfulEntryDraft } from "../repositories/draftRepository";
 import {type OutlineHandle} from "../components/OutlineList";
-import {releaseDeskFocus,restoreDeskFocus,trackDeskFocus} from "../lib/deskFocus";
+import {releaseDeskFocus,restoreDeskFocus,trackDeskFocusGroup} from "../lib/deskFocus";
 import {createPortal,flushSync} from "react-dom";
 import {getOutlineBindings} from "../lib/outlineBinding";
 import {MemoActionsMenu} from "../components/MemoActionsMenu";
@@ -370,10 +370,7 @@ export function MemoEditorPage() {
   const [caretDescription, setCaretDescription] = useState("");
   const effectiveSlot: EntryKind = isMobile ? activeKind : deskSlot;
   const activeDesk = () => deskRefs.current[effectiveSlot];
-  useEffect(() => {
-    const cleanup = Object.values(deskHosts).map((host) => trackDeskFocus(host));
-    return () => cleanup.forEach((stop) => stop());
-  }, [deskHosts]);
+  useEffect(() => trackDeskFocusGroup(Object.values(deskHosts)), [deskHosts]);
   // iPhoneでタブを切り替えても、別の書き口へ古いフォーカスを押し付けない。
   useLayoutEffect(() => restoreDeskFocus(deskHosts[effectiveSlot]));
   /** 書き口を欄へ運び、フォーカスする。変換中は運ばない(呼ぶ側がキーを見て決める)。 */
@@ -1277,9 +1274,13 @@ export function MemoEditorPage() {
       setNotice("段落に書きかけがあります。段落の入力内容を先に保存してください。"); return;
     }
     // 復元処理より先に押された場合も、IndexedDBの旧下書きを上書きしない。
-    const storedParagraph = await draftRepository.get(buildEntryDraftId(memo.id, "paragraph", "main"));
-    if(storedParagraph && hasMeaningfulEntryDraft(storedParagraph)) {
-      setNotice("段落に保存済みの下書きがあります。上書きせず保護しました。"); return;
+    try {
+      const storedParagraph = await draftRepository.get(buildEntryDraftId(memo.id, "paragraph", "main"));
+      if(storedParagraph && hasMeaningfulEntryDraft(storedParagraph)) {
+        setNotice("段落に保存済みの下書きがあります。上書きせず保護しました。"); return;
+      }
+    } catch {
+      setNotice("下書きを確認できないため、安全のため段落への移動を中止しました。"); return;
     }
     const rowOrder=getEntryTree(memo.entries,'sentence','manual').map(entry=>entry.id);
     const myIndex=rowOrder.indexOf(rowId);
