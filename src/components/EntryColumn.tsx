@@ -255,6 +255,8 @@ export function EntryColumn({
   const [isDeletingAll, setIsDeletingAll] = useState(false);
   const [pendingUndo, setPendingUndo] = useState<PendingUndo | null>(null);
   const [isUndoing, setIsUndoing] = useState(false);
+  const [outlineCanUndo, setOutlineCanUndo] = useState(false);
+  useEffect(() => { setOutlineCanUndo(false); }, [memoId]);
   /** 単語／文／段落ごとに記憶する表示方法。未設定の区分はタグでまとめる。 */
   const [displayMode, setDisplayMode] = useState<EntryListDisplayMode>(
     () => readEntryListDisplayMode(kind),
@@ -1231,6 +1233,16 @@ export function EntryColumn({
         </div>
 
         <div className="entry-column__header-actions">
+          {kind === "sentence" && onRelocateOutline ? (
+            <button type="button" className="outline-undo-action"
+              onClick={() => outlineRef?.current?.undoLast()}
+              disabled={!outlineCanUndo || disabled || isDeletingAll}
+              aria-label="直前のアウトライン編集・移動を元に戻す"
+              title="元に戻す（Ctrl / ⌘ + Z）">
+              <span aria-hidden="true" className="outline-undo-action__icon">↶</span>
+              <span className="outline-undo-action__label">戻す</span>
+            </button>
+          ) : null}
           {kind === "sentence" && onOutlineNumberedChange ? (
             <div className="outline-marker-switch" role="group" aria-label="アウトラインの行頭表示">
               <button type="button" aria-label="ビュレットで表示" aria-pressed={!outlineNumbered}
@@ -1264,7 +1276,8 @@ export function EntryColumn({
 
       <div className="entry-list" aria-live="polite">
         {kind === "sentence" && onRelocateOutline ? (
-          <OutlineList ref={outlineRef} entries={primaryEntries} disabled={disabled || isDeletingAll} dense={outlineDense} numbered={outlineNumbered}
+          <OutlineList key={memoId} ref={outlineRef} entries={primaryEntries} disabled={disabled || isDeletingAll} dense={outlineDense} numbered={outlineNumbered}
+            onUndoAvailabilityChange={setOutlineCanUndo}
             showCompletedOutline={showCompletedOutline}
             completedOutlineCount={completedOutlineCount}
             onToggleShowCompletedOutline={onToggleShowCompletedOutline}
