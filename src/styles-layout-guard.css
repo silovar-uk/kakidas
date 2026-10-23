@@ -50,6 +50,10 @@
   box-sizing: border-box;
 }
 .outline__content { min-width: 0; max-width: 100%; }
+/* 行頭マーカーの幅を確保し、入力位置を実際のアウトライン本文へ揃える。 */
+.outline__caret:has(.outline__caret-host) {
+  padding-left: calc(var(--outline-depth, 0) * 15px + 2px + var(--outline-marker-width, 40px));
+}
 
 /*
  * PCの真因: .entry-list はgridだが暗黙のauto trackが本文のmax-content幅へ膨らむ。
