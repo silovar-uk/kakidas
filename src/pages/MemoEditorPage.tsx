@@ -769,7 +769,7 @@ export function MemoEditorPage() {
       `${safeTitle}.txt`,
       formatMemoText(memo, {
         includeEntryNumbers: showEntryNumbers,
-          includeOutlineNumbers: outlineNumbered,
+        includeOutlineNumbers: outlineNumbered,
         entrySortMode,
       }),
     );
