@@ -9,7 +9,6 @@ import {
   useRef,
   useState,
 } from "react";
-import { UndoToast } from "./UndoToast";
 import type { EntryRow, EntryTreeNode, EntryUpdate } from "../types/memo";
 
 /** 「次の一行」(書き口が入る場所)。parentId=null は範囲(全体か集中中の枝)の一番上の階層。 */
@@ -38,6 +37,8 @@ export type OutlineHandle = {
   /** 項目の詳細・スマホのシートから、行を動かす・枝に集中する。 */
   moveRow(rowId: string, action: "indent" | "outdent" | "up" | "down"): void;
   zoomTo(rowId: string | null): void;
+  /** 保存済みの直前の本文編集・構造移動を戻す。 */
+  undoLast(): void;
 };
 
 type OutlineListProps = {
@@ -47,6 +48,8 @@ type OutlineListProps = {
   dense: boolean;
   /** 行頭を階層番号で描く。falseならビュレット。 */
   numbered?: boolean;
+  /** Undo操作が可能かを見出しへ通知する。 */
+  onUndoAvailabilityChange?: (available: boolean) => void;
   /** アウトライナーの完了済み項目だけを表示するか。既定は非表示。 */
   showCompletedOutline?: boolean;
   completedOutlineCount?: number;
@@ -77,6 +80,9 @@ type OutlineListProps = {
 };
 
 type MoveHistory = { id: string; parentId: string | null; index: number };
+type UndoableAction =
+  | { type: "edit"; id: string; previous: string }
+  | ({ type: "move" } & MoveHistory);
 
 const isMobileViewport = () => window.matchMedia("(max-width: 920px)").matches;
 
@@ -86,6 +92,7 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
   disabled = false,
   dense,
   numbered = false,
+  onUndoAvailabilityChange,
   showCompletedOutline = false,
   completedOutlineCount = 0,
   onToggleShowCompletedOutline,
@@ -112,13 +119,14 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
   const setCaret = (next: Caret | null) => { caretRef.current = next; setCaretState(next); };
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
   const [zoomId, setZoomId] = useState<string | null>(null);
-  const [moved, setMoved] = useState<MoveHistory | null>(null);
+  const undoStackRef = useRef<UndoableAction[]>([]);
+  const [undoDepth, setUndoDepth] = useState(0);
+  const undoInFlightRef = useRef(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const editorRef = useRef<HTMLTextAreaElement | null>(null);
   const savingRef = useRef(false);
   const skipBlurRef = useRef(false);
-  const movedTimerRef = useRef<number | null>(null);
   const lastInsertRef = useRef<Caret | null>(null);
   const lastAdvanceRef = useRef(0);
   /** 置いたばかりで、一覧にはまだ描かれていない行の位置(Tabが続けて来ても親にできるように)。 */
@@ -126,9 +134,18 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
   const nodeById = useMemo(() => new Map(entries.map((row) => [row.id, row])), [entries]);
   /** 表示切替で本文を動かさないよう、どちらのモードでも同じガターを確保する。 */
   const markerWidth = useMemo(() => {
-    const maxLength = entries.reduce((max, row) => Math.max(max, row.outline_number.length), 0);
-    return `${Math.min(88, Math.max(40, maxLength * 6.5 + 12))}px`;
-  }, [entries]);
+    if (!numbered) return "12px";
+    const maxLength = entries.reduce((max, row) => Math.max(max, row.outline_number.length), 1);
+    return `${Math.min(120, Math.max(12, maxLength * 7 + 4))}px`;
+  }, [entries, numbered]);
+  /** 前の操作だけを保持する。データや既存のブラウザUndo履歴は変更しない。 */
+  const recordUndo = (action: UndoableAction) => {
+    undoStackRef.current = [...undoStackRef.current.slice(-29), action];
+    setUndoDepth(undoStackRef.current.length);
+  };
+  useEffect(() => {
+    onUndoAvailabilityChange?.(undoDepth > 0 && !busy && !disabled && editingId === null);
+  }, [undoDepth, busy, disabled, editingId, onUndoAvailabilityChange]);
   const childrenOf = (parentId: string | null) => entries
     .filter((row) => row.parent_id === parentId)
     .sort((a, b) => a.sort_order - b.sort_order || a.created_at.localeCompare(b.created_at));
@@ -212,7 +229,6 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
     if (selectedId && !nodeById.has(selectedId)) setSelectedId(null);
     if (editingId && !nodeById.has(editingId)) setEditingId(null);
   }, [editingId, nodeById, selectedId]);
-  useEffect(() => () => { if (movedTimerRef.current !== null) window.clearTimeout(movedTimerRef.current); }, []);
 
   const focusRow = (id: string) => window.requestAnimationFrame(() => {
     document.querySelector<HTMLElement>(`[data-outline-id="${CSS.escape(id)}"]`)?.focus({ preventScroll: false });
@@ -298,6 +314,7 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
       if (row) move(row, action);
     },
     zoomTo: (rowId: string | null) => zoomTo(rowId),
+    undoLast: () => { void undoLast(); },
     revealRow: (rowId: string) => {
       const row = nodeById.get(rowId);
       if (!row) return;
@@ -318,9 +335,17 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
 
   const showError = (error: unknown) => setMessage(error instanceof Error ? error.message : "操作を保存できませんでした。");
   const updateText = async (id: string, content: string) => {
-    if (!content.trim()) { setMessage("空の項目は保存できません。Escで編集を取り消せます。"); return false; }
-    try { await onUpdate(id, { content: content.trim() }); setEditingId(null); return true; }
-    catch (error) { showError(error); return false; }
+    const next = content.trim();
+    if (!next) { setMessage("空の項目は保存できません。Escで編集を取り消せます。"); return false; }
+    const previous = nodeById.get(id)?.content;
+    if (next === previous) { setEditingId(null); return true; }
+    try {
+      await onUpdate(id, { content: next });
+      if (previous !== undefined) recordUndo({ type: "edit", id, previous });
+      setEditingId(null);
+      setMessage("");
+      return true;
+    } catch (error) { showError(error); return false; }
   };
   const commitEditing = async () => {
     if (!editingId || savingRef.current) return false;
@@ -328,24 +353,42 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
     try { return await updateText(editingId, editingValue); }
     finally { savingRef.current = false; }
   };
-  const moveTo = async (id: string, parentId: string | null, index: number, record = true) => {
-    if (busy || disabled) return;
+  const moveTo = async (id: string, parentId: string | null, index: number) => {
+    if (busy || disabled || undoInFlightRef.current) return;
     const previous = locationOf(id);
     if (!previous || previous.index < 0) return;
+    if (previous.parentId === parentId && previous.index === index) return;
     setBusy(true);
     try {
       await onRelocate(id, parentId, index);
-      setSelectedId(id); setMessage("");
-      if (movedTimerRef.current !== null) window.clearTimeout(movedTimerRef.current);
-      if (record) {
-        // 動かした直後の知らせ。「戻す」で元の位置へ。
-        setMoved(previous);
-        movedTimerRef.current = window.setTimeout(() => setMoved(null), 5_500);
-      } else {
-        setMoved(null);
-      }
+      recordUndo({ type: "move", ...previous });
+      setSelectedId(id);
+      setMessage("");
     } catch (error) { showError(error); }
     finally { setBusy(false); }
+  };
+  const undoLast = async () => {
+    if (disabled || busy || editingId || savingRef.current || undoInFlightRef.current) return;
+    const last = undoStackRef.current.at(-1);
+    if (!last) return;
+    if (!nodeById.has(last.id)) {
+      setMessage("元の項目が見つからないため、取り消せません。");
+      undoStackRef.current.pop();
+      setUndoDepth(undoStackRef.current.length);
+      return;
+    }
+    undoInFlightRef.current = true;
+    setBusy(true);
+    try {
+      if (last.type === "edit") await onUpdate(last.id, { content: last.previous });
+      else await onRelocate(last.id, last.parentId, last.index);
+      undoStackRef.current.pop();
+      setUndoDepth(undoStackRef.current.length);
+      setMessage("");
+      setSelectedId(last.id);
+      focusRow(last.id);
+    } catch (error) { showError(error); }
+    finally { undoInFlightRef.current = false; setBusy(false); }
   };
   const move = (row: EntryTreeNode, action: "indent" | "outdent" | "up" | "down") => {
     const siblings = childrenOf(row.parent_id);
@@ -375,6 +418,9 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
 
   const onRowKeyDown = (event: KeyboardEvent<HTMLDivElement>, row: EntryTreeNode) => {
     if (disabled || busy || event.nativeEvent.isComposing) return;
+    if ((event.ctrlKey || event.metaKey) && !event.shiftKey && event.key.toLowerCase() === "z") {
+      event.preventDefault(); void undoLast(); return;
+    }
     if (event.ctrlKey && event.shiftKey && (event.key === "ArrowUp" || event.key === "ArrowDown")) {
       event.preventDefault(); move(row, event.key === "ArrowUp" ? "up" : "down"); focusRow(row.id); return;
     }
@@ -462,14 +508,20 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
         onKeyDown={(event) => { if (event.target === event.currentTarget) onRowKeyDown(event, row); }}
         style={{ "--outline-depth": rowDepth(row) } as CSSProperties}
       >
-        {row.has_children ? <button className="outline__twisty" type="button" tabIndex={-1}
-          aria-label={collapsed.has(row.id) ? "子を展開" : "子を折りたたむ"}
-          onClick={() => toggleCollapsed(row.id)}>{collapsed.has(row.id) ? "▸" : "▾"}</button>
-        : <span className="outline__twisty outline__twisty--empty" aria-hidden="true">·</span>}
-        <span className={`outline__marker ${numbered ? "outline__marker--number" : "outline__marker--bullet"}`}
-          aria-hidden={!numbered} title={numbered ? row.outline_number : undefined}>
-          {numbered ? row.outline_number : "•"}
-        </span>
+        {row.has_children ? (
+          <button type="button" tabIndex={-1}
+            className={`outline__marker outline__marker--toggle ${numbered ? "outline__marker--number" : "outline__marker--bullet"}`}
+            aria-label={`「${row.content.slice(0, 24)}」の子項目を${collapsed.has(row.id) ? "展開" : "折りたたむ"}`}
+            aria-expanded={!collapsed.has(row.id)}
+            title={collapsed.has(row.id) ? "子項目を展開" : "子項目を折りたたむ"}
+            onClick={() => toggleCollapsed(row.id)}
+          >{numbered ? row.outline_number : "•"}</button>
+        ) : (
+          <span className={`outline__marker ${numbered ? "outline__marker--number" : "outline__marker--bullet"}`}
+            aria-hidden="true" title={numbered ? row.outline_number : undefined}>
+            {numbered ? row.outline_number : "•"}
+          </span>
+        )}
         {editingId === row.id ? <textarea ref={editorRef} className="outline__edit" rows={1} value={editingValue}
           aria-label="アウトラインの本文を編集" onChange={(event) => setEditingValue(event.target.value)}
           onKeyDown={(event) => onEditorKeyDown(event, row)}
@@ -532,15 +584,5 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
       </div>
     ) : null}
     {message ? <p className="outline__message" role="status">{message} <button type="button" onClick={() => setMessage("")}>閉じる</button></p> : null}
-    {moved ? <UndoToast
-      kind="sentence"
-      message="動かしました"
-      actionLabel="戻す"
-      actionAriaLabel="直前の移動を戻す"
-      dismissAriaLabel="動かした通知を閉じる"
-      isUndoing={busy}
-      onUndo={() => { const previous = moved; setMoved(null); void moveTo(previous.id, previous.parentId, previous.index, false); focusRow(previous.id); }}
-      onDismiss={() => setMoved(null)}
-    /> : null}
   </div>;
 });
