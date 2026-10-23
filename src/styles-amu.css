@@ -90,6 +90,23 @@
   margin: 0; padding: 2px var(--s-1) 4px;
   color: var(--color-shu-ink); font: 400 var(--text-xs)/1.5 var(--font-sans);
 }
+/* 一行→段落は自動で移さない。入力者が押す小さな明示操作だけを提供する。 */
+.entry-composer__convert {
+  display: inline-flex; align-items: center; gap: 5px;
+  border: 0; background: transparent; color: var(--color-shu-ink);
+  border-radius: 5px; padding: 5px 7px; cursor: pointer;
+  font: 500 var(--text-xs)/1.5 var(--font-sans);
+}
+.entry-composer__convert:hover { background: var(--color-shu-wash); }
+.entry-composer__convert:focus-visible { outline: 2px solid var(--color-shu-ink); outline-offset: 2px; }
+.editor-tab__draft-dot {
+  display: inline-block; flex: 0 0 5px; width: 5px; height: 5px;
+  border-radius: 50%; background: var(--color-shu);
+  margin-inline-start: 2px; vertical-align: middle;
+}
+@media (max-width: 920px) {
+  .entry-composer__convert { min-height: 40px; padding: 7px 11px; }
+}
 .entry-composer__note-toggle {
   justify-self: start; margin: 0; padding: 4px;
   border: 0; border-radius: var(--radius-s); background: none;
