@@ -46,6 +46,9 @@
     font: 600 12px/1 var(--font-sans);
     font-variant-numeric: tabular-nums;
   }
+  @media (max-width: 920px) {
+    .outline-marker-switch button { min-width: 38px; height: 36px; }
+  }
   .outline-marker-switch button:hover { color: var(--color-ink); }
   .outline-marker-switch button[aria-pressed="true"] {
     background: var(--color-sheet); color: var(--color-ink);
