@@ -3,7 +3,7 @@ import {BackIcon} from "../components/icons";
 import {waitForCreatedEntry,withViewTransition} from "../lib/viewTransition";
 import {EntryComposer,type EntryComposerHandle} from "../components/EntryComposer";
 import {DeskSlot} from "../components/DeskSlot";
-import { buildEntryDraftId, draftRepository } from "../repositories/draftRepository";
+import { buildEntryDraftId, draftRepository, hasMeaningfulEntryDraft } from "../repositories/draftRepository";
 import {type OutlineHandle} from "../components/OutlineList";
 import {releaseDeskFocus,restoreDeskFocus,trackDeskFocus} from "../lib/deskFocus";
 import {createPortal,flushSync} from "react-dom";
@@ -1272,6 +1272,11 @@ export function MemoEditorPage() {
     if(deskRefs.current.paragraph && !deskRefs.current.paragraph.isEmpty()){
       setNotice("段落に書きかけがあります。段落の入力内容を先に保存してください。"); return;
     }
+    // 復元処理より先に押された場合も、IndexedDBの旧下書きを上書きしない。
+    const storedParagraph = await draftRepository.get(buildEntryDraftId(memo.id, "paragraph", "main"));
+    if(storedParagraph && hasMeaningfulEntryDraft(storedParagraph)) {
+      setNotice("段落に保存済みの下書きがあります。上書きせず保護しました。"); return;
+    }
     const rowOrder=getEntryTree(memo.entries,'sentence','manual').map(entry=>entry.id);
     const myIndex=rowOrder.indexOf(rowId);
     const paragraphs=getEntryTree(memo.entries,'paragraph','manual');
@@ -1306,7 +1311,14 @@ export function MemoEditorPage() {
   };
 
   /** ユーザーが「段落にする」を押したときだけ、下書きを安全に移す。 */
+  const convertingDraftRef = useRef(false);
   const convertSentenceDraftToParagraph = async () => {
+    if (!memo || convertingDraftRef.current) return;
+    convertingDraftRef.current = true;
+    try { await performSentenceDraftConversion(); }
+    finally { convertingDraftRef.current = false; }
+  };
+  const performSentenceDraftConversion = async () => {
     if (!memo) return;
     const from = deskRefs.current.sentence;
     const to = deskRefs.current.paragraph;
@@ -1316,13 +1328,25 @@ export function MemoEditorPage() {
       return;
     }
     const snapshot = from.getDraftSnapshot();
-    if (!snapshot.content.trim()) return;
+    if (!snapshot.content.trim() && !snapshot.heading.trim()) return;
+    const paragraphDraftId = buildEntryDraftId(memo.id, "paragraph", "main");
+    // 別のタブがまだ復元途中でも、既存下書きの上書きを絶対に避ける。
+    try {
+      const existing = await draftRepository.get(paragraphDraftId);
+      if (existing && hasMeaningfulEntryDraft(existing)) {
+        setNotice("段落に下書きが残っています。先に段落の内容を保存してください。");
+        return;
+      }
+    } catch {
+      setNotice("下書きの保存状態を確認できませんでした。安全のため移動を中止しました。");
+      return;
+    }
     // 先に段落の編集面へコピーして移る。旧下書きは新下書きの保存成功まで保持。
     to.loadTransferredDraft(snapshot);
     moveDeskTo("paragraph");
     try {
       await draftRepository.save({
-        id: buildEntryDraftId(memo.id, "paragraph", "main"),
+        id: paragraphDraftId,
         memo_id: memo.id, kind: "paragraph", scope: "main", fixed_tag: null,
         base_memo_updated_at: memo.updated_at, snapshot,
       });
@@ -1475,7 +1499,7 @@ export function MemoEditorPage() {
             type="button"
             role="tab"
             aria-selected={activeKind === kind}
-            aria-label={`${ENTRY_KIND_LABEL[kind]}、未完了${openEntryCountsByKind[kind]}件`}
+            aria-label={`${ENTRY_KIND_LABEL[kind]}、未完了${openEntryCountsByKind[kind]}件${draftsByKind[kind] ? "、書きかけあり" : ""}`}
             className={
               activeKind === kind
                 ? "editor-tab editor-tab--active"
@@ -1491,6 +1515,7 @@ export function MemoEditorPage() {
             >
               {openEntryCountsByKind[kind]}
             </span>
+            {draftsByKind[kind] ? <span className="editor-tab__draft-dot" title="書きかけを保持しています" aria-hidden="true" /> : null}
           </button>
         ))}
       </div>
