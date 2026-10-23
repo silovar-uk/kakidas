@@ -575,7 +575,13 @@ export function EntryColumn({
       nextPatch.content = getLinkHostname(patch.link_url) || patch.link_url;
     }
 
+    const previousContent = kind === "sentence" && typeof nextPatch.content === "string"
+      ? entries.find((entry) => entry.id === entryId)?.content
+      : undefined;
     const updated = await onUpdate(entryId, nextPatch);
+    if (previousContent !== undefined && nextPatch.content !== previousContent) {
+      outlineRef?.current?.recordExternalEdit(entryId, previousContent);
+    }
 
     if (
       kind === "word" &&
@@ -1285,7 +1291,7 @@ export function EntryColumn({
             onOpenActions={openStructureActions}
             onOpenDetails={openDetails}
             onToggleCompleted={toggleCompleted}
-            onUpdate={handleUpdateEntry}
+            onUpdate={onUpdate}
             deskNode={deskNode}
             paragraphsByRowId={bindings?.paragraphsByRowId}
             lensIds={lensIds}
