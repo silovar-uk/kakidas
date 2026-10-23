@@ -93,6 +93,8 @@ function getNavigationKind(state: EditorNavigationState | null): EntryKind {
 // 旧い保存名は開くたびに既定値(true)が書き込まれ、本人の選択と区別できないため引き継がない。
 const ENTRY_TIMESTAMP_VISIBILITY_STORAGE_KEY = "kakidas.show-entry-timestamps.v2";
 const ENTRY_NUMBER_VISIBILITY_STORAGE_KEY = "kakidas.show-entry-numbers";
+/** アウトラインの行頭は段落・参考URLとは独立して切り替える。 */
+const OUTLINE_NUMBER_VISIBILITY_STORAGE_KEY = "kakidas.outline-numbered.v1";
 const HIDE_COMPLETED_ENTRIES_STORAGE_KEY = "kakidas.hide-completed-entries";
 /** アウトラインだけの完了表示。初期値はfalseで、端末ごとに保持する。 */
 const SHOW_COMPLETED_OUTLINE_STORAGE_KEY = "kakidas.show-completed-outline.v1";
@@ -159,6 +161,16 @@ function readEntryTimestampVisibility(): boolean {
 function readEntryNumberVisibility(): boolean {
   try {
     return window.localStorage.getItem(ENTRY_NUMBER_VISIBILITY_STORAGE_KEY) === "true";
+  } catch {
+    return false;
+  }
+}
+
+/** 旧「番号を表示」をONにしていた端末だけ、初回は番号へ引き継ぐ。以降は独立。 */
+function readOutlineNumberVisibility(): boolean {
+  try {
+    const saved = window.localStorage.getItem(OUTLINE_NUMBER_VISIBILITY_STORAGE_KEY);
+    return saved === null ? readEntryNumberVisibility() : saved === "true";
   } catch {
     return false;
   }
@@ -368,6 +380,7 @@ export function MemoEditorPage() {
   const [showEntryNumbers, setShowEntryNumbers] = useState(
     readEntryNumberVisibility,
   );
+  const [outlineNumbered, setOutlineNumbered] = useState(readOutlineNumberVisibility);
   const [hideCompletedEntries, setHideCompletedEntries] = useState(
     readHideCompletedEntries,
   );
@@ -437,6 +450,14 @@ export function MemoEditorPage() {
       // private modeなどで保存できない場合でも、現在の画面では切り替えられる。
     }
   }, [showEntryNumbers]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(OUTLINE_NUMBER_VISIBILITY_STORAGE_KEY, String(outlineNumbered));
+    } catch {
+      // プライベートブラウズ中も切替そのものは利用できる。
+    }
+  }, [outlineNumbered]);
 
   useEffect(() => {
     try {
@@ -748,6 +769,7 @@ export function MemoEditorPage() {
       `${safeTitle}.txt`,
       formatMemoText(memo, {
         includeEntryNumbers: showEntryNumbers,
+          includeOutlineNumbers: outlineNumbered,
         entrySortMode,
       }),
     );
@@ -768,6 +790,7 @@ export function MemoEditorPage() {
       await copyToClipboard(
         formatMemoText(memo, {
           includeEntryNumbers: showEntryNumbers,
+          includeOutlineNumbers: outlineNumbered,
           excludeCompleted: !includeCompletedInCopy,
           entrySortMode,
         }),
@@ -822,6 +845,7 @@ export function MemoEditorPage() {
       await copyToClipboard(
         formatMemoText(memo, {
           includeEntryNumbers: showEntryNumbers,
+          includeOutlineNumbers: outlineNumbered,
           excludeCompleted: !includeCompletedInCopy,
           onlyKind: kind,
           entrySortMode,
@@ -1082,7 +1106,7 @@ export function MemoEditorPage() {
     if(!tab){setNotice('新しいタブの表示を許可してください。');return;}
     tab.opener=null;
     const prompt=formatMemoText({...memo,title:title.trim()||memo.title},{
-      includeEntryNumbers:showEntryNumbers,excludeCompleted:!includeCompletedInCopy,entrySortMode});
+      includeEntryNumbers:showEntryNumbers,includeOutlineNumbers:outlineNumbered,excludeCompleted:!includeCompletedInCopy,entrySortMode});
     const url=new URL('https://chatgpt.com/');url.searchParams.set('prompt',prompt);
     tab.location.replace(url.toString());
   };
@@ -1382,7 +1406,7 @@ export function MemoEditorPage() {
           onDeleteCompleted={()=>void handleDeleteCompleted()} onDeleteMemo={()=>void handleDeleteMemo()}
           options={[
             {label:'項目の日時を表示',value:showEntryTimestamps,onChange:setShowEntryTimestamps},
-            {label:'番号を表示',value:showEntryNumbers,onChange:setShowEntryNumbers},
+            {label:'段落・参考URLに番号を表示',value:showEntryNumbers,onChange:setShowEntryNumbers},
             {label:'本文だけ表示',value:compactEntryView,onChange:setCompactEntryView},
             {label:'段落・参考URLの完了を非表示',value:hideCompletedEntries,onChange:setHideCompletedEntries},
             {label:'参考URLを下に足す',value:addEntriesAtBottom,onChange:setAddEntriesAtBottom},
@@ -1470,6 +1494,8 @@ export function MemoEditorPage() {
             onToggleCollapsed={() => toggleEntryColumnCollapsed(kind)}
             showCreatedAt={showEntryTimestamps}
             showEntryNumbers={showEntryNumbers}
+            outlineNumbered={outlineNumbered}
+            onOutlineNumberedChange={setOutlineNumbered}
             compactView={compactEntryView}
             tagSuggestions={entryTagSuggestions}
             disabled={isUploading}
