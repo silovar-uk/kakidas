@@ -44,6 +44,10 @@ export type EntryComposerHandle = {
   insertText: (text: string) => void;
   /** 打った字・見出し・添えるものが何もないか。空の書き口は、行を選ぶとついてくる。 */
   isEmpty: () => boolean;
+  /** 下書きを明示的に移すときだけ使用。入力状態は自動共有しない。 */
+  getDraftSnapshot: () => EntryDraftSnapshot;
+  loadTransferredDraft: (snapshot: EntryDraftSnapshot) => void;
+  clearTransferredDraft: () => void;
 };
 
 type EntryComposerProps = {
@@ -62,9 +66,10 @@ type EntryComposerProps = {
   /** 書き口がいる欄。行き先はこれで決まる(URLだけを書いたときは参考URLへ)。 */
   slot?: EntryKind;
   /** 下書きの復元・引き継ぎで、書き口の欄を合わせてほしいときに呼ぶ。 */
-  onSlotHint?: (kind: EntryKind) => void;
-  /** アウトラインの欄でShift+Enter。改行を入れたあとに呼び、書き口ごと段落の欄へ移る。 */
-  onGrowToParagraph?: () => void;
+  /** 明示操作でのみ、現在のアウトライン下書きを段落へ移す。 */
+  onConvertToParagraph?: () => void;
+  /** フォーカス時に現在の欄を通知する。 */
+  onWritingFocus?: () => void;
   onCaretIndent?: () => void;
   onCaretOutdent?: () => void;
   /** 空のときの↑。上の行へ戻る。 */
@@ -79,8 +84,6 @@ type EntryComposerProps = {
   caretDescription?: string;
   /** 書きかけがあるかどうかが変わったときに呼ぶ(スマホの「ここに入ります」の灯りに使う)。 */
   onDraftChange?: (hasDraft: boolean) => void;
-  /** 置く先(欄)が変わったときに呼ぶ。URLだけを書くと、いる欄に関わらず参考URLになる。 */
-  onRouteChange?: (kind: EntryKind) => void;
   onPlaced?: (kind: EntryKind, createdId?: string) => void;
   /** 参考URLの重複判定に使う、このメモ内の既存URL。 */
   existingReferenceUrls?: string[];
@@ -143,8 +146,8 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
       kind: baseKind,
       variant,
       slot: slotProp = "sentence",
-      onSlotHint,
-      onGrowToParagraph,
+      onConvertToParagraph,
+      onWritingFocus,
       onCaretIndent,
       onCaretOutdent,
       onExitUp,
@@ -153,7 +156,6 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
       showDepthButtons = false,
       caretDescription,
       onDraftChange,
-      onRouteChange,
       onPlaced,
       disabled = false,
       tagSuggestions,
@@ -170,9 +172,8 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
     const isDesk = variant === "desk";
     const isMobile = typeof window !== "undefined" && window.matchMedia("(max-width:920px)").matches;
     const slot: EntryKind = isDesk ? slotProp : baseKind;
-    // 置く先は、書き口のいる欄で決まる。アウトライン・段落の欄でURLだけを書いたときは参考URLへ送る。
-    const isUrlOnly = /^(https?:\/\/|www\.)\S+$/iu.test(value.trim());
-    const kind: EntryKind = isDesk ? (slot !== "word" && isUrlOnly ? "word" : slot) : baseKind;
+    // 入力先は必ずこの書き口が所属する欄。書いた内容から別の欄へ自動移動させない。
+    const kind: EntryKind = isDesk ? slot : baseKind;
 
     const [tagValue, setTagValue] = useState("");
     const [noteValue, setNoteValue] = useState("");
@@ -211,9 +212,6 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
     useEffect(() => {
       onDraftChange?.(hasDraft);
     }, [hasDraft]); // eslint-disable-line react-hooks/exhaustive-deps
-    useEffect(() => {
-      if (isDesk) onRouteChange?.(kind);
-    }, [isDesk, kind]); // eslint-disable-line react-hooks/exhaustive-deps
     const existingReferenceUrlKeys = useMemo(
       () =>
         new Set(
@@ -229,8 +227,8 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
     );
     const draftScope = lockedTag ? "tag-group" : "main";
     const draftId = useMemo(
-      () => buildEntryDraftId(memoId, isDesk ? "sentence" : kind, draftScope, lockedTag),
-      [draftScope, isDesk, kind, lockedTag, memoId],
+      () => buildEntryDraftId(memoId, kind, draftScope, lockedTag),
+      [draftScope, kind, lockedTag, memoId],
     );
     const draftSnapshot = useMemo<EntryDraftSnapshot>(() => ({
       content: value,
@@ -278,35 +276,14 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
         setLinkDraft(draft.link_draft);
         setActiveMetaPicker(draft.active_meta_picker);
         setLinkError(null);
-        // 見出しや改行のある下書きは、段落の欄で続きを書けるようにする。
-        if (isDesk && (draft.heading.trim() || draft.content.includes("\n"))) onSlotHint?.("paragraph");
         window.requestAnimationFrame(() =>
           scheduleParagraphTextareaResize({ allowShrink: true })
         );
       },
     });
 
-    useEffect(() => {
-      if (!isDesk || !memoId) return;
-      let cancelled = false;
-      // 旧「段落・参考URL」のmain下書きを、新しい書き口へ安全に引き継ぐ。
-      const migrate = async () => {
-        const main = await draftRepository.get(draftId);
-        if (main) return;
-        const old = (await draftRepository.listForMemo(memoId)).filter(row =>
-          row.scope === "main" && (row.kind === "word" || row.kind === "paragraph")
-        )[0];
-        if (!old || cancelled) return;
-        await draftRepository.migrateOldMainDraft(old.id, draftId);
-        if (cancelled || latestValueRef.current) return;
-        latestValueRef.current = old.content;
-        setValue(old.content); setHeadingValue(old.heading);
-        setTagValue(old.tag_value); setNoteValue(old.note_value); setLinkValue(old.link_value);
-        onSlotHint?.(old.kind);
-      };
-      void migrate().catch(error => console.error("下書きを移せませんでした", error));
-      return () => { cancelled = true; };
-    }, [draftId, isDesk, memoId]);
+    // 以前の共通入力で使われていたsentence下書きも、そのIDのまま復元する。
+    // paragraph/wordの旧下書きはそれぞれの欄で復元し、移動や削除をしない。
 
     function resetMetaDrafts() {
       markDraftEdited();
@@ -365,6 +342,30 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
     }, [activeMetaPicker, linkValue, noteValue, selectedTag]);
 
     useImperativeHandle(ref, () => ({
+      getDraftSnapshot: () => ({
+        content: latestValueRef.current,
+        heading: headingValue,
+        tag_value: tagValue, note_value: noteValue, link_value: linkValue,
+        tag_draft: tagDraft, note_draft: noteDraft, link_draft: linkDraft,
+        active_meta_picker: activeMetaPicker,
+      }),
+      loadTransferredDraft: (snapshot: EntryDraftSnapshot) => {
+        markDraftEdited();
+        latestValueRef.current = snapshot.content;
+        setValue(snapshot.content); setHeadingValue(snapshot.heading);
+        setTagValue(snapshot.tag_value); setNoteValue(snapshot.note_value);
+        setLinkValue(snapshot.link_value); setTagDraft(snapshot.tag_draft);
+        setNoteDraft(snapshot.note_draft); setLinkDraft(snapshot.link_draft);
+        setActiveMetaPicker(snapshot.active_meta_picker);
+        scheduleParagraphTextareaResize();
+      },
+      clearTransferredDraft: () => {
+        markDraftEdited();
+        latestValueRef.current = "";
+        setValue(""); setHeadingValue(""); setTagValue(""); setNoteValue("");
+        setLinkValue(""); setTagDraft(""); setNoteDraft(""); setLinkDraft("");
+        setActiveMetaPicker(null);
+      },
       focus: ({ scroll = true, delay = 160, heading = false } = {}) => {
         const target = heading ? headingInputRef.current : inputRef.current;
         if (scroll) {
@@ -806,16 +807,7 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
           return;
         }
         if (event.key === "Enter" && event.shiftKey && slot === "sentence") {
-          // 一行から段落へ育てる。改行を入れたまま、書き口ごと段落の欄へ移る。
-          event.preventDefault();
-          const el = inputRef.current;
-          const position = el?.selectionStart ?? latestValueRef.current.length;
-          const next = latestValueRef.current.slice(0, position) + "\n" + latestValueRef.current.slice(position);
-          latestValueRef.current = next;
-          setValue(next);
-          markDraftEdited();
-          onGrowToParagraph?.();
-          window.requestAnimationFrame(() => { el?.focus({ preventScroll: true }); el?.setSelectionRange(position + 1, position + 1); });
+          // 改行だけを追加し、段落へは移動しない。変換は専用ボタンで明示する。
           return;
         }
         if (event.key === "Enter") {
@@ -944,7 +936,8 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
 
 
     return (
-      <section aria-label={isDesk ? "書き口" : undefined} className={isDesk ? "entry-composer entry-composer--desk" : undefined}
+      <section aria-label={isDesk ? `${ENTRY_KIND_LABEL[slot]}の書き口` : undefined} className={isDesk ? "entry-composer entry-composer--desk" : undefined}
+        onFocusCapture={isDesk ? onWritingFocus : undefined}
         data-draft={isDesk ? String(hasDraft) : undefined} data-slot={isDesk ? slot : undefined}>
       <form
         aria-label={isDesk ? "書き口" : undefined}
@@ -1055,9 +1048,11 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
           </button>
         </div>
 
-        {isDesk && kind !== slot ? (
-          <div className="entry-composer__route" role="status">
-            → {ENTRY_KIND_LABEL[kind]}へ置きます
+        {isDesk && slot === "sentence" && Boolean(value.trim()) && onConvertToParagraph ? (
+          <div className="entry-composer__route entry-composer__route--convert">
+            <button type="button" className="entry-composer__convert" onClick={onConvertToParagraph}>
+              段落にする <span aria-hidden="true">↗</span>
+            </button>
           </div>
         ) : null}
 
