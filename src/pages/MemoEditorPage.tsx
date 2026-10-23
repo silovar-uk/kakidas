@@ -3,8 +3,9 @@ import {BackIcon} from "../components/icons";
 import {waitForCreatedEntry,withViewTransition} from "../lib/viewTransition";
 import {EntryComposer,type EntryComposerHandle} from "../components/EntryComposer";
 import {DeskSlot} from "../components/DeskSlot";
+import { buildEntryDraftId, draftRepository, hasMeaningfulEntryDraft } from "../repositories/draftRepository";
 import {type OutlineHandle} from "../components/OutlineList";
-import {releaseDeskFocus,restoreDeskFocus,trackDeskFocus} from "../lib/deskFocus";
+import {releaseDeskFocus,restoreDeskFocus,trackDeskFocusGroup} from "../lib/deskFocus";
 import {createPortal,flushSync} from "react-dom";
 import {getOutlineBindings} from "../lib/outlineBinding";
 import {MemoActionsMenu} from "../components/MemoActionsMenu";
@@ -323,12 +324,20 @@ export function MemoEditorPage() {
   const [isCloudDialogOpen, setIsCloudDialogOpen] = useState(false);
   const [isUploadDialogOpen, setIsUploadDialogOpen] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
-  const deskRef = useRef<EntryComposerHandle>(null);
-  /** 書き口はひとつだけ作り、作り直さない。置き場所(DeskSlot)が、この箱をいる欄へ運ぶ。 */
-  const deskHost = useMemo(() => {
-    const el = document.createElement("div");
-    el.className = "desk-host";
-    return el;
+  /** 書き口は種類ごとに独立。入力欄・編集中の選択範囲・下書き保存先を共有しない。 */
+  const deskRefs = useRef<Record<EntryKind, EntryComposerHandle | null>>({
+    sentence: null, paragraph: null, word: null,
+  });
+  const deskHosts = useMemo(() => {
+    const create = (kind: EntryKind) => {
+      const el = document.createElement("div");
+      el.className = "desk-host";
+      el.dataset.kind = kind;
+      return el;
+    };
+    return {
+      sentence: create("sentence"), paragraph: create("paragraph"), word: create("word"),
+    } satisfies Record<EntryKind, HTMLElement>;
   }, []);
   const outlineRef = useRef<OutlineHandle>(null);
   const [isMobile, setIsMobile] = useState(() => window.matchMedia("(max-width: 920px)").matches);
@@ -342,9 +351,13 @@ export function MemoEditorPage() {
   const [deskSlot, setDeskSlot] = useState<EntryKind>("sentence");
   /** 段落の書き口は、この段落の後ろに入る。null=末尾、"^"=先頭。 */
   const [paragraphAfterId, setParagraphAfterId] = useState<string | null>(null);
-  const [deskDraft, setDeskDraft] = useState(false);
-  /** 書き口の行き先(URLだけを書くと、いる欄に関わらず参考URL)。参考URLの入口の灯りに使う。 */
-  const [deskRoute, setDeskRoute] = useState<EntryKind>("sentence");
+  const [draftsByKind, setDraftsByKind] = useState<Record<EntryKind, boolean>>({
+    sentence: false, paragraph: false, word: false,
+  });
+  // 別のメモへ移動した直後に前のメモの下書き印を残さない。
+  useEffect(() => {
+    setDraftsByKind({sentence: false, paragraph: false, word: false});
+  }, [memoId]);
   /** 結び目を灯している項目(1.6秒)。 */
   const [lensIds, setLensIds] = useState<Set<string>>(() => new Set());
   const lensTimerRef = useRef<number | null>(null);
@@ -356,9 +369,10 @@ export function MemoEditorPage() {
   useEffect(() => () => { if (lensTimerRef.current !== null) window.clearTimeout(lensTimerRef.current); }, []);
   const [caretDescription, setCaretDescription] = useState("");
   const effectiveSlot: EntryKind = isMobile ? activeKind : deskSlot;
-  useEffect(() => trackDeskFocus(deskHost), [deskHost]);
-  // 行が増えて置き場所が動いたときも、外れたフォーカスを戻す。
-  useLayoutEffect(() => restoreDeskFocus(deskHost));
+  const activeDesk = () => deskRefs.current[effectiveSlot];
+  useEffect(() => trackDeskFocusGroup(Object.values(deskHosts)), [deskHosts]);
+  // iPhoneでタブを切り替えても、別の書き口へ古いフォーカスを押し付けない。
+  useLayoutEffect(() => restoreDeskFocus(deskHosts[effectiveSlot]));
   /** 書き口を欄へ運び、フォーカスする。変換中は運ばない(呼ぶ側がキーを見て決める)。 */
   /**
    * 書き口を欄へ運び、そのままフォーカスする。キー操作の中でも、運んだ直後に同期でフォーカスを入れる
@@ -369,7 +383,7 @@ export function MemoEditorPage() {
     const apply = () => { if (mobile) setActiveKind(kind); else setDeskSlot(kind); };
     if (options.focus === false) { apply(); return; }
     flushSync(apply);
-    deskRef.current?.focus({ scroll: false, delay: 0, heading: options.heading });
+    deskRefs.current[kind]?.focus({ scroll: false, delay: 0, heading: options.heading });
   }, []);
   const moveDeskToRef = useRef(moveDeskTo);
   moveDeskToRef.current = moveDeskTo;
@@ -1075,7 +1089,7 @@ export function MemoEditorPage() {
     if(!memo||!shouldFocusNewMemoComposer)return;
     const frame=requestAnimationFrame(()=>{
       window.dispatchEvent(new CustomEvent('kakidas:choose-entry-kind',{detail:composerFocusKind}));
-      deskRef.current?.focus({scroll:false,delay:0});
+      deskRefs.current[composerFocusKind]?.focus({scroll:false,delay:0});
       setShouldFocusNewMemoComposer(false);
     });
     return()=>cancelAnimationFrame(frame);
@@ -1191,9 +1205,8 @@ export function MemoEditorPage() {
       void placeReferenceUrls(lines.map(line=>normalizeLinkUrlForSave(line)));
       return;
     }
-    // 参考URLの欄にいるときは、ふつうの文はアウトラインの書き口へ。
-    if(!window.matchMedia("(max-width: 920px)").matches&&deskSlot==='word')setDeskSlot('sentence');
-    deskRef.current?.insertText(text);
+    // 貼り付けた文章も現在の書き口に留める。暗黙に別の欄へは移動しない。
+    activeDesk()?.insertText(text);
   };
   useEffect(()=>{
     const onPaste=(event:ClipboardEvent)=>pasteRef.current(event);
@@ -1257,7 +1270,18 @@ export function MemoEditorPage() {
     if(!row)return;
     const bound=bindings.paragraphsByRowId.get(rowId)?.[0];
     if(bound){jumpToParagraph(bound.id,rowId);return;}
-    if(deskRef.current&&!deskRef.current.isEmpty()){setNotice("書きかけを先に置いてください。");return;}
+    if(deskRefs.current.paragraph && !deskRefs.current.paragraph.isEmpty()){
+      setNotice("段落に書きかけがあります。段落の入力内容を先に保存してください。"); return;
+    }
+    // 復元処理より先に押された場合も、IndexedDBの旧下書きを上書きしない。
+    try {
+      const storedParagraph = await draftRepository.get(buildEntryDraftId(memo.id, "paragraph", "main"));
+      if(storedParagraph && hasMeaningfulEntryDraft(storedParagraph)) {
+        setNotice("段落に保存済みの下書きがあります。上書きせず保護しました。"); return;
+      }
+    } catch {
+      setNotice("下書きを確認できないため、安全のため段落への移動を中止しました。"); return;
+    }
     const rowOrder=getEntryTree(memo.entries,'sentence','manual').map(entry=>entry.id);
     const myIndex=rowOrder.indexOf(rowId);
     const paragraphs=getEntryTree(memo.entries,'paragraph','manual');
@@ -1279,16 +1303,64 @@ export function MemoEditorPage() {
       if(source)source.style.viewTransitionName='';
       setParagraphAfterId(nextAfter);
       moveDeskTo('paragraph',{focus:false});
-      deskRef.current?.prefillParagraph(row.content);
+      deskRefs.current.paragraph?.prefillParagraph(row.content);
       // 描き直した後に、見出しの欄へ同じ名前を付け替える(行の文が見出しへ飛ぶ)
       return Promise.resolve().then(()=>{
-        const heading=deskHost.querySelector<HTMLElement>('.entry-composer__paragraph-title');
+        const heading=deskHosts.paragraph.querySelector<HTMLElement>('.entry-composer__paragraph-title');
         if(heading)heading.style.viewTransitionName='amu-grow';
       });
     },{scoped:true});
-    deskHost.querySelector<HTMLElement>('.entry-composer__paragraph-title')?.style.removeProperty('view-transition-name');
-    deskRef.current?.focus({scroll:false,delay:0});
-    deskHost.scrollIntoView({block:'nearest'});
+    deskHosts.paragraph.querySelector<HTMLElement>('.entry-composer__paragraph-title')?.style.removeProperty('view-transition-name');
+    deskRefs.current.paragraph?.focus({scroll:false,delay:0,heading:true});
+    deskHosts.paragraph.scrollIntoView({block:'nearest'});
+  };
+
+  /** ユーザーが「段落にする」を押したときだけ、下書きを安全に移す。 */
+  const convertingDraftRef = useRef(false);
+  const convertSentenceDraftToParagraph = async () => {
+    if (!memo || convertingDraftRef.current) return;
+    convertingDraftRef.current = true;
+    try { await performSentenceDraftConversion(); }
+    finally { convertingDraftRef.current = false; }
+  };
+  const performSentenceDraftConversion = async () => {
+    if (!memo) return;
+    const from = deskRefs.current.sentence;
+    const to = deskRefs.current.paragraph;
+    if (!from || !to || from.isEmpty()) return;
+    if (!to.isEmpty()) {
+      setNotice("段落にも書きかけがあります。まず段落の下書きを保存してください。");
+      return;
+    }
+    const snapshot = from.getDraftSnapshot();
+    if (!snapshot.content.trim() && !snapshot.heading.trim()) return;
+    const paragraphDraftId = buildEntryDraftId(memo.id, "paragraph", "main");
+    // 別のタブがまだ復元途中でも、既存下書きの上書きを絶対に避ける。
+    try {
+      const existing = await draftRepository.get(paragraphDraftId);
+      if (existing && hasMeaningfulEntryDraft(existing)) {
+        setNotice("段落に下書きが残っています。先に段落の内容を保存してください。");
+        return;
+      }
+    } catch {
+      setNotice("下書きの保存状態を確認できませんでした。安全のため移動を中止しました。");
+      return;
+    }
+    // 先に段落の編集面へコピーして移る。旧下書きは新下書きの保存成功まで保持。
+    to.loadTransferredDraft(snapshot);
+    moveDeskTo("paragraph");
+    try {
+      await draftRepository.save({
+        id: paragraphDraftId,
+        memo_id: memo.id, kind: "paragraph", scope: "main", fixed_tag: null,
+        base_memo_updated_at: memo.updated_at, snapshot,
+      });
+      from.clearTransferredDraft();
+      setNotice("段落の書き口へ移しました。");
+    } catch {
+      // 保存できなかった場合は旧書き口を消さない。
+      setNotice("移動先の下書きを保存できませんでした。元のアウトラインにも残しています。");
+    }
   };
 
   /** 参考URLを、アウトラインの次の一行へ(リンク付きで)引く。 */
@@ -1389,7 +1461,7 @@ export function MemoEditorPage() {
               if(e.nativeEvent.isComposing||e.nativeEvent.keyCode===229||e.key==='Process'||e.key!=='Enter')return;
               e.preventDefault();
               void saveTitle(title);
-              deskRef.current?.focus({scroll:false,delay:0});
+              activeDesk()?.focus({scroll:false,delay:0});
             }}
             onBlur={()=>void saveTitle(title)} />
           <MemoTagControl tag={memo.tag} suggestions={tagSuggestions} disabled={isSaving} onSave={handleSaveTag}/>
@@ -1432,7 +1504,7 @@ export function MemoEditorPage() {
             type="button"
             role="tab"
             aria-selected={activeKind === kind}
-            aria-label={`${ENTRY_KIND_LABEL[kind]}、未完了${openEntryCountsByKind[kind]}件`}
+            aria-label={`${ENTRY_KIND_LABEL[kind]}、未完了${openEntryCountsByKind[kind]}件${draftsByKind[kind] ? "、書きかけあり" : ""}`}
             className={
               activeKind === kind
                 ? "editor-tab editor-tab--active"
@@ -1448,6 +1520,7 @@ export function MemoEditorPage() {
             >
               {openEntryCountsByKind[kind]}
             </span>
+            {draftsByKind[kind] ? <span className="editor-tab__draft-dot" title="書きかけを保持しています" aria-hidden="true" /> : null}
           </button>
         ))}
       </div>
@@ -1458,7 +1531,7 @@ export function MemoEditorPage() {
         </p>
       ) : null}
 
-      {isMobile ? <DeskSlot active host={deskHost} label="書き口" onActivate={()=>undefined} className="editor-mobile-desk" /> : null}
+      {isMobile ? <DeskSlot active host={deskHosts[activeKind]} label="書き口" onActivate={()=>undefined} className="editor-mobile-desk" /> : null}
       <div className="editor-receipt-anchor">
         {receipt ? <div className="editor-receipt" role="status" key={receipt.at}>
           <span>{receipt.text}</span>
@@ -1501,7 +1574,7 @@ export function MemoEditorPage() {
             disabled={isUploading}
             addAtBottom={addEntriesAtBottom}
             deskNode={isMobile?undefined:(
-              <DeskSlot active={deskSlot===kind} host={deskHost}
+              <DeskSlot active host={deskHosts[kind]}
                 label={DESK_OPEN_LABEL[kind]} text={DESK_OPEN_TEXT[kind]}
                 onActivate={()=>moveDeskTo(kind)} />
             )}
@@ -1509,12 +1582,9 @@ export function MemoEditorPage() {
              showCompletedOutline={showCompletedOutline}
              completedOutlineCount={completedOutlineCount}
              onToggleShowCompletedOutline={() => setShowCompletedOutline((current) => !current)}
-            ghostOn={isMobile&&kind==='sentence'&&deskDraft}
+            ghostOn={isMobile&&kind==='sentence'&&draftsByKind.sentence}
             onCaretDescribed={kind==='sentence'?setCaretDescription:undefined}
-            onRowSelected={()=>{
-              // 書き口が空で別の欄にいるなら、行を選んだらついてくる(書きかけはその場に残る)。
-              if(!isMobile&&deskSlot!=='sentence'&&deskRef.current?.isEmpty())setDeskSlot('sentence');
-            }}
+            onRowSelected={()=>undefined}
             onFocusDesk={()=>moveDeskTo('sentence')}
             paragraphAfterId={paragraphAfterId}
             onSelectParagraph={setParagraphAfterId}
@@ -1527,7 +1597,7 @@ export function MemoEditorPage() {
             onPullToOutline={pullToOutline}
             citationRowIds={citationRowIds}
             onJumpToCitation={jumpToCitation}
-            routeToWord={!isMobile&&deskSlot!=='word'&&deskRoute==='word'}
+            routeToWord={false}
             onCreate={createEntry}
             onUpdate={(entryId, patch) => updateEntry(entryId, patch)}
             onDelete={deleteEntry}
@@ -1550,25 +1620,28 @@ export function MemoEditorPage() {
 
       </>}
 
-      {createPortal(
-        <EntryComposer ref={deskRef} variant="desk" kind="sentence" memoId={memo.id}
+      {WORKSPACE_KINDS.map((kind) => createPortal(
+        <EntryComposer key={`${memo.id}:${kind}`}
+          ref={(instance) => { deskRefs.current[kind] = instance; }}
+          variant="desk" kind={kind} slot={kind} memoId={memo.id}
           memoUpdatedAt={memo.updated_at} tagSuggestions={entryTagSuggestions}
-          slot={effectiveSlot} disabled={isUploading}
+          disabled={isUploading}
           existingReferenceUrls={memo.entries.filter(e=>e.kind==='word'&&e.link_url).map(e=>e.link_url)}
           onSubmit={handleDeskCreate} onPlaced={handlePlaced}
-          onSlotHint={kind=>moveDeskTo(kind,{focus:false})}
-          onGrowToParagraph={()=>moveDeskTo('paragraph',{focus:false})}
-          onCaretIndent={()=>outlineRef.current?.indentCaret()}
-          onCaretOutdent={()=>outlineRef.current?.outdentCaret()}
-          onExitUp={()=>{releaseDeskFocus();outlineRef.current?.focusRowAboveCaret();}}
-          onExitDown={()=>{releaseDeskFocus();outlineRef.current?.focusRowBelowCaret();}}
+          onConvertToParagraph={kind === 'sentence' ? () => {void convertSentenceDraftToParagraph();} : undefined}
+          onWritingFocus={() => { if(!isMobile) setDeskSlot(kind); }}
+          onCaretIndent={kind === 'sentence' ? () => outlineRef.current?.indentCaret() : undefined}
+          onCaretOutdent={kind === 'sentence' ? () => outlineRef.current?.outdentCaret() : undefined}
+          onExitUp={kind === 'sentence' ? () => {releaseDeskFocus();outlineRef.current?.focusRowAboveCaret();} : undefined}
+          onExitDown={kind === 'sentence' ? () => {releaseDeskFocus();outlineRef.current?.focusRowBelowCaret();} : undefined}
           onExit={()=>{releaseDeskFocus();(document.activeElement as HTMLElement|null)?.blur?.();}}
-          showDepthButtons={isMobile&&effectiveSlot==='sentence'}
-          caretDescription={caretDescription}
-          onDraftChange={setDeskDraft}
-          onRouteChange={setDeskRoute}/>,
-        deskHost,
-      )}
+          showDepthButtons={isMobile&&kind==='sentence'}
+          caretDescription={kind === 'sentence' ? caretDescription : undefined}
+          onDraftChange={(hasDraft) => setDraftsByKind((current) =>
+            current[kind] === hasDraft ? current : { ...current, [kind]: hasDraft })}/>,
+        deskHosts[kind],
+        kind,
+      ))}
 
       <CloudAccountDialog
         open={isCloudDialogOpen}
