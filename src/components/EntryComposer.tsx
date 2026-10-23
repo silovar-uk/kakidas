@@ -29,7 +29,6 @@ import {
 } from "../lib/memoTags";
 import { getEntryTagToneClassName } from "../lib/entryTagGroups";
 import { releaseDeskFocus } from "../lib/deskFocus";
-import { draftRepository } from "../repositories/draftRepository";
 import { useDraftPersistence } from "../hooks/useDraftPersistence";
 import {
   buildEntryDraftId,
