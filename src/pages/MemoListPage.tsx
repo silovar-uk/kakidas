@@ -601,11 +601,16 @@ export function MemoListPage() {
       }
 
       let includeEntryNumbers = false;
+      let includeOutlineNumbers = false;
       try {
         includeEntryNumbers =
           window.localStorage.getItem("kakidas.show-entry-numbers") === "true";
+        const outlinePreference = window.localStorage.getItem("kakidas.outline-numbered.v1");
+        includeOutlineNumbers = outlinePreference === null
+          ? includeEntryNumbers
+          : outlinePreference === "true";
       } catch {
-        // ストレージに触れない環境では、番号なしで安全にコピーする。
+        // ストレージに触れない環境では、両方とも番号なしで安全にコピーする。
       }
 
       const completedCount = detail.entries.filter(
@@ -615,6 +620,7 @@ export function MemoListPage() {
       await copyToClipboard(
         formatMemoText(detail, {
           includeEntryNumbers,
+          includeOutlineNumbers,
           excludeCompleted: !includeCompletedInCopy,
           entrySortMode: readEntrySortMode(),
         }),
