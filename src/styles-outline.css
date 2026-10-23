@@ -24,6 +24,38 @@
   .outline__item--selected { background:var(--color-shu-wash); }
   .outline__twisty { display:grid; flex:0 0 18px; width:18px; height:25px; place-items:center; border:0; padding:0; background:transparent; color:var(--color-ink-3); font-size:12px; cursor:pointer; }
   .outline__twisty--empty { opacity:.32; cursor:default; }
+  /* ビュレット/番号とも同じ幅。モード切替で本文や選択位置を揺らさない。 */
+  .outline__marker {
+    box-sizing: border-box; flex: 0 0 var(--outline-marker-width, 40px);
+    width: var(--outline-marker-width, 40px); min-width: 0; max-width: 88px;
+    padding: 0 5px 0 4px; overflow: hidden; text-overflow: ellipsis;
+    white-space: nowrap; color: var(--color-ink-3); user-select: none;
+    font: 500 12px/1.4 var(--font-sans); font-variant-numeric: tabular-nums;
+  }
+  .outline__marker--bullet { color: var(--color-ink-2); font-size: 14px; }
+  /* アウトライン見出しの右側。常時表示だが文字を書く面を邪魔しない。 */
+  .outline-marker-switch {
+    order: 3; margin-left: auto; flex: 0 0 auto;
+    display: inline-flex; align-items: center; gap: 2px; padding: 2px;
+    border-radius: 8px; background: var(--color-track);
+  }
+  .outline-marker-switch button {
+    display: grid; place-items: center; min-width: 33px; height: 28px;
+    border: 0; border-radius: 6px; padding: 0 5px; cursor: pointer;
+    color: var(--color-ink-2); background: transparent;
+    font: 600 12px/1 var(--font-sans);
+    font-variant-numeric: tabular-nums;
+  }
+  .outline-marker-switch button:hover { color: var(--color-ink); }
+  .outline-marker-switch button[aria-pressed="true"] {
+    background: var(--color-sheet); color: var(--color-ink);
+    box-shadow: 0 1px 2px rgb(35 33 29 / .14);
+  }
+  .outline-marker-switch button:focus-visible {
+    outline: 2px solid var(--color-ink); outline-offset: 2px;
+  }
+  .entry-column--sentence .entry-column__collapse-toggle { order: 4; margin-left: 0; }
+  .entry-column--sentence .entry-column__header-menu { order: 5; margin-left: 0; }
   .outline__item.entry-item--fresh .outline__content { color: var(--color-shu); transition: color 1.6s ease; }
   .outline__content { display:-webkit-box; flex:1; min-width:0; padding:4px 2px; border:0; text-align:left; background:transparent; font-size:14px; font-weight:400; color:inherit; line-height:1.35; overflow:hidden; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow-wrap:anywhere; cursor:text; }
   .outline--dense .outline__content { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; display:block; }
