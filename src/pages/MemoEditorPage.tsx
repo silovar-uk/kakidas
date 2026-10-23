@@ -354,6 +354,10 @@ export function MemoEditorPage() {
   const [draftsByKind, setDraftsByKind] = useState<Record<EntryKind, boolean>>({
     sentence: false, paragraph: false, word: false,
   });
+  // 別のメモへ移動した直後に前のメモの下書き印を残さない。
+  useEffect(() => {
+    setDraftsByKind({sentence: false, paragraph: false, word: false});
+  }, [memoId]);
   /** 結び目を灯している項目(1.6秒)。 */
   const [lensIds, setLensIds] = useState<Set<string>>(() => new Set());
   const lensTimerRef = useRef<number | null>(null);
