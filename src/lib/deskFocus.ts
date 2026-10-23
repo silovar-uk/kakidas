@@ -8,25 +8,39 @@ const remember = (target: EventTarget | null) => {
   }
 };
 
-/** 書き口の箱(host)の中の入力を見張る。戻り値で見張りをやめる。 */
-export function trackDeskFocus(host: HTMLElement): () => void {
+/** 複数の独立した書き口を一つのフォーカス領域として監視する。
+ * 旧方式で各hostに監視を付けると、他hostのpointerdownリスナーがkeep=falseにしてしまう。
+ * documentの監視は一度だけにし、「いずれかの書き口の中か」を判定する。
+ */
+export function trackDeskFocusGroup(hosts: readonly HTMLElement[]): () => void {
   const onIn = (event: FocusEvent) => { keep = true; remember(event.target); };
   const onEdit = (event: Event) => remember(event.target);
-  const onDown = (event: PointerEvent) => { if (!host.contains(event.target as Node)) keep = false; };
-  const onAnyIn = (event: FocusEvent) => { if (!host.contains(event.target as Node)) keep = false; };
+  const inside = (target: EventTarget | null) =>
+    target instanceof Node && hosts.some((host) => host.contains(target));
+  const onDown = (event: PointerEvent) => { if (!inside(event.target)) keep = false; };
+  const onAnyIn = (event: FocusEvent) => { if (!inside(event.target)) keep = false; };
   const edits = ["input", "keyup", "select", "click"];
 
-  host.addEventListener("focusin", onIn);
-  edits.forEach((type) => host.addEventListener(type, onEdit));
+  hosts.forEach((host) => {
+    host.addEventListener("focusin", onIn);
+    edits.forEach((type) => host.addEventListener(type, onEdit));
+  });
   document.addEventListener("pointerdown", onDown, true);
   document.addEventListener("focusin", onAnyIn);
 
   return () => {
-    host.removeEventListener("focusin", onIn);
-    edits.forEach((type) => host.removeEventListener(type, onEdit));
+    hosts.forEach((host) => {
+      host.removeEventListener("focusin", onIn);
+      edits.forEach((type) => host.removeEventListener(type, onEdit));
+    });
     document.removeEventListener("pointerdown", onDown, true);
     document.removeEventListener("focusin", onAnyIn);
   };
+}
+
+/** 単一の書き口向けの互換API。 */
+export function trackDeskFocus(host: HTMLElement): () => void {
+  return trackDeskFocusGroup([host]);
 }
 
 /** Escや↑で自分から書き口を離れるときは、先にこれを呼んで、戻さないようにする。 */
