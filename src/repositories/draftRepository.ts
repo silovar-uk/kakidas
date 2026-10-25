@@ -101,6 +101,17 @@ export function hasMeaningfulEntryDraft(
 }
 
 class IndexedDbDraftRepository {
+  /** 旧版・将来版の下書きも含めて存在を判定する。Undo時の誤上書き防止に使う。 */
+  async hasAnyDraft(draftId: string): Promise<boolean> {
+    const db = await getDatabase();
+    const tx = db.transaction(STORE_NAMES.drafts, "readonly");
+    const value = await requestToPromise(
+      tx.objectStore(STORE_NAMES.drafts).get(draftId) as IDBRequest<EntryDraftRow | undefined>,
+    );
+    await transactionToPromise(tx);
+    return value !== undefined;
+  }
+
   async get(draftId: string): Promise<EntryDraftRow | null> {
     const db = await getDatabase();
     const transaction = db.transaction(STORE_NAMES.drafts, "readonly");
