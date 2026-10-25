@@ -1178,8 +1178,8 @@ export function MemoEditorPage() {
     if (!check.allowed) throw new Error(check.reason ?? "この操作を元に戻せません。");
     if (!writer) throw new Error("入力欄をまだ復元できません。");
     const draftId = buildEntryDraftId(memo.id, "sentence", "main");
-    const stored = await draftRepository.get(draftId);
-    if (stored && hasMeaningfulEntryDraft(stored)) {
+    // get()が読み取れない将来版や旧形式のレコードも上書きしてはいけない。
+    if (await draftRepository.hasAnyDraft(draftId)) {
       throw new Error("保存済みの別の下書きがあります。上書きせず保護しました。");
     }
     const snapshot = snapshotFromOutlineEntry(row);
