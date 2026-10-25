@@ -47,7 +47,6 @@ import {
 import {
   buildEntryDraftId,
   hasMeaningfulEntryDraft,
-  isEntryDraftExpired,
   type EntryDraftRow,
 } from "./draftRepository";
 
@@ -119,7 +118,7 @@ export interface MemoRepository {
     nextTag: string,
   ): Promise<EntryTagBulkUpdateResult>;
   /** 個別削除。親の場合は子孫もまとめてソフト削除し、Undo用の情報を返す。 */
-  deleteEntry(entryId: string): Promise<EntryDeletionResult>;
+  deleteEntry(entryId: string, options?: { requireLeaf?: boolean }): Promise<EntryDeletionResult>;
   /** 直前の個別削除を元に戻す。 */
   restoreEntries(entryIds: string[]): Promise<void>;
   /** 指定したWord / Sentence / Paragraphの内容をまとめてソフト削除する。 */
@@ -713,14 +712,9 @@ class IndexedDbMemoRepository implements MemoRepository {
     const drafts = await requestToPromise(
       draftStore.index("by_memo_id").getAll(memoId) as IDBRequest<EntryDraftRow[]>,
     );
-    const activeDrafts = drafts.filter((draft) => !isEntryDraftExpired(draft));
-    const hasActiveDraft = activeDrafts.some((draft) =>
-      hasMeaningfulEntryDraft(draft)
-    );
-
-    drafts
-      .filter(isEntryDraftExpired)
-      .forEach((draft) => draftStore.delete(draft.id));
+    // 古い期限や未対応バージョンで書きかけのメモを誤破棄しない。
+    // 内容を読めないレコードも保護対象とし、下書きが一件でもあれば空メモとは見なさない。
+    const hasActiveDraft = drafts.length > 0;
 
     if (current.title !== defaultTitle || hasActiveEntry || hasActiveDraft) {
       // 入力済みのメモには一切書き込まず、そのまま残す。
@@ -1167,7 +1161,7 @@ class IndexedDbMemoRepository implements MemoRepository {
     };
   }
 
-  async deleteEntry(entryId: string): Promise<EntryDeletionResult> {
+  async deleteEntry(entryId: string, options: { requireLeaf?: boolean } = {}): Promise<EntryDeletionResult> {
     const db = await getDatabase();
 
     const transaction = db.transaction(
@@ -1183,6 +1177,11 @@ class IndexedDbMemoRepository implements MemoRepository {
     const allEntries = await this.getEntriesForMemo(entryStore, current.memo_id);
     const deletedAt = nowIso();
     const targetIds = this.getSubtreeIds(allEntries, current.id);
+    // 新規追加Undo用: 子孫を巻き込む削除は、DBトランザクション内で拒否する。
+    if (options.requireLeaf && targetIds.size !== 1) {
+      transaction.abort();
+      throw new Error("この行には子項目があります。安全のため取り消しませんでした。");
+    }
 
     for (const entry of allEntries) {
       if (targetIds.has(entry.id) && entry.deleted_at === null) {

@@ -65,8 +65,8 @@ type OutlineListProps = {
   onOpenDetails: (id: string, anchor: HTMLElement) => void;
   onToggleCompleted?: (id: string) => Promise<void>;
   onUpdate: (id: string, patch: EntryUpdate) => Promise<unknown>;
-  /** 新規追加を戻すときは既存のソフト削除を使う。 */
-  onDelete?: (id: string) => Promise<unknown>;
+  /** 新規行を戻す前に下書きを復元し、子を巻き込まずソフト削除する。 */
+  onUndoCreate?: (row: EntryTreeNode) => Promise<void>;
   /** 書き口(置き場所)。いる欄では運ばれてきた書き口が、いない欄では入口が入る。 */
   deskNode?: ReactNode;
   /** 行に結ばれた段落(見出しが同じ文)。結ばれていれば「¶」を見せる。 */
@@ -108,7 +108,7 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
   onOpenDetails,
   onToggleCompleted,
   onUpdate,
-  onDelete,
+  onUndoCreate,
   deskNode,
   paragraphsByRowId,
   lensIds,
@@ -403,16 +403,14 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
     if (disabled || busy || editingId || savingRef.current || undoInFlightRef.current) return;
     const last = undoStackRef.current.at(-1);
     if (!last) return;
-    if (!nodeById.has(last.id)) {
-      setMessage("元の項目が見つからないため、取り消せません。");
-      undoStackRef.current.pop();
-      setUndoDepth(undoStackRef.current.length);
+    const target = nodeById.get(last.id);
+    if (!target) {
+      // 反映待ちの行を誤って履歴から捨てない。次回そのまま再試行できる。
+      setMessage("対象の行がまだ表示されていません。更新後にもう一度お試しください。");
       return;
     }
-    if (last.type === "create" && (nodeById.get(last.id)?.has_children || !onDelete)) {
-      setMessage("子項目がある場合は、追加だけを安全に戻せません。項目の「⋯」から確認してください。");
-      undoStackRef.current.pop();
-      setUndoDepth(undoStackRef.current.length);
+    if (last.type === "create" && (target.has_children || !onUndoCreate)) {
+      setMessage("子がある行は安全のためUndoしません。項目の操作から確認してください。");
       return;
     }
     undoInFlightRef.current = true;
@@ -420,12 +418,12 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
     try {
       if (last.type === "edit") await onUpdate(last.id, { content: last.previous });
       else if (last.type === "move") await onRelocate(last.id, last.parentId, last.index);
-      else await onDelete!(last.id);
+      else await onUndoCreate!(target);
       undoStackRef.current.pop();
       setUndoDepth(undoStackRef.current.length);
       setMessage("");
       if (last.type === "create") {
-        // 削除した行の挿入位置を保持し、書き直しを同じ場所で再開できる。
+        // 書き口へ本文・補足を戻す。次の一行は元と同じ場所へ。
         const location = locationOf(last.id);
         setSelectedId(null);
         setCaret(location ? { parentId: location.parentId, index: location.index } : null);

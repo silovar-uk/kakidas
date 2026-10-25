@@ -302,9 +302,9 @@ export function useMemoDetail(memoId: string | undefined) {
   );
 
   const deleteEntry = useCallback(
-    async (entryId: string): Promise<EntryDeletionResult> => {
+    async (entryId: string, options?: { requireLeaf?: boolean }): Promise<EntryDeletionResult> => {
       return runWrite(async () => {
-        const deletion = await memoRepository.deleteEntry(entryId);
+        const deletion = await memoRepository.deleteEntry(entryId, options);
         await refreshAfterWrite();
         return deletion;
       });

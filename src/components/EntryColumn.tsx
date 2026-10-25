@@ -139,6 +139,8 @@ type EntryColumnProps = {
   onMoveToKind: (entryId: string, targetKind: EntryKind) => Promise<unknown>;
   /** アウトラインの行と、親のない段落(手動の順)を動かす。 */
   onRelocateOutline?: (id: string, parentId: string | null, index: number) => Promise<void>;
+  /** 新規追加Undo時に書きかけを復元してから安全に削除する。 */
+  onUndoCreateOutline?: (row: EntryTreeNode) => Promise<void>;
   /** タグでまとめる見出しから、現在の区分にある同名タグを一括変更する。 */
   onRenameTag: (currentTag: string, nextTag: string) => Promise<unknown>;
 };
@@ -222,6 +224,7 @@ export function EntryColumn({
   isCopying = false,
   onMoveToKind,
   onRelocateOutline,
+  onUndoCreateOutline,
   onRenameTag,
 }: EntryColumnProps) {
   /** PCの項目の詳細(行のそばの小窓)。 */
@@ -1296,7 +1299,7 @@ export function EntryColumn({
             onOpenDetails={openDetails}
             onToggleCompleted={toggleCompleted}
             onUpdate={onUpdate}
-            onDelete={onDelete}
+            onUndoCreate={onUndoCreateOutline}
             deskNode={deskNode}
             paragraphsByRowId={bindings?.paragraphsByRowId}
             lensIds={lensIds}

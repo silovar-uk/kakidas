@@ -4,6 +4,7 @@ import {waitForCreatedEntry,withViewTransition} from "../lib/viewTransition";
 import {EntryComposer,type EntryComposerHandle} from "../components/EntryComposer";
 import {DeskSlot} from "../components/DeskSlot";
 import { buildEntryDraftId, draftRepository, hasMeaningfulEntryDraft } from "../repositories/draftRepository";
+import { canUndoCreatedOutlineEntry, snapshotFromOutlineEntry } from "../lib/draftRecovery";
 import {type OutlineHandle} from "../components/OutlineList";
 import {releaseDeskFocus,restoreDeskFocus,trackDeskFocusGroup} from "../lib/deskFocus";
 import {createPortal,flushSync} from "react-dom";
@@ -42,6 +43,7 @@ import { uploadMemoToCloud } from "../repositories/cloudMemoRepository";
 import { memoRepository } from "../repositories/memoRepository";
 import {
   type EntryKind,
+  type EntryTreeNode,
   type EntrySortMode,
   type MemoWithEntries,
   ENTRY_KINDS,
@@ -1166,6 +1168,32 @@ export function MemoEditorPage() {
     return created;
   };
 
+  /** 新規行のUndoは「書いた文字を失わない」を最優先にする。
+   * 保存→単独行削除→入力欄復元。別の書きかけや子項目があれば一切削除しない。
+   */
+  const undoCreatedOutlineEntry = async (row: EntryTreeNode): Promise<void> => {
+    if (!memo || row.memo_id !== memo.id) throw new Error("対象のメモを確認できませんでした。");
+    const writer = deskRefs.current.sentence;
+    const check = canUndoCreatedOutlineEntry(row, Boolean(writer?.isEmpty()));
+    if (!check.allowed) throw new Error(check.reason ?? "この操作を元に戻せません。");
+    if (!writer) throw new Error("入力欄をまだ復元できません。");
+    const draftId = buildEntryDraftId(memo.id, "sentence", "main");
+    // get()が読み取れない将来版や旧形式のレコードも上書きしてはいけない。
+    if (await draftRepository.hasAnyDraft(draftId)) {
+      throw new Error("保存済みの別の下書きがあります。上書きせず保護しました。");
+    }
+    const snapshot = snapshotFromOutlineEntry(row);
+    // 書き口の復元が完了する前に閉じても失われないよう、先にIndexedDBへ保存する。
+    await draftRepository.save({
+      id: draftId, memo_id: memo.id, kind: "sentence", scope: "main",
+      fixed_tag: null, base_memo_updated_at: memo.updated_at, snapshot,
+    });
+    // requireLeafでトランザクション内から子孫の有無を再確認する。通常の親削除は使わない。
+    await deleteEntry(row.id, { requireLeaf: true });
+    writer.loadTransferredDraft(snapshot);
+    setNotice("追加した行を戻しました。文章は書き口に残しています。");
+  };
+
   /** どこで貼っても: URLだけなら参考URLへ(重複は除く)。ふつうの文は書き口へ入れる(置くのはEnter)。 */
   const placeReferenceUrls=async(urls:string[])=>{
     const known=new Set((memo?.entries??[]).filter(entry=>entry.kind==='word'&&entry.link_url).map(entry=>getReferenceUrlKey(entry.link_url)));
@@ -1615,6 +1643,7 @@ export function MemoEditorPage() {
             }
             onMoveToKind={handleMoveEntryToKind}
             onRelocateOutline={relocateOutlineEntry}
+            onUndoCreateOutline={kind === "sentence" ? undoCreatedOutlineEntry : undefined}
           />
         ))}
       </section>
