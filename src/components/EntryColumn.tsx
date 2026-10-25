@@ -256,6 +256,7 @@ export function EntryColumn({
   const [pendingUndo, setPendingUndo] = useState<PendingUndo | null>(null);
   const [isUndoing, setIsUndoing] = useState(false);
   const [outlineCanUndo, setOutlineCanUndo] = useState(false);
+  const [outlineUndoDescription, setOutlineUndoDescription] = useState<string | null>(null);
   useEffect(() => { setOutlineCanUndo(false); }, [memoId]);
   /** 単語／文／段落ごとに記憶する表示方法。未設定の区分はタグでまとめる。 */
   const [displayMode, setDisplayMode] = useState<EntryListDisplayMode>(
@@ -1243,10 +1244,10 @@ export function EntryColumn({
             <button type="button" className="outline-undo-action"
               onClick={() => outlineRef?.current?.undoLast()}
               disabled={!outlineCanUndo || disabled || isDeletingAll}
-              aria-label="直前のアウトライン編集・移動を元に戻す"
-              title="元に戻す（Ctrl / ⌘ + Z）">
+              aria-label={outlineUndoDescription ?? "直前の編集・移動・追加を戻す"}
+              title={`${outlineUndoDescription ?? "操作を戻す"}（行選択中：Ctrl / ⌘ + Z）`}>
               <span aria-hidden="true" className="outline-undo-action__icon">↶</span>
-              <span className="outline-undo-action__label">戻す</span>
+              <span className="outline-undo-action__label">操作を戻す</span>
             </button>
           ) : null}
           {kind === "sentence" && onOutlineNumberedChange ? (
@@ -1283,7 +1284,10 @@ export function EntryColumn({
       <div className="entry-list" aria-live="polite">
         {kind === "sentence" && onRelocateOutline ? (
           <OutlineList key={memoId} ref={outlineRef} entries={primaryEntries} disabled={disabled || isDeletingAll} dense={outlineDense} numbered={outlineNumbered}
-            onUndoAvailabilityChange={setOutlineCanUndo}
+            onUndoAvailabilityChange={(available, description) => {
+              setOutlineCanUndo(available);
+              setOutlineUndoDescription(description);
+            }}
             showCompletedOutline={showCompletedOutline}
             completedOutlineCount={completedOutlineCount}
             onToggleShowCompletedOutline={onToggleShowCompletedOutline}
@@ -1292,6 +1296,7 @@ export function EntryColumn({
             onOpenDetails={openDetails}
             onToggleCompleted={toggleCompleted}
             onUpdate={onUpdate}
+            onDelete={onDelete}
             deskNode={deskNode}
             paragraphsByRowId={bindings?.paragraphsByRowId}
             lensIds={lensIds}
