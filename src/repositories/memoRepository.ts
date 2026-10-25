@@ -47,7 +47,6 @@ import {
 import {
   buildEntryDraftId,
   hasMeaningfulEntryDraft,
-  isEntryDraftExpired,
   type EntryDraftRow,
 } from "./draftRepository";
 
@@ -713,14 +712,9 @@ class IndexedDbMemoRepository implements MemoRepository {
     const drafts = await requestToPromise(
       draftStore.index("by_memo_id").getAll(memoId) as IDBRequest<EntryDraftRow[]>,
     );
-    const activeDrafts = drafts.filter((draft) => !isEntryDraftExpired(draft));
-    const hasActiveDraft = activeDrafts.some((draft) =>
-      hasMeaningfulEntryDraft(draft)
-    );
-
-    drafts
-      .filter(isEntryDraftExpired)
-      .forEach((draft) => draftStore.delete(draft.id));
+    // 古い期限や未対応バージョンで書きかけのメモを誤破棄しない。
+    // 内容を読めないレコードも保護対象とし、下書きが一件でもあれば空メモとは見なさない。
+    const hasActiveDraft = drafts.length > 0;
 
     if (current.title !== defaultTitle || hasActiveEntry || hasActiveDraft) {
       // 入力済みのメモには一切書き込まず、そのまま残す。
