@@ -425,8 +425,10 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
       setUndoDepth(undoStackRef.current.length);
       setMessage("");
       if (last.type === "create") {
+        // 削除した行の挿入位置を保持し、書き直しを同じ場所で再開できる。
+        const location = locationOf(last.id);
         setSelectedId(null);
-        setCaret(null);
+        setCaret(location ? { parentId: location.parentId, index: location.index } : null);
       } else {
         setSelectedId(last.id);
         focusRow(last.id);
