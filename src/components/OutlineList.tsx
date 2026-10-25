@@ -41,6 +41,8 @@ export type OutlineHandle = {
   undoLast(): void;
   /** 詳細画面から保存した本文編集も同じ履歴へ追加する。 */
   recordExternalEdit(id: string, previous: string): void;
+  /** 「置く」で追加した新規行を戻す（安全な場合のみ）。 */
+  recordExternalCreate(id: string): void;
 };
 
 type OutlineListProps = {
@@ -51,7 +53,7 @@ type OutlineListProps = {
   /** 行頭を階層番号で描く。falseならビュレット。 */
   numbered?: boolean;
   /** Undo操作が可能かを見出しへ通知する。 */
-  onUndoAvailabilityChange?: (available: boolean) => void;
+  onUndoAvailabilityChange?: (available: boolean, actionDescription: string | null) => void;
   /** アウトライナーの完了済み項目だけを表示するか。既定は非表示。 */
   showCompletedOutline?: boolean;
   completedOutlineCount?: number;
@@ -63,6 +65,8 @@ type OutlineListProps = {
   onOpenDetails: (id: string, anchor: HTMLElement) => void;
   onToggleCompleted?: (id: string) => Promise<void>;
   onUpdate: (id: string, patch: EntryUpdate) => Promise<unknown>;
+  /** 新規追加を戻すときは既存のソフト削除を使う。 */
+  onDelete?: (id: string) => Promise<unknown>;
   /** 書き口(置き場所)。いる欄では運ばれてきた書き口が、いない欄では入口が入る。 */
   deskNode?: ReactNode;
   /** 行に結ばれた段落(見出しが同じ文)。結ばれていれば「¶」を見せる。 */
@@ -84,7 +88,8 @@ type OutlineListProps = {
 type MoveHistory = { id: string; parentId: string | null; index: number };
 type UndoableAction =
   | { type: "edit"; id: string; previous: string }
-  | ({ type: "move" } & MoveHistory);
+  | ({ type: "move" } & MoveHistory)
+  | { type: "create"; id: string };
 
 const isMobileViewport = () => window.matchMedia("(max-width: 920px)").matches;
 
@@ -103,6 +108,7 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
   onOpenDetails,
   onToggleCompleted,
   onUpdate,
+  onDelete,
   deskNode,
   paragraphsByRowId,
   lensIds,
@@ -118,7 +124,24 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
   const [, setCaretState] = useState<Caret | null>(null);
   // 続けて置くとき、描き直しを待たずに最新の位置を読めるよう、同じ値を持っておく。
   const caretRef = useRef<Caret | null>(null);
-  const setCaret = (next: Caret | null) => { caretRef.current = next; setCaretState(next); };
+  /** 「次の一行」を明示的に移した直後だけ、保存先を短く表示する。 */
+  const [caretPreviewVisible, setCaretPreviewVisible] = useState(false);
+  const caretPreviewTimerRef = useRef<number | null>(null);
+  const setCaret = (next: Caret | null) => {
+    caretRef.current = next;
+    setCaretState(next);
+    if (caretPreviewTimerRef.current !== null) window.clearTimeout(caretPreviewTimerRef.current);
+    setCaretPreviewVisible(next !== null);
+    if (next !== null) {
+      caretPreviewTimerRef.current = window.setTimeout(() => {
+        setCaretPreviewVisible(false);
+        caretPreviewTimerRef.current = null;
+      }, 2200);
+    }
+  };
+  useEffect(() => () => {
+    if (caretPreviewTimerRef.current !== null) window.clearTimeout(caretPreviewTimerRef.current);
+  }, []);
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
   const [zoomId, setZoomId] = useState<string | null>(null);
   const undoStackRef = useRef<UndoableAction[]>([]);
@@ -146,7 +169,12 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
     setUndoDepth(undoStackRef.current.length);
   };
   useEffect(() => {
-    onUndoAvailabilityChange?.(undoDepth > 0 && !busy && !disabled && editingId === null);
+    const last = undoStackRef.current.at(-1);
+    const description = !last ? null
+      : last.type === "edit" ? "本文の変更を戻す"
+      : last.type === "move" ? "行の移動を戻す"
+      : "直前に追加した行を戻す";
+    onUndoAvailabilityChange?.(undoDepth > 0 && !busy && !disabled && editingId === null, description);
   }, [undoDepth, busy, disabled, editingId, onUndoAvailabilityChange]);
   const childrenOf = (parentId: string | null) => entries
     .filter((row) => row.parent_id === parentId)
@@ -318,6 +346,7 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
     zoomTo: (rowId: string | null) => zoomTo(rowId),
     undoLast: () => { void undoLast(); },
     recordExternalEdit: (id: string, previous: string) => recordUndo({ type: "edit", id, previous }),
+    recordExternalCreate: (id: string) => recordUndo({ type: "create", id }),
     revealRow: (rowId: string) => {
       const row = nodeById.get(rowId);
       if (!row) return;
@@ -380,16 +409,30 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
       setUndoDepth(undoStackRef.current.length);
       return;
     }
+    if (last.type === "create" && (nodeById.get(last.id)?.has_children || !onDelete)) {
+      setMessage("子項目がある場合は、追加だけを安全に戻せません。項目の「⋯」から確認してください。");
+      undoStackRef.current.pop();
+      setUndoDepth(undoStackRef.current.length);
+      return;
+    }
     undoInFlightRef.current = true;
     setBusy(true);
     try {
       if (last.type === "edit") await onUpdate(last.id, { content: last.previous });
-      else await onRelocate(last.id, last.parentId, last.index);
+      else if (last.type === "move") await onRelocate(last.id, last.parentId, last.index);
+      else await onDelete!(last.id);
       undoStackRef.current.pop();
       setUndoDepth(undoStackRef.current.length);
       setMessage("");
-      setSelectedId(last.id);
-      focusRow(last.id);
+      if (last.type === "create") {
+        // 削除した行の挿入位置を保持し、書き直しを同じ場所で再開できる。
+        const location = locationOf(last.id);
+        setSelectedId(null);
+        setCaret(location ? { parentId: location.parentId, index: location.index } : null);
+      } else {
+        setSelectedId(last.id);
+        focusRow(last.id);
+      }
     } catch (error) { showError(error); }
     finally { undoInFlightRef.current = false; setBusy(false); }
   };
@@ -474,12 +517,12 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
     }
   };
 
-  const caretNode = deskNode || ghostOn ? (
+  const caretNode = deskNode || ghostOn || caretPreviewVisible ? (
     <div
       key="outline-caret"
       role="none"
       data-outline-caret=""
-      className={`outline__caret ${spot.end ? "outline__caret--end" : ""}`}
+      className={`outline__caret ${spot.end ? "outline__caret--end" : ""} ${!deskNode && caretPreviewVisible ? "outline__caret--floating-preview" : ""}`}
       style={{ "--outline-depth": spot.depth } as CSSProperties}
     >
       {deskNode ? (
@@ -488,7 +531,11 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
           <div className="outline__caret-host">{deskNode}</div>
         </>
       ) : null}
-      {ghostOn ? <p className="outline__ghost">↳ ここに入ります</p> : null}
+      {caretPreviewVisible ? (
+        <span className="outline__placement-indicator" aria-hidden="true">
+          <span className="outline__placement-label">{caretDescription}</span>
+        </span>
+      ) : ghostOn ? <p className="outline__ghost">↳ ここに入ります</p> : null}
     </div>
   ) : null;
 

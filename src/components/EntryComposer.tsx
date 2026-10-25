@@ -258,7 +258,7 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
     } = useDraftPersistence({
       id: draftId,
       memo_id: memoId,
-      kind: isDesk ? "sentence" : kind,
+      kind,
       scope: draftScope,
       fixed_tag: lockedTag,
       base_memo_updated_at: memoUpdatedAt,

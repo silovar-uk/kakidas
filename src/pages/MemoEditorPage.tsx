@@ -1154,6 +1154,7 @@ export function MemoEditorPage() {
       const position=outlineRef.current?.insertPosition();
       created=await createEntry('sentence',content,metadata,position?.parentId??null,'bottom',draftId,entryId,position?.index);
       outlineRef.current?.advance(created.id);
+      outlineRef.current?.recordExternalCreate(created.id);
     }else if(kind==='paragraph'){
       // 段落は文書の順。選んだ段落の後ろ(なければ末尾)へ置き、続けて次の段落をその後ろへ。
       created=await createEntry('paragraph',content,metadata,null,'bottom',draftId,entryId,paragraphInsertIndex());

@@ -201,6 +201,19 @@
   }
   /* 開閉はビュレット/番号で行うため、専用の▼列は不要。 */
   .entry-column--sentence .outline__marker { width: max-content; min-width: 0; max-width: min(120px, 33vw); }
+  /* 操作の面積は左側へ拡張し、記号→本文の4pxは維持する。 */
+  .entry-column--sentence .outline__marker--toggle {
+    width: max-content; min-width: 44px; max-width: min(152px, calc(33vw + 28px));
+    margin-left: -28px; padding-left: 28px; padding-right: 4px;
+    touch-action: manipulation;
+  }
+  /* 挿入位置ガイドはゼロ高。末尾のsticky書き口と干渉させない。 */
+  .entry-column--sentence .outline__caret--floating-preview,
+  .entry-column--sentence .outline__caret--floating-preview.outline__caret--end {
+    position: relative; height: 0; min-height: 0; padding: 0;
+    bottom: auto; z-index: 4; background: transparent; overflow: visible;
+    pointer-events: none;
+  }
   .entry-column--sentence .outline__actions {
     display: flex;
     width: 44px;
