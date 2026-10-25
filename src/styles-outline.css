@@ -36,6 +36,26 @@
   .outline__marker--toggle:hover { color: var(--color-shu-ink); }
   .outline__marker--toggle:focus-visible { outline: 2px solid var(--color-ink); outline-offset: 1px; }
   .outline__marker--toggle[aria-expanded="false"] { color: var(--color-shu-ink); font-weight: 700; }
+  /* 次の挿入場所は操作直後だけ薄い線で見せる。通常の項目を押し下げない。 */
+  .outline__caret { position: relative; }
+  .outline__placement-indicator {
+    position: absolute; left: calc(var(--outline-depth, 0) * 15px + 2px);
+    right: 8px; top: 0; height: 0; z-index: 3;
+    border-top: 1px dashed var(--color-shu); pointer-events: none;
+  }
+  .outline__placement-label {
+    position: absolute; top: -19px; right: 0; max-width: min(85%, 320px);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    padding: 1px 6px; border-radius: 5px; background: var(--color-shu-wash);
+    color: var(--color-shu-ink); font: 500 11px/1.5 var(--font-sans);
+  }
+  /* タブ切替や挿入先確認時、スマホでは高さ0のガイドとして表示する。 */
+  .outline__caret--floating-preview,
+  .outline__caret--floating-preview.outline__caret--end {
+    position: relative; height: 0; min-height: 0; padding: 0;
+    bottom: auto; z-index: 4; background: transparent; overflow: visible;
+    pointer-events: none;
+  }
   /* アウトライン見出しの右側。常時表示だが文字を書く面を邪魔しない。 */
   .outline-marker-switch {
     order: 4; margin-left: 0; flex: 0 0 auto;
@@ -122,6 +142,14 @@
     .outline__content { min-width:0; max-width:100%; }
     .outline__item { min-height:44px; padding-block:2px; }
     .outline__marker { min-height:44px; height:44px; }
+    /* 文字との4px間隔は保ち、操作領域だけを左側へ広げる（本文のタップを奪わない）。 */
+    .outline__marker--toggle {
+      box-sizing: border-box; min-width: 44px;
+      margin-left: -28px; padding-left: 28px; padding-right: 4px;
+      touch-action: manipulation;
+    }
+    .outline__placement-indicator { left: calc(var(--outline-depth, 0) * 16px + 2px); right: 0; }
+    .outline__placement-label { top: -18px; right: 0; max-width: min(88%, 260px); }
     .outline__actions { opacity:1; }
     .outline__zoom-action { display:none !important; }
     .outline__mobile-actions { display:grid !important; }
