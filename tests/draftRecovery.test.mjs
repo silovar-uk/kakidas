@@ -45,6 +45,7 @@ test("下書きRepositoryは期限切れのみを理由に削除しない", asyn
   assert.ok(!repo.includes("expiredIds"));
   assert.match(repo, /\.filter\(isSupportedDraft\)/);
   assert.match(repo, /expires_at: NO_EXPIRY/);
+  assert.match(repo, /async hasAnyDraft\(draftId\)/);
 });
 
 test("空メモ整理でも、旧下書きが一件あれば削除しない", async () => {
@@ -62,6 +63,7 @@ test("新規追加Undoは復元を保存してから子のいない行だけ削�
   const start = page.indexOf("const undoCreatedOutlineEntry =");
   assert.ok(start >= 0);
   const body = page.slice(start, page.indexOf("/** どこで貼っても", start));
+  assert.match(body, /await draftRepository\.hasAnyDraft\(draftId\)/);
   const save = body.indexOf("await draftRepository.save(");
   const remove = body.indexOf("await deleteEntry(row.id, { requireLeaf: true })");
   assert.ok(save >= 0 && remove > save, "durable write must precede constrained delete");
