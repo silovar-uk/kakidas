@@ -45,7 +45,7 @@ test("下書きRepositoryは期限切れのみを理由に削除しない", asyn
   assert.ok(!repo.includes("expiredIds"));
   assert.match(repo, /\.filter\(isSupportedDraft\)/);
   assert.match(repo, /expires_at: NO_EXPIRY/);
-  assert.match(repo, /async hasAnyDraft\(draftId\)/);
+  assert.ok(repo.includes("async hasAnyDraft(draftId: string)"));
 });
 
 test("空メモ整理でも、旧下書きが一件あれば削除しない", async () => {
