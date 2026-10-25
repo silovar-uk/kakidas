@@ -189,6 +189,8 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
     const [referenceNoteOpen, setReferenceNoteOpen] = useState(false);
     const [flyingCopy, setFlyingCopy] = useState<{id:string; text:string}|null>(null);
     const latestValueRef = useRef("");
+    /** 連続投稿の途中なら、表示上は空欄でもUndoで上書きしない。 */
+    const pendingSubmitRef = useRef<Promise<void> | null>(null);
 
     const inputRef = useRef<HTMLInputElement | HTMLTextAreaElement | null>(null);
     const headingInputRef = useRef<HTMLInputElement | null>(null);
@@ -404,10 +406,16 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
         });
       },
       isEmpty: () =>
+        pendingSubmitRef.current === null &&
         latestValueRef.current.trim().length === 0 &&
         headingValue.trim().length === 0 &&
+        tagValue.trim().length === 0 &&
         noteValue.trim().length === 0 &&
         linkValue.trim().length === 0 &&
+        tagDraft.trim().length === 0 &&
+        noteDraft.trim().length === 0 &&
+        linkDraft.trim().length === 0 &&
+        activeMetaPicker === null &&
         !selectedTag,
     }));
 
@@ -533,7 +541,6 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
     };
 
     /** 置いている最中の保存。Tabや矢印は、次の一行が進んでから効かせる。 */
-    const pendingSubmitRef = useRef<Promise<void> | null>(null);
     const submit = (options: { allowDuplicate?: boolean } = {}): Promise<void> => {
       const pending: Promise<void> = submitNow(options).finally(() => {
         if (pendingSubmitRef.current === pending) pendingSubmitRef.current = null;
