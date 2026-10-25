@@ -119,7 +119,7 @@ export interface MemoRepository {
     nextTag: string,
   ): Promise<EntryTagBulkUpdateResult>;
   /** 個別削除。親の場合は子孫もまとめてソフト削除し、Undo用の情報を返す。 */
-  deleteEntry(entryId: string): Promise<EntryDeletionResult>;
+  deleteEntry(entryId: string, options?: { requireLeaf?: boolean }): Promise<EntryDeletionResult>;
   /** 直前の個別削除を元に戻す。 */
   restoreEntries(entryIds: string[]): Promise<void>;
   /** 指定したWord / Sentence / Paragraphの内容をまとめてソフト削除する。 */
@@ -1167,7 +1167,7 @@ class IndexedDbMemoRepository implements MemoRepository {
     };
   }
 
-  async deleteEntry(entryId: string): Promise<EntryDeletionResult> {
+  async deleteEntry(entryId: string, options: { requireLeaf?: boolean } = {}): Promise<EntryDeletionResult> {
     const db = await getDatabase();
 
     const transaction = db.transaction(
@@ -1183,6 +1183,11 @@ class IndexedDbMemoRepository implements MemoRepository {
     const allEntries = await this.getEntriesForMemo(entryStore, current.memo_id);
     const deletedAt = nowIso();
     const targetIds = this.getSubtreeIds(allEntries, current.id);
+    // 新規追加Undo用: 子孫を巻き込む削除は、DBトランザクション内で拒否する。
+    if (options.requireLeaf && targetIds.size !== 1) {
+      transaction.abort();
+      throw new Error("この行には子項目があります。安全のため取り消しませんでした。");
+    }
 
     for (const entry of allEntries) {
       if (targetIds.has(entry.id) && entry.deleted_at === null) {
