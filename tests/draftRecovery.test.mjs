@@ -47,6 +47,16 @@ test("下書きRepositoryは期限切れのみを理由に削除しない", asyn
   assert.match(repo, /expires_at: NO_EXPIRY/);
 });
 
+test("空メモ整理でも、旧下書きが一件あれば削除しない", async () => {
+  const repo = await readFile(new URL("../src/repositories/memoRepository.ts", import.meta.url), "utf8");
+  const start = repo.indexOf("async discardUntitledEmptyMemo(");
+  assert.ok(start >= 0);
+  const block = repo.slice(start, repo.indexOf("async createEntry(", start));
+  assert.match(block, /const hasActiveDraft = drafts\.length > 0/);
+  assert.match(block, /hasActiveEntry \|\| hasActiveDraft/);
+  assert.ok(!block.includes("isEntryDraftExpired"));
+});
+
 test("新規追加Undoは復元を保存してから子のいない行だけ削除する", async () => {
   const page = await readFile(new URL("../src/pages/MemoEditorPage.tsx", import.meta.url), "utf8");
   const start = page.indexOf("const undoCreatedOutlineEntry =");
