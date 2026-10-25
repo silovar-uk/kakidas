@@ -5,6 +5,7 @@ import {
   transactionToPromise,
 } from "../lib/db";
 import {
+  ENTRY_KINDS,
   type EntryKind,
   getEntryTagKey,
   normalizeEntryTag,
@@ -50,6 +51,24 @@ export type EntryDraftSaveInput = {
 };
 
 const DRAFT_RETENTION_MS = 30 * 24 * 60 * 60 * 1_000;
+
+/** 初期の共通書き口では、IDはparagraph/wordでもkindがsentenceとなり得た。
+ * ID側が正しい場合はそれを正本とし、既存レコードを削除・上書きせず復元する。
+ */
+export function kindFromDraftIdentity(id: string, memoId: string, fallback: EntryKind): EntryKind {
+  try {
+    const parts: unknown = JSON.parse(id);
+    if (Array.isArray(parts) && parts.length === 4 && parts[0] === memoId &&
+      ENTRY_KINDS.includes(parts[1] as EntryKind)) return parts[1] as EntryKind;
+  } catch {
+    // 旧形式・不正なIDは元の種類を維持する。
+  }
+  return fallback;
+}
+function normalizeLegacyDraftKind(draft: EntryDraftRow): EntryDraftRow {
+  const kind = kindFromDraftIdentity(draft.id, draft.memo_id, draft.kind);
+  return kind === draft.kind ? draft : { ...draft, kind };
+}
 
 export function buildEntryDraftId(
   memoId: string,
@@ -101,7 +120,7 @@ class IndexedDbDraftRepository {
       return null;
     }
 
-    return draft;
+    return normalizeLegacyDraftKind(draft);
   }
 
   async save(input: EntryDraftSaveInput): Promise<EntryDraftRow | null> {
@@ -124,7 +143,7 @@ class IndexedDbDraftRepository {
     const next: EntryDraftRow = {
       id: input.id,
       memo_id: input.memo_id,
-      kind: input.kind,
+      kind: kindFromDraftIdentity(input.id, input.memo_id, input.kind),
       scope: input.scope,
       tag_key: input.scope === "tag-group" ? getEntryTagKey(fixedTag) : null,
       fixed_tag: fixedTag,
@@ -155,8 +174,12 @@ class IndexedDbDraftRepository {
     const old = await requestToPromise(store.get(fromId) as IDBRequest<EntryDraftRow | undefined>);
     const current = await requestToPromise(store.get(toId) as IDBRequest<EntryDraftRow | undefined>);
     if (old && !current) {
-      store.put({...old, id:toId,kind:"sentence",updated_at:nowIso()});
-      store.delete(fromId);
+      // コピー先を作っても原本は消さない。誤って古い書きかけを失うことを防ぐ。
+      store.put({
+        ...old, id: toId,
+        kind: kindFromDraftIdentity(toId, old.memo_id, old.kind),
+        updated_at: nowIso(),
+      });
     }
     await transactionToPromise(tx);
   }
@@ -178,6 +201,7 @@ class IndexedDbDraftRepository {
 
     return drafts
       .filter((draft) => draft.version === 1 && !isEntryDraftExpired(draft))
+      .map(normalizeLegacyDraftKind)
       .sort((left, right) => right.updated_at.localeCompare(left.updated_at));
   }
 }
