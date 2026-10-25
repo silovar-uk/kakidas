@@ -4,6 +4,7 @@ import {
   requestToPromise,
   transactionToPromise,
 } from "../lib/db";
+import { isSupportedDraft } from "../lib/draftRecovery";
 import {
   ENTRY_KINDS,
   type EntryKind,
@@ -50,7 +51,8 @@ export type EntryDraftSaveInput = {
   snapshot: EntryDraftSnapshot;
 };
 
-const DRAFT_RETENTION_MS = 30 * 24 * 60 * 60 * 1_000;
+/** 保存済みの書きかけを経過日数だけで消してはいけない。旧スキーマの期限欄は維持する。 */
+const NO_EXPIRY = "9999-12-31T23:59:59.999Z";
 
 /** 初期の共通書き口では、IDはparagraph/wordでもkindがsentenceとなり得た。
  * ID側が正しい場合はそれを正本とし、既存レコードを削除・上書きせず復元する。
@@ -98,11 +100,6 @@ export function hasMeaningfulEntryDraft(
   ].some((value) => value.trim().length > 0);
 }
 
-export function isEntryDraftExpired(draft: EntryDraftRow): boolean {
-  const expiresAt = new Date(draft.expires_at).getTime();
-  return !Number.isFinite(expiresAt) || expiresAt <= Date.now();
-}
-
 class IndexedDbDraftRepository {
   async get(draftId: string): Promise<EntryDraftRow | null> {
     const db = await getDatabase();
@@ -113,12 +110,8 @@ class IndexedDbDraftRepository {
     );
     await transactionToPromise(transaction);
 
-    if (!draft || draft.version !== 1) return null;
-
-    if (isEntryDraftExpired(draft)) {
-      await this.delete(draftId);
-      return null;
-    }
+    // 旧レコードの期限が過ぎていても内容は残す。バージョン不一致も自動削除しない。
+    if (!draft || !isSupportedDraft(draft)) return null;
 
     return normalizeLegacyDraftKind(draft);
   }
@@ -151,7 +144,7 @@ class IndexedDbDraftRepository {
         existing?.base_memo_updated_at || input.base_memo_updated_at,
       ...input.snapshot,
       updated_at: updatedAt,
-      expires_at: new Date(Date.now() + DRAFT_RETENTION_MS).toISOString(),
+      expires_at: NO_EXPIRY,
       version: 1,
     };
 
@@ -193,14 +186,9 @@ class IndexedDbDraftRepository {
     );
     await transactionToPromise(transaction);
 
-    const expiredIds = drafts.filter(isEntryDraftExpired).map((draft) => draft.id);
-
-    if (expiredIds.length > 0) {
-      await Promise.all(expiredIds.map((draftId) => this.delete(draftId)));
-    }
-
+    // 期限切れ扱いによるデータ削除・非表示を廃止。破棄は保存確定後の明示削除だけ。
     return drafts
-      .filter((draft) => draft.version === 1 && !isEntryDraftExpired(draft))
+      .filter(isSupportedDraft)
       .map(normalizeLegacyDraftKind)
       .sort((left, right) => right.updated_at.localeCompare(left.updated_at));
   }
