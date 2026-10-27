@@ -12,7 +12,8 @@ import {
 import type { EntryRow, EntryTreeNode, EntryUpdate } from "../types/memo";
 import { normalizeOutlineLines, rowsFromOutlinePaste } from "../lib/outlinePaste.js";
 import { useDraftPersistence } from "../hooks/useDraftPersistence";
-import { buildEntryDraftId, draftRepository, type EntryDraftSnapshot } from "../repositories/draftRepository";
+import { buildEntryDraftId, type EntryDraftSnapshot } from "../repositories/draftRepository";
+import { flushSync } from "react-dom";
 import { hasMeaningfulEntryDraft } from "../repositories/draftRepository";
 import type { EntryCreateMetadata } from "../types/memo";
 
@@ -149,6 +150,7 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
   const pendingRef = useRef<PendingRow | null>(null);
   const pendingEditorRef = useRef<HTMLTextAreaElement | null>(null);
   const creatingRef = useRef(false);
+  const [pendingSaving, setPendingSaving] = useState(false);
   const changePending = (next: PendingRow | null) => { pendingRef.current = next; setPending(next); };
   const emptyMeta: EntryDraftSnapshot = {
     content: "", heading: "", tag_value: "", note_value: "", link_value: "",
@@ -335,6 +337,7 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
       return;
     }
     creatingRef.current = true;
+    setPendingSaving(true);
     try {
       await flushInlineDraft();
       const metadata: EntryCreateMetadata = {
@@ -357,22 +360,18 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
       showError(error);
       // 失敗した場合も変更前の書きかけと追加位置をそのまま保持する。
       changePending(current);
-    } finally { creatingRef.current = false; }
+    } finally { creatingRef.current = false; setPendingSaving(false); }
   };
   const savePastedPending = async (parts: string[]) => {
     const current = pendingRef.current;
     if (!current || creatingRef.current || disabled || parts.length === 0) return;
     creatingRef.current = true;
     let done = 0;
-    changePending({ ...current, value: parts.join("\n") });
+    // 一覧の再描画と下書きフックを同期させてから永続保存へ進む。
+    flushSync(() => changePending({ ...current, value: parts.join("\n") }));
+    setPendingSaving(true);
     try {
       await flushInlineDraft();
-      // 再描画前に保存が始まっても、まず全行の原文をIndexedDBへ退避する。
-      await draftRepository.save({
-        id: draftId, memo_id: memoId, kind: "sentence", scope: "main",
-        fixed_tag: null, base_memo_updated_at: memoUpdatedAt,
-        snapshot: { ...pendingMeta, content: parts.join("\n") },
-      });
       for (const line of parts) {
         const metadata: EntryCreateMetadata = done === 0 ? {
           tag: pendingMeta.tag_value.trim() || undefined,
@@ -395,7 +394,7 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
       if (done > 0) setPendingMeta(emptyMeta);
       changePending({ ...current, index: current.index + done, value: parts.slice(done).join("\n") });
       showError(error);
-    } finally { creatingRef.current = false; }
+    } finally { creatingRef.current = false; setPendingSaving(false); }
   };
   useEffect(() => {
     if (visible.length === 0 && pendingRef.current === null && !disabled)
@@ -787,6 +786,9 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
     event.preventDefault();
     void savePastedPending(lines);
   };
+  useEffect(() => {
+    if (pending && !pendingSaving) pendingEditorRef.current?.focus({ preventScroll: true });
+  }, [pendingSaving, pending?.parentId, pending?.index]);
   const pendingNode = pending ? (
     <div key="pending-outline-row" className="outline__item outline__item--pending"
       data-outline-pending="" role="treeitem"
@@ -794,6 +796,7 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
       style={{ "--outline-depth": spot.depth } as CSSProperties}>
       <span className="outline__marker outline__marker--bullet" aria-hidden="true">•</span>
       <textarea ref={pendingEditorRef} className="outline__edit outline__edit--pending" rows={1}
+        disabled={disabled || pendingSaving}
         aria-label="新しいアウトライン項目" placeholder={visible.length ? "次の項目…" : "何から書く？"}
         value={pending.value} onChange={event => changePending({ ...pending, value: event.target.value })}
         onKeyDown={onPendingKeyDown} onPaste={onPendingPaste}
