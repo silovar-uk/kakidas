@@ -12,10 +12,12 @@ type DeskSlotProps = {
   text?: string;
   onActivate: () => void;
   className?: string;
+  /** アウトラインでは追加階層の理解を優先し、＋でなく矢印を使う。 */
+  outlinePlacement?: boolean;
 };
 
 /** 書き口の置き場所。いる欄では書き口の箱を受け取り、いない欄では入口だけを見せる。 */
-export function DeskSlot({ active, host, label, text, onActivate, className }: DeskSlotProps) {
+export function DeskSlot({ active, host, label, text, onActivate, className, outlinePlacement = false }: DeskSlotProps) {
   const ref = useRef<HTMLDivElement | null>(null);
 
   useLayoutEffect(() => {
@@ -31,8 +33,8 @@ export function DeskSlot({ active, host, label, text, onActivate, className }: D
 
   return (
     <button type="button" className="desk-slot__open" aria-label={label} onClick={onActivate}>
-      <span aria-hidden="true">＋</span>
-      {text ?? label}
+      <span aria-hidden="true">{outlinePlacement ? "↳" : "＋"}</span>
+      {outlinePlacement ? "この位置に書く" : (text ?? label)}
     </button>
   );
 }

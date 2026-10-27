@@ -10,6 +10,7 @@ import {
   useState,
 } from "react";
 import type { EntryRow, EntryTreeNode, EntryUpdate } from "../types/memo";
+import { rowsFromOutlinePaste } from "../lib/outlinePaste.js";
 
 /** 「次の一行」(書き口が入る場所)。parentId=null は範囲(全体か集中中の枝)の一番上の階層。 */
 type Caret = { parentId: string | null; index: number };
@@ -65,6 +66,8 @@ type OutlineListProps = {
   onOpenDetails: (id: string, anchor: HTMLElement) => void;
   onToggleCompleted?: (id: string) => Promise<void>;
   onUpdate: (id: string, patch: EntryUpdate) => Promise<unknown>;
+  /** 既存行の編集中に複数行を貼り付けた際、先頭を更新し残りを兄弟行として追加する。 */
+  onPasteRows?: (row: EntryTreeNode, rows: string[]) => Promise<void>;
   /** 新規行を戻す前に下書きを復元し、子を巻き込まずソフト削除する。 */
   onUndoCreate?: (row: EntryTreeNode) => Promise<void>;
   /** 書き口(置き場所)。いる欄では運ばれてきた書き口が、いない欄では入口が入る。 */
@@ -108,6 +111,7 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
   onOpenDetails,
   onToggleCompleted,
   onUpdate,
+  onPasteRows,
   onUndoCreate,
   deskNode,
   paragraphsByRowId,
@@ -249,7 +253,7 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
   const caretDescription = (() => {
     const parent = spot.parentId ? nodeById.get(spot.parentId) : null;
     const level = spot.depth + 1;
-    return parent ? `「${parent.content}」の下、${level}段目に入ります` : `いちばん上の階層、${level}段目に入ります`;
+    return parent ? `第${level}階層・親「${parent.content}」の下に追加` : `第${level}階層・最上位に追加`;
   })();
   useEffect(() => { onCaretDescribed?.(caretDescription); }, [caretDescription]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -515,6 +519,28 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
     }
   };
 
+  const onEditorPaste = (event: import("react").ClipboardEvent<HTMLTextAreaElement>, row: EntryTreeNode) => {
+    if (!onPasteRows || disabled || savingRef.current) return;
+    const field = event.currentTarget;
+    const pasted = event.clipboardData.getData("text/plain");
+    const lines = rowsFromOutlinePaste(editingValue, field.selectionStart, field.selectionEnd, pasted);
+    if (!lines) return;
+    event.preventDefault();
+    // 途中で保存できなかった場合、元の入力内容を消さず再編集できるようにする。
+    const merged = editingValue.slice(0, field.selectionStart) + pasted + editingValue.slice(field.selectionEnd);
+    setEditingValue(merged);
+    savingRef.current = true;
+    setBusy(true);
+    void onPasteRows(row, lines).then(() => {
+      setEditingId(null);
+      setSelectedId(row.id);
+      setMessage("");
+    }).catch(showError).finally(() => {
+      savingRef.current = false;
+      setBusy(false);
+    });
+  };
+
   const caretNode = deskNode || ghostOn || caretPreviewVisible ? (
     <div
       key="outline-caret"
@@ -525,8 +551,14 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
     >
       {deskNode ? (
         <>
-          <span className="outline__caret-plus" aria-hidden="true">＋</span>
-          <div className="outline__caret-host">{deskNode}</div>
+          <span className="outline__caret-marker" aria-hidden="true">•</span>
+          <div className="outline__caret-host">
+            <div className="outline__insertion-context" aria-label={caretDescription}>
+              <span className="outline__insertion-title">ここに追加</span>
+              <span className="outline__insertion-level">第{spot.depth + 1}階層</span>
+            </div>
+            {deskNode}
+          </div>
         </>
       ) : null}
       {caretPreviewVisible ? (
@@ -573,6 +605,7 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
         {editingId === row.id ? <textarea ref={editorRef} className="outline__edit" rows={1} value={editingValue}
           aria-label="アウトラインの本文を編集" onChange={(event) => setEditingValue(event.target.value)}
           onKeyDown={(event) => onEditorKeyDown(event, row)}
+          onPaste={(event) => onEditorPaste(event, row)}
           onBlur={() => { if (skipBlurRef.current) { skipBlurRef.current = false; return; } void commitEditing(); }}/>
         : <span className="outline__content"
             onClick={(event) => {

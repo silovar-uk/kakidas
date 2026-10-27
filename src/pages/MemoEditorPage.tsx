@@ -1234,8 +1234,10 @@ export function MemoEditorPage() {
       void placeReferenceUrls(lines.map(line=>normalizeLinkUrlForSave(line)));
       return;
     }
-    // 貼り付けた文章も現在の書き口に留める。暗黙に別の欄へは移動しない。
-    activeDesk()?.insertText(text);
+    // 貼り付け先がアウトラインなら改行を独立した兄弟行へ。ほかの欄は通常入力へ。
+    const desk = activeDesk();
+    if (desk?.pasteOutlineText(text)) return;
+    desk?.insertText(text);
   };
   useEffect(()=>{
     const onPaste=(event:ClipboardEvent)=>pasteRef.current(event);
@@ -1605,6 +1607,7 @@ export function MemoEditorPage() {
             deskNode={isMobile?undefined:(
               <DeskSlot active host={deskHosts[kind]}
                 label={DESK_OPEN_LABEL[kind]} text={DESK_OPEN_TEXT[kind]}
+                outlinePlacement={kind === 'sentence'}
                 onActivate={()=>moveDeskTo(kind)} />
             )}
             outlineRef={kind==='sentence'?outlineRef:undefined}

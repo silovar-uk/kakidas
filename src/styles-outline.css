@@ -38,6 +38,20 @@
   .outline__marker--toggle[aria-expanded="false"] { color: var(--color-shu-ink); font-weight: 700; }
   /* 次の挿入場所は操作直後だけ薄い線で見せる。通常の項目を押し下げない。 */
   .outline__caret { position: relative; }
+  /* 入力中ずっと位置を見せる。＋の記号だけに追加階層を伝えさせない。 */
+  .outline__insertion-context {
+    display: none; align-items: center; flex-wrap: wrap; gap: 6px;
+    min-height: 24px; padding: 2px 0 4px;
+    font: 500 11px/1.35 var(--font-sans); color: var(--color-ink-2);
+  }
+  .outline__caret:has(.desk-host) .outline__insertion-context { display: flex; }
+  .outline__insertion-title { color: var(--color-shu-ink); font-weight: 650; }
+  .outline__insertion-level { padding: 2px 6px; border-radius: 5px; background: var(--color-shu-wash); color: var(--color-shu-ink); }
+  .outline__caret-marker { margin-top: 23px; }
+  .entry-composer__outline-position, .entry-composer__outline-paste-status {
+    margin: 2px 0 0; font: 500 11px/1.5 var(--font-sans); color: var(--color-ink-2);
+  }
+  .entry-composer__outline-paste-status { color: var(--color-shu-ink); }
   .outline__placement-indicator {
     position: absolute; left: calc(var(--outline-depth, 0) * 15px + 2px);
     right: 8px; top: 0; height: 0; z-index: 3;

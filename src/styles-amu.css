@@ -131,11 +131,11 @@
   padding: 0 4px 0 calc(var(--outline-depth, 0) * 15px + 2px);
   transition: padding-left var(--dur-2) var(--ease);
 }
-.outline__caret-plus { flex: 0 0 18px; height: 32px; display: grid; place-items: center; color: var(--color-shu); font-size: 14px; }
+.outline__caret-marker { flex: 0 0 18px; height: 32px; display: grid; place-items: center; color: var(--color-shu); font-size: 14px; }
 .outline__caret-host { flex: 1; min-width: 0; }
 .outline__caret .desk-slot__open { padding: 6px 4px; }
-/* 入口のボタンは自分の「＋」を持つので、二重に出さない */
-.outline__caret:has(.desk-slot__open) .outline__caret-plus { display: none; }
+/* 書き口が別の欄にあるときは、入口の矢印だけを表示する。 */
+.outline__caret:has(.desk-slot__open) .outline__caret-marker { display: none; }
 .outline__caret:has(.desk-slot__open) .desk-slot__open { padding-left: 2px; }
 /* 木の最後にあるときは、欄の下端に貼り付いて、いつも見える */
 .outline__caret--end {

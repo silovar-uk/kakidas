@@ -50,11 +50,11 @@
   box-sizing: border-box;
 }
 .outline__content { min-width: 0; max-width: 100%; }
-/* 書き口の「＋」が行頭の記号の位置を担う。余白を重複計上しない。 */
+/* 挿入マーカーが通常行のビュレット位置を担う。余白を重複計上しない。 */
 .outline__caret:has(.outline__caret-host) {
   padding-left: calc(var(--outline-depth, 0) * 15px + 2px);
 }
-.outline__caret-plus {
+.outline__caret-marker {
   flex: 0 0 var(--outline-marker-width, 12px);
   width: var(--outline-marker-width, 12px);
 }
