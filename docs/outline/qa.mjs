@@ -68,6 +68,22 @@ check('P1','保存済みの行があっても独立した書く欄を置かな�
   await row(page,'1行目').getByText('1行目').click();
   assert.equal(await page.locator('.entry-column--sentence .outline__edit').count(),1);
 });
+check('P1','PCの単一行は28px基準、通常表示も31px基準で詰まる',async(page)=>{
+  await put(page,'余白の計測A');
+  await put(page,'余白の計測B');
+  const measure=()=>row(page,'余白の計測A').evaluate(el=>({
+    height:el.getBoundingClientRect().height,
+    marker:el.querySelector('.outline__marker')?.getBoundingClientRect().height,
+    padding:getComputedStyle(el.querySelector('.outline__content')).paddingTop,
+  }));
+  const dense=await measure();
+  assert.ok(dense.height >= 27.5 && dense.height <= 29.5,'高密度の単一行は28px程度 '+JSON.stringify(dense));
+  assert.equal(dense.padding,'2px','本文の上下余白は詰まっている');
+  await page.getByRole('button',{name:'アウトラインの操作'}).click();
+  await page.getByRole('menuitemcheckbox',{name:'高密度で表示'}).click();
+  const normal=await measure();
+  assert.ok(normal.height >= 30.5 && normal.height <= 32.5,'通常表示の単一行は31px程度 '+JSON.stringify(normal));
+});
 check('P1','高密度表示を切り替えられる',async(page)=>{
   // v0.7.2: 切り替えは列のメニューの「高密度で表示」へ移った(上の帯は無くなった)
   const toggle=async()=>{await page.getByRole('button',{name:'アウトラインの操作'}).click();await page.getByRole('menuitemcheckbox',{name:'高密度で表示'}).click();};
@@ -166,10 +182,41 @@ check('P2','複数行ペーストは空白行と記号を除いて兄弟項目�
     data.setData('text/plain','先頭A\n\n• 中央B\n- 末尾C');
     el.dispatchEvent(new ClipboardEvent('paste',{bubbles:true,cancelable:true,clipboardData:data}));
   });
-  await row(page,'末尾C').waitFor({state:'visible'});
-  assert.deepEqual(await outline(page).locator('.outline__content').allTextContents(),['先頭A','中央B','末尾C']);
+  const expected=['先頭A','中央B','末尾C'];
+  // 連続DB保存の途中でReactが一時的に一覧を再描画するため、3行の安定を待つ。
+  const hasAll = items => JSON.stringify(items) === JSON.stringify(expected);
+  await page.waitForFunction((items) =>
+    JSON.stringify([...document.querySelectorAll('.outline__content')].map(el=>el.textContent))===JSON.stringify(items),
+    expected);
+  assert.ok(hasAll(await outline(page).locator('.outline__content').allTextContents()));
   await page.reload();
-  assert.deepEqual(await outline(page).locator('.outline__content').allTextContents(),['先頭A','中央B','末尾C']);
+  await page.waitForFunction((items) =>
+    JSON.stringify([...document.querySelectorAll('.outline__content')].map(el=>el.textContent))===JSON.stringify(items),
+    expected);
+  assert.ok(hasAll(await outline(page).locator('.outline__content').allTextContents()));
+});
+check('P2','兄弟行は密着し、子グループを抜けるところだけ5px空く',async(page)=>{
+  for(const content of ['大項目A','子項目A1','子項目A2','大項目B'])await put(page,content);
+  for(const content of ['子項目A1','子項目A2']){
+    await row(page,content).focus();
+    await page.keyboard.press('Tab');
+    await page.waitForFunction(value => [...document.querySelectorAll('[role="treeitem"][aria-level="2"]')]
+      .some(node=>node.textContent?.includes(value)),content);
+  }
+  const groupStart=row(page,'大項目B').locator('..');
+  assert.ok((await groupStart.getAttribute('class'))?.includes('outline__item-wrap--group-start'));
+  assert.equal(await groupStart.evaluate(el=>getComputedStyle(el).marginTop),'5px');
+  const sibling=row(page,'子項目A2').locator('..');
+  assert.equal(await sibling.evaluate(el=>getComputedStyle(el).marginTop),'0px');
+});
+check('P2','折り返す長文は編集時に本文が隠れない',async(page)=>{
+  await put(page,'長文の編集対象');
+  await row(page,'長文の編集対象').locator('.outline__content').click();
+  const input=page.getByRole('textbox',{name:'アウトラインの本文を編集'});
+  await input.fill('文章を途中で隠さず編集するための長文。'.repeat(12));
+  const size=await input.evaluate(el=>({client:el.clientHeight,scroll:el.scrollHeight}));
+  assert.ok(size.scroll>33,'長文は複数行に折り返される '+JSON.stringify(size));
+  assert.ok(size.client>=size.scroll-2,'入力欄が全体を表示する '+JSON.stringify(size));
 });
 check('P2','兄弟を移動し、直前の移動を取り消せる',async(page)=>{
   await put(page,'上A');await put(page,'下B');
@@ -222,7 +269,7 @@ check('P3','スマホでもアウトライン項目が表示される',async(pag
   const item=row(page,'モバイル入力');
   assert.equal(await item.isVisible(),true);
   const bb=await item.boundingBox();
-  assert.ok(bb.height>=44,'スマホの行高 '+bb.height);
+  assert.ok(bb.height>=44 && bb.height<=50,'スマホの行高はタップ領域を残して約44px '+bb.height);
 });
 const browser=await chromium.launch({headless:true});
 let failed=0, passed=0;

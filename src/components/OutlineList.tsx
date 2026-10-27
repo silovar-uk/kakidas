@@ -5,6 +5,7 @@ import {
   forwardRef,
   useEffect,
   useImperativeHandle,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -811,6 +812,18 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
   useEffect(() => {
     if (pending && !pendingSaving) pendingEditorRef.current?.focus({ preventScroll: true });
   }, [pendingSaving, pending?.parentId, pending?.index]);
+  // 単一行は固定リズム。折り返す項目だけ行数に応じて成長させる。
+  // textarea の初期1行高さのまま本文が隠れる問題と、編集開始時の跳ねを防ぐ。
+  useLayoutEffect(() => {
+    for (const field of [editorRef.current, pendingEditorRef.current]) {
+      if (!field) continue;
+      const minimum = Number.parseFloat(window.getComputedStyle(field).minHeight) || 28;
+      field.style.height = "0px";
+      const contentHeight = Math.ceil(field.scrollHeight);
+      // scrollHeightはborderを含まない。長文だけ境界分の余裕を足して最終行を切らない。
+      field.style.height = `${Math.max(minimum, contentHeight > minimum ? contentHeight + 4 : minimum)}px`;
+    }
+  }, [editingId, editingValue, pending?.value, dense]);
   const pendingNode = pending ? (
     <div key="pending-outline-row" className="outline__item outline__item--pending"
       data-outline-pending="" role="treeitem"
@@ -853,10 +866,12 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
     </div>
   ) : null;
 
-  const rowElement = (row: EntryTreeNode) => {
+  const rowElement = (row: EntryTreeNode, index: number) => {
     const isSelected = selectedId === row.id;
+    // フラットな兄弟行は詰め、子のまとまりを抜けて大項目へ戻る箇所だけ空ける。
+    const startsGroup = index > 0 && rowDepth(row) === 0 && rowDepth(visible[index - 1]) > 0;
     const isBound = (paragraphsByRowId?.get(row.id)?.length ?? 0) > 0;
-    return <div key={row.id} className="outline__item-wrap">
+    return <div key={row.id} className={`outline__item-wrap ${startsGroup ? "outline__item-wrap--group-start" : ""}`}>
       <div
         data-outline-id={row.id}
         data-outline-parent-id={row.parent_id ?? ""}
@@ -919,7 +934,7 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
   visible.forEach((row, index) => {
     if (pendingNode && spot.at === index) rows.push(pendingNode);
     if (caretNode && spot.at === index && !pendingNode) rows.push(caretNode);
-    rows.push(rowElement(row));
+    rows.push(rowElement(row, index));
     if (!pendingNode) rows.push(
       <button key={`insert-after-${row.id}`} type="button" className="outline__insert-between"
         tabIndex={-1} aria-label={`「${row.content.slice(0, 24)}」の後に項目を挿入`}

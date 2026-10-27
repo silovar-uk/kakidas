@@ -197,7 +197,7 @@
     gap: 0;
     width: 100%;
     max-width: 100%;
-    padding: 2px 0 2px calc(var(--outline-depth, 0) * 16px);
+    padding: 0 0 0 calc(var(--outline-depth, 0) * 16px);
   }
   /* 開閉はビュレット/番号で行うため、専用の▼列は不要。 */
   .entry-column--sentence .outline__marker { width: max-content; min-width: 0; max-width: min(120px, 33vw); }
