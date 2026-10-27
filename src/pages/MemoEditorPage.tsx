@@ -374,7 +374,7 @@ export function MemoEditorPage() {
   const activeDesk = () => deskRefs.current[effectiveSlot];
   useEffect(() => trackDeskFocusGroup(Object.values(deskHosts)), [deskHosts]);
   // iPhoneでタブを切り替えても、別の書き口へ古いフォーカスを押し付けない。
-  useLayoutEffect(() => restoreDeskFocus(deskHosts[effectiveSlot]));
+  useLayoutEffect(() => { if (effectiveSlot !== "sentence") restoreDeskFocus(deskHosts[effectiveSlot]); }, [effectiveSlot, deskHosts]);
   /** 書き口を欄へ運び、フォーカスする。変換中は運ばない(呼ぶ側がキーを見て決める)。 */
   /**
    * 書き口を欄へ運び、そのままフォーカスする。キー操作の中でも、運んだ直後に同期でフォーカスを入れる
@@ -385,7 +385,8 @@ export function MemoEditorPage() {
     const apply = () => { if (mobile) setActiveKind(kind); else setDeskSlot(kind); };
     if (options.focus === false) { apply(); return; }
     flushSync(apply);
-    deskRefs.current[kind]?.focus({ scroll: false, delay: 0, heading: options.heading });
+    if (kind === "sentence") outlineRef.current?.focusInline();
+    else deskRefs.current[kind]?.focus({ scroll: false, delay: 0, heading: options.heading });
   }, []);
   const moveDeskToRef = useRef(moveDeskTo);
   moveDeskToRef.current = moveDeskTo;
@@ -1091,7 +1092,8 @@ export function MemoEditorPage() {
     if(!memo||!shouldFocusNewMemoComposer)return;
     const frame=requestAnimationFrame(()=>{
       window.dispatchEvent(new CustomEvent('kakidas:choose-entry-kind',{detail:composerFocusKind}));
-      deskRefs.current[composerFocusKind]?.focus({scroll:false,delay:0});
+      if (composerFocusKind === "sentence") outlineRef.current?.focusInline();
+      else deskRefs.current[composerFocusKind]?.focus({scroll:false,delay:0});
       setShouldFocusNewMemoComposer(false);
     });
     return()=>cancelAnimationFrame(frame);
@@ -1173,10 +1175,9 @@ export function MemoEditorPage() {
    */
   const undoCreatedOutlineEntry = async (row: EntryTreeNode): Promise<void> => {
     if (!memo || row.memo_id !== memo.id) throw new Error("対象のメモを確認できませんでした。");
-    const writer = deskRefs.current.sentence;
-    const check = canUndoCreatedOutlineEntry(row, Boolean(writer?.isEmpty()));
+    const check = canUndoCreatedOutlineEntry(row, !outlineRef.current?.hasPendingDraft());
     if (!check.allowed) throw new Error(check.reason ?? "この操作を元に戻せません。");
-    if (!writer) throw new Error("入力欄をまだ復元できません。");
+    if (!outlineRef.current) throw new Error("アウトラインをまだ復元できません。");
     const draftId = buildEntryDraftId(memo.id, "sentence", "main");
     // get()が読み取れない将来版や旧形式のレコードも上書きしてはいけない。
     if (await draftRepository.hasAnyDraft(draftId)) {
@@ -1190,8 +1191,8 @@ export function MemoEditorPage() {
     });
     // requireLeafでトランザクション内から子孫の有無を再確認する。通常の親削除は使わない。
     await deleteEntry(row.id, { requireLeaf: true });
-    writer.loadTransferredDraft(snapshot);
-    setNotice("追加した行を戻しました。文章は書き口に残しています。");
+    outlineRef.current.restorePendingDraft(snapshot);
+    setNotice("追加した行を戻しました。文章はアウトラインの空行に残しています。");
   };
 
   /** どこで貼っても: URLだけなら参考URLへ(重複は除く)。ふつうの文は書き口へ入れる(置くのはEnter)。 */
@@ -1235,6 +1236,7 @@ export function MemoEditorPage() {
       return;
     }
     // 貼り付け先がアウトラインなら改行を独立した兄弟行へ。ほかの欄は通常入力へ。
+    if (effectiveSlot === 'sentence' && outlineRef.current?.pastePlainText(text)) return;
     const desk = activeDesk();
     if (desk?.pasteOutlineText(text)) return;
     desk?.insertText(text);
@@ -1562,7 +1564,7 @@ export function MemoEditorPage() {
         </p>
       ) : null}
 
-      {isMobile ? <DeskSlot active host={deskHosts[activeKind]} label="書き口" onActivate={()=>undefined} className="editor-mobile-desk" /> : null}
+      {isMobile && activeKind !== 'sentence' ? <DeskSlot active host={deskHosts[activeKind]} label="書き口" onActivate={()=>undefined} className="editor-mobile-desk" /> : null}
       <div className="editor-receipt-anchor">
         {receipt ? <div className="editor-receipt" role="status" key={receipt.at}>
           <span>{receipt.text}</span>
@@ -1604,7 +1606,7 @@ export function MemoEditorPage() {
             tagSuggestions={entryTagSuggestions}
             disabled={isUploading}
             addAtBottom={addEntriesAtBottom}
-            deskNode={isMobile?undefined:(
+            deskNode={kind === 'sentence' || isMobile ? undefined : (
               <DeskSlot active host={deskHosts[kind]}
                 label={DESK_OPEN_LABEL[kind]} text={DESK_OPEN_TEXT[kind]}
                 outlinePlacement={kind === 'sentence'}
@@ -1614,10 +1616,10 @@ export function MemoEditorPage() {
              showCompletedOutline={showCompletedOutline}
              completedOutlineCount={completedOutlineCount}
              onToggleShowCompletedOutline={() => setShowCompletedOutline((current) => !current)}
-            ghostOn={isMobile&&kind==='sentence'&&draftsByKind.sentence}
+            ghostOn={false}
             onCaretDescribed={kind==='sentence'?setCaretDescription:undefined}
             onRowSelected={()=>undefined}
-            onFocusDesk={()=>moveDeskTo('sentence')}
+            onFocusDesk={()=>outlineRef.current?.focusInline()}
             paragraphAfterId={paragraphAfterId}
             onSelectParagraph={setParagraphAfterId}
             manualOrder={entrySortMode==='manual'}
@@ -1632,6 +1634,8 @@ export function MemoEditorPage() {
             routeToWord={false}
             onCreate={createEntry}
             onUpdate={(entryId, patch) => updateEntry(entryId, patch)}
+            onRemoveInline={kind === "sentence" ? async id => { await deleteEntry(id, { requireLeaf: true }); } : undefined}
+            onInlineDraftChange={kind === "sentence" ? hasDraft => setDraftsByKind(old => old.sentence === hasDraft ? old : {...old, sentence: hasDraft}) : undefined}
             onDelete={deleteEntry}
             onRestore={restoreEntries}
             onDeleteAll={deleteEntriesByKind}
@@ -1653,7 +1657,7 @@ export function MemoEditorPage() {
 
       </>}
 
-      {WORKSPACE_KINDS.map((kind) => createPortal(
+      {WORKSPACE_KINDS.filter(kind => kind !== 'sentence').map((kind) => createPortal(
         <EntryComposer key={`${memo.id}:${kind}`}
           ref={(instance) => { deskRefs.current[kind] = instance; }}
           variant="desk" kind={kind} slot={kind} memoId={memo.id}
