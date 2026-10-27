@@ -319,12 +319,21 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
     parentId: row.parent_id,
     index: childrenOf(row.parent_id).findIndex(item => item.id === row.id) + 1,
   });
-  const beginPending = (position: Caret, value = "") => {
+  const beginPending = (position: Caret, value = "", immediate = false) => {
     if (disabled || creatingRef.current) return;
-    changePending({ ...position, value });
-    setCaret(position);
-    setEditingId(null);
-    window.requestAnimationFrame(() => pendingEditorRef.current?.focus({ preventScroll: true }));
+    const render = () => {
+      changePending({ ...position, value });
+      setCaret(position);
+      setEditingId(null);
+    };
+    if (immediate) {
+      // Enter直後の連続打鍵を最初の1文字から受け取れるよう同期で描画する。
+      flushSync(render);
+      pendingEditorRef.current?.focus({ preventScroll: true });
+    } else {
+      render();
+      window.requestAnimationFrame(() => pendingEditorRef.current?.focus({ preventScroll: true }));
+    }
   };
   const pendingPosition = (): Caret => pendingRef.current
     ? { parentId: pendingRef.current.parentId, index: pendingRef.current.index }
@@ -665,7 +674,7 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
       const idx = visible.findIndex((item) => item.id === row.id);
       const next = visible[idx + (event.key === "ArrowUp" ? -1 : 1)];
       if (next) { selectRow(next); focusRow(next.id); }
-      else if (event.key === "ArrowDown") { beginPending(siblingAfter(row)); }
+      else if (event.key === "ArrowDown") { beginPending(siblingAfter(row), "", true); }
     }
   };
   const onEditorKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>, row: EntryTreeNode) => {
@@ -702,13 +711,13 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
       // 行頭でEnterは前へ空行を挿入。中間では文字列を分割。行末では次行を追加。
       if (offset === 0) {
         setEditingId(null);
-        beginPending(position);
+        beginPending(position, "", true);
       } else {
         // 描画・フォーカス移動を保存通信より先に行い、高速な連続入力を取りこぼさない。
         const firstHalf = before;
         savingRef.current = true;
         setEditingValue(firstHalf);
-        beginPending(position, after);
+        beginPending(position, after, true);
         void onUpdate(row.id, { content: firstHalf }).then(() => {
           if (firstHalf !== row.content) recordUndo({ type: "edit", id: row.id, previous: row.content });
         }).catch(showError).finally(() => { savingRef.current = false; });
