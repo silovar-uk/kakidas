@@ -83,7 +83,7 @@
   }
   @media (max-width:920px) {
     .outline__edit, .outline__edit--pending { min-height: 42px; font-size: 16px; }
-    .outline__insert-between { height: 12px; margin-block: -4px; }
+    .outline__insert-between { display: none; }
     .outline__add-last { min-height: 40px; padding: 10px 8px; }
   }
   /* 入力中ずっと位置を見せる。＋の記号だけに追加階層を伝えさせない。 */
