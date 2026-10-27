@@ -122,6 +122,8 @@ type EntryColumnProps = {
     outlineIndex?: number,
   ) => Promise<unknown>;
   onUpdate: (entryId: string, patch: EntryUpdate) => Promise<unknown>;
+  onRemoveInline?: (entryId: string) => Promise<void>;
+  onInlineDraftChange?: (hasDraft: boolean) => void;
   onDelete: (entryId: string) => Promise<EntryDeletionResult>;
   onRestore: (entryIds: string[]) => Promise<void>;
   onDeleteAll: (kind: EntryKind) => Promise<number>;
@@ -213,6 +215,8 @@ export function EntryColumn({
   routeToWord = false,
   onCreate,
   onUpdate,
+  onRemoveInline,
+  onInlineDraftChange,
   onDelete,
   onRestore,
   onDeleteAll,
@@ -1286,7 +1290,12 @@ export function EntryColumn({
 
       <div className="entry-list" aria-live="polite">
         {kind === "sentence" && onRelocateOutline ? (
-          <OutlineList key={memoId} ref={outlineRef} entries={primaryEntries} disabled={disabled || isDeletingAll} dense={outlineDense} numbered={outlineNumbered}
+          <OutlineList key={memoId} ref={outlineRef} entries={primaryEntries}
+            memoId={memoId} memoUpdatedAt={memoUpdatedAt}
+            onCreateInline={async (content, parentId, index, draftId, metadata) =>
+              await onCreate("sentence", content, metadata ?? {}, parentId, "bottom", draftId, undefined, index) as {id:string}}
+            onRemoveInline={onRemoveInline} onInlineDraftChange={onInlineDraftChange}
+            disabled={disabled || isDeletingAll} dense={outlineDense} numbered={outlineNumbered}
             onUndoAvailabilityChange={(available, description) => {
               setOutlineCanUndo(available);
               setOutlineUndoDescription(description);
