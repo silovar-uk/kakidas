@@ -12,7 +12,7 @@ import {
 import type { EntryRow, EntryTreeNode, EntryUpdate } from "../types/memo";
 import { normalizeOutlineLines, rowsFromOutlinePaste } from "../lib/outlinePaste.js";
 import { useDraftPersistence } from "../hooks/useDraftPersistence";
-import { buildEntryDraftId, type EntryDraftSnapshot } from "../repositories/draftRepository";
+import { buildEntryDraftId, draftRepository, type EntryDraftSnapshot } from "../repositories/draftRepository";
 import { hasMeaningfulEntryDraft } from "../repositories/draftRepository";
 import type { EntryCreateMetadata } from "../types/memo";
 
@@ -367,19 +367,32 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
     changePending({ ...current, value: parts.join("\n") });
     try {
       await flushInlineDraft();
+      // 再描画前に保存が始まっても、まず全行の原文をIndexedDBへ退避する。
+      await draftRepository.save({
+        id: draftId, memo_id: memoId, kind: "sentence", scope: "main",
+        fixed_tag: null, base_memo_updated_at: memoUpdatedAt,
+        snapshot: { ...pendingMeta, content: parts.join("\n") },
+      });
       for (const line of parts) {
+        const metadata: EntryCreateMetadata = done === 0 ? {
+          tag: pendingMeta.tag_value.trim() || undefined,
+          note: pendingMeta.note_value.trim(),
+          link_url: pendingMeta.link_value.trim(),
+        } : {};
         const created = await onCreateInline(line, current.parentId, current.index + done,
-          done === parts.length - 1 ? draftId : undefined);
+          done === parts.length - 1 ? draftId : undefined, metadata);
         recordUndo({ type: "create", id: created.id });
         done++;
       }
       markInlineCommitted();
+      setPendingMeta(emptyMeta);
       const next = { parentId: current.parentId, index: current.index + done, value: "" };
       changePending(next);
       setCaret(next);
       window.requestAnimationFrame(() => pendingEditorRef.current?.focus({ preventScroll: true }));
       setMessage("");
     } catch (error) {
+      if (done > 0) setPendingMeta(emptyMeta);
       changePending({ ...current, index: current.index + done, value: parts.slice(done).join("\n") });
       showError(error);
     } finally { creatingRef.current = false; }
@@ -566,6 +579,7 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
       setMessage("子がある行は安全のためUndoしません。項目の操作から確認してください。");
       return;
     }
+    const originalLocation = locationOf(last.id);
     undoInFlightRef.current = true;
     setBusy(true);
     try {
@@ -576,10 +590,12 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
       setUndoDepth(undoStackRef.current.length);
       setMessage("");
       if (last.type === "create") {
-        // 安全な削除のあと、書きかけはインラインの次の行へ復元する。
-        const location = locationOf(last.id);
         setSelectedId(null);
-        setCaret(location ? { parentId: location.parentId, index: location.index } : null);
+        if (originalLocation) {
+          const restored = pendingRef.current;
+          if (restored) changePending({ ...restored, parentId: originalLocation.parentId, index: originalLocation.index });
+          setCaret({ parentId: originalLocation.parentId, index: originalLocation.index });
+        }
       } else {
         setSelectedId(last.id);
         focusRow(last.id);
@@ -650,7 +666,7 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
       const idx = visible.findIndex((item) => item.id === row.id);
       const next = visible[idx + (event.key === "ArrowUp" ? -1 : 1)];
       if (next) { selectRow(next); focusRow(next.id); }
-      else if (event.key === "ArrowDown") { setCaret(caretAfterRow(row)); onFocusDesk(); }
+      else if (event.key === "ArrowDown") { beginPending(siblingAfter(row)); }
     }
   };
   const onEditorKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>, row: EntryTreeNode) => {
