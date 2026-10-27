@@ -1609,7 +1609,6 @@ export function MemoEditorPage() {
             deskNode={kind === 'sentence' || isMobile ? undefined : (
               <DeskSlot active host={deskHosts[kind]}
                 label={DESK_OPEN_LABEL[kind]} text={DESK_OPEN_TEXT[kind]}
-                outlinePlacement={kind === 'sentence'}
                 onActivate={()=>moveDeskTo(kind)} />
             )}
             outlineRef={kind==='sentence'?outlineRef:undefined}
@@ -1665,15 +1664,8 @@ export function MemoEditorPage() {
           disabled={isUploading}
           existingReferenceUrls={memo.entries.filter(e=>e.kind==='word'&&e.link_url).map(e=>e.link_url)}
           onSubmit={handleDeskCreate} onPlaced={handlePlaced}
-          onConvertToParagraph={kind === 'sentence' ? () => {void convertSentenceDraftToParagraph();} : undefined}
           onWritingFocus={() => { if(!isMobile) setDeskSlot(kind); }}
-          onCaretIndent={kind === 'sentence' ? () => outlineRef.current?.indentCaret() : undefined}
-          onCaretOutdent={kind === 'sentence' ? () => outlineRef.current?.outdentCaret() : undefined}
-          onExitUp={kind === 'sentence' ? () => {releaseDeskFocus();outlineRef.current?.focusRowAboveCaret();} : undefined}
-          onExitDown={kind === 'sentence' ? () => {releaseDeskFocus();outlineRef.current?.focusRowBelowCaret();} : undefined}
           onExit={()=>{releaseDeskFocus();(document.activeElement as HTMLElement|null)?.blur?.();}}
-          showDepthButtons={isMobile&&kind==='sentence'}
-          caretDescription={kind === 'sentence' ? caretDescription : undefined}
           onDraftChange={(hasDraft) => setDraftsByKind((current) =>
             current[kind] === hasDraft ? current : { ...current, [kind]: hasDraft })}/>,
         deskHosts[kind],
