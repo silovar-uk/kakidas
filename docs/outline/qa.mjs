@@ -61,6 +61,13 @@ check('P1','アウトラインに複数の行を入力できる',async(page)=>{
   await page.reload();
   assert.deepEqual(await outline(page).locator('.outline__content').allTextContents(),before,'作成順序の再現性');
 });
+check('P1','保存済みの行があっても独立した書く欄を置かない',async(page)=>{
+  await put(page,'1行目');
+  assert.equal(await page.locator('.entry-column--sentence .entry-composer__textarea').count(),0);
+  assert.equal(await page.locator('.entry-column--sentence .outline__content').count(),1);
+  await row(page,'1行目').getByText('1行目').click();
+  assert.equal(await page.locator('.entry-column--sentence .outline__edit').count(),1);
+});
 check('P1','高密度表示を切り替えられる',async(page)=>{
   // v0.7.2: 切り替えは列のメニューの「高密度で表示」へ移った(上の帯は無くなった)
   const toggle=async()=>{await page.getByRole('button',{name:'アウトラインの操作'}).click();await page.getByRole('menuitemcheckbox',{name:'高密度で表示'}).click();};
@@ -130,12 +137,25 @@ check('P2','字下げ・字上げは親子関係を保存する',async(page)=>{
   await page.reload();
   assert.equal(await row(page,'子B').getAttribute('aria-level'),'1','再読込後の字上げ');
 });
+check('P2','複数行ペーストは空白行と記号を除いて兄弟項目になる',async(page)=>{
+  await selectKind(page,'sentence');
+  await page.evaluate(() => {
+    const el=document.querySelector('.entry-column--sentence .outline__edit--pending');
+    const data=new DataTransfer();
+    data.setData('text/plain','先頭A\n\n• 中央B\n- 末尾C');
+    el.dispatchEvent(new ClipboardEvent('paste',{bubbles:true,cancelable:true,clipboardData:data}));
+  });
+  await row(page,'末尾C').waitFor({state:'visible'});
+  assert.deepEqual(await outline(page).locator('.outline__content').allTextContents(),['先頭A','中央B','末尾C']);
+  await page.reload();
+  assert.deepEqual(await outline(page).locator('.outline__content').allTextContents(),['先頭A','中央B','末尾C']);
+});
 check('P2','兄弟を移動し、直前の移動を取り消せる',async(page)=>{
   await put(page,'上A');await put(page,'下B');
   const initial=await outline(page).locator('.outline__content').allTextContents();
   await row(page,initial[1]).focus();await page.keyboard.press('Control+Shift+ArrowUp');
   await page.waitForFunction(text=>document.querySelector('.outline__content')?.textContent===text,initial[1]);
-  await page.getByRole('button',{name:'直前の移動を戻す'}).click();
+  await page.getByRole('button',{name:/移動を戻す/}).click();
   await page.waitForFunction(text=>document.querySelector('.outline__content')?.textContent===text,initial[0]);
   assert.deepEqual(await outline(page).locator('.outline__content').allTextContents(),initial);
 });
@@ -167,9 +187,9 @@ check('P3','折りたたみと集中表示を解除できる',async(page)=>{
   await page.reload();
   await row(page,childText).waitFor({state:'visible'});
   assert.equal(await row(page,childText).getAttribute('aria-level'),'2','リロード後に親子関係が保たれる');
-  await row(page,parentText).getByRole('button',{name:'子を折りたたむ'}).click();
+  await row(page,parentText).getByRole('button',{name:/子項目を折りたたむ/}).click();
   assert.equal(await row(page,childText).count(),0);
-  await row(page,parentText).getByRole('button',{name:'子を展開'}).click();
+  await row(page,parentText).getByRole('button',{name:/子項目を展開/}).click();
   assert.equal(await row(page,childText).count(),1);
   await row(page,parentText).getByRole('button',{name:'この枝に集中'}).click();
   assert.equal(await page.getByRole('navigation',{name:'アウトラインのズーム位置'}).count(),1);
