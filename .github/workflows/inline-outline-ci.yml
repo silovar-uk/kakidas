@@ -1,0 +1,47 @@
+name: Inline Outline acceptance
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/components/OutlineList.tsx'
+      - 'src/components/EntryColumn.tsx'
+      - 'src/pages/MemoEditorPage.tsx'
+      - 'src/styles-outline.css'
+      - 'src/styles-write-focus.css'
+      - 'docs/outline/qa.mjs'
+      - 'docs/amu/kinds.mjs'
+      - '.github/workflows/inline-outline-ci.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'src/components/OutlineList.tsx'
+      - 'src/components/EntryColumn.tsx'
+      - 'src/pages/MemoEditorPage.tsx'
+      - 'docs/outline/qa.mjs'
+permissions:
+  contents: read
+jobs:
+  inline-outline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: |
+          npm install --no-save --package-lock=false playwright
+          npx playwright install --with-deps chromium
+      - name: Test inline creation, hierarchy, paste, Undo and mobile
+        run: |
+          npm run preview -- --host 127.0.0.1 --port 4173 > /tmp/inline-outline-preview.log 2>&1 &
+          for i in $(seq 1 40); do
+            if curl -fsS http://127.0.0.1:4173/ > /dev/null; then break; fi
+            sleep 1
+          done
+          BASE_URL=http://127.0.0.1:4173/ node docs/outline/qa.mjs

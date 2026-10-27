@@ -67,7 +67,7 @@ test("新規追加Undoは復元を保存してから子のいない行だけ削�
   const save = body.indexOf("await draftRepository.save(");
   const remove = body.indexOf("await deleteEntry(row.id, { requireLeaf: true })");
   assert.ok(save >= 0 && remove > save, "durable write must precede constrained delete");
-  assert.match(body, /writer\.loadTransferredDraft\(snapshot\)/);
+  assert.match(body, /outlineRef\.current\.restorePendingDraft\(snapshot\)/);
   const repo = await readFile(new URL("../src/repositories/memoRepository.ts", import.meta.url), "utf8");
   assert.match(repo, /if \(options\.requireLeaf && targetIds\.size !== 1\)/);
   assert.match(repo, /transaction\.abort\(\)/);

@@ -13,7 +13,7 @@ const checks = [];
 function check(phase, name, fn) { checks.push({ phase, name, fn }); }
 const outline = page => page.locator('.outline__tree');
 const row = (page, text) => outline(page).locator('[role="treeitem"]').filter({ has: page.locator('.outline__content', { hasText: text }) }).first();
-const entries = page => outline(page).locator('[role="treeitem"]');
+const entries = page => outline(page).locator('[role="treeitem"][data-outline-id]');
 async function outlineCompletedMenu(page, { toggle = false } = {}) {
   await page.getByRole('button',{name:'アウトラインの操作'}).click();
   const item=page.getByRole('menuitemcheckbox',{name:'完了済みを表示'});
@@ -24,9 +24,10 @@ async function outlineCompletedMenu(page, { toggle = false } = {}) {
 }
 async function put(page, content) {
   await selectKind(page, 'sentence');
-  const desk = page.getByRole('textbox', { name: '書く', exact: true });
-  await desk.fill(content);
-  await desk.press('Enter');
+  const line = page.locator('.entry-column--sentence .outline__edit--pending');
+  await line.waitFor({state:'visible'});
+  await line.fill(content);
+  await line.press('Enter');
   await row(page, content).waitFor({ state: 'visible' });
 }
 async function fresh(browser, width = 1366) {
@@ -46,7 +47,10 @@ check('P1','3領域の入力先をキーボードで選択できる',async(page)
     // 書き口が使う欄(v0.8.0以降は書き口が運ばれた欄、それ以前は置き先の選択)を確かめる
     for(let i=0;i<20&&!(await deskIsFor(page,kind));i++)await page.waitForTimeout(100);
     assert.equal(await deskIsFor(page,kind),true,label+' '+key);
-    assert.equal(await page.getByRole('textbox',{name:'書く',exact:true}).evaluate(e=>document.activeElement===e),true,key+' フォーカス');
+    const target=kind==='sentence'
+      ? page.locator('.entry-column--sentence .outline__edit').first()
+      : page.getByRole('region',{name:label,exact:true}).getByRole('textbox',{name:'書く',exact:true}).first();
+    assert.equal(await target.evaluate(e=>document.activeElement===e),true,key+' フォーカス');
   }
 });
 check('P1','アウトラインに複数の行を入力できる',async(page)=>{
@@ -56,6 +60,13 @@ check('P1','アウトラインに複数の行を入力できる',async(page)=>{
   assert.deepEqual([...before].sort(),['構造A','構造B','構造C'],'3項目の保持');
   await page.reload();
   assert.deepEqual(await outline(page).locator('.outline__content').allTextContents(),before,'作成順序の再現性');
+});
+check('P1','保存済みの行があっても独立した書く欄を置かない',async(page)=>{
+  await put(page,'1行目');
+  assert.equal(await page.locator('.entry-column--sentence .entry-composer__textarea').count(),0);
+  assert.equal(await page.locator('.entry-column--sentence .outline__content').count(),1);
+  await row(page,'1行目').getByText('1行目').click();
+  assert.equal(await page.locator('.entry-column--sentence .outline__edit').count(),1);
 });
 check('P1','高密度表示を切り替えられる',async(page)=>{
   // v0.7.2: 切り替えは列のメニューの「高密度で表示」へ移った(上の帯は無くなった)
@@ -126,12 +137,46 @@ check('P2','字下げ・字上げは親子関係を保存する',async(page)=>{
   await page.reload();
   assert.equal(await row(page,'子B').getAttribute('aria-level'),'1','再読込後の字上げ');
 });
+check('P2','追加した項目のUndoはインラインの下書きに文章を戻す',async(page)=>{
+  await put(page,'復元する行');
+  await page.getByRole('button',{name:/追加した行を戻す/}).click();
+  const pending=page.locator('.entry-column--sentence .outline__edit--pending');
+  await pending.waitFor({state:'visible'});
+  assert.equal(await pending.inputValue(),'復元する行');
+  assert.equal(await row(page,'復元する行').count(),0);
+});
+check('P2','文章の途中でEnterすると、末尾を次の行へ分割できる',async(page)=>{
+  await put(page,'左右');
+  await row(page,'左右').locator('.outline__content').click();
+  const editing=page.getByRole('textbox',{name:'アウトラインの本文を編集'});
+  await editing.evaluate(el=>el.setSelectionRange(1,1));
+  await editing.press('Enter');
+  const pending=page.locator('.entry-column--sentence .outline__edit--pending');
+  await pending.waitFor({state:'visible'});
+  assert.equal(await pending.inputValue(),'右');
+  await pending.press('Enter');
+  await row(page,'左').waitFor({state:'visible'});
+  await row(page,'右').waitFor({state:'visible'});
+});
+check('P2','複数行ペーストは空白行と記号を除いて兄弟項目になる',async(page)=>{
+  await selectKind(page,'sentence');
+  await page.evaluate(() => {
+    const el=document.querySelector('.entry-column--sentence .outline__edit--pending');
+    const data=new DataTransfer();
+    data.setData('text/plain','先頭A\n\n• 中央B\n- 末尾C');
+    el.dispatchEvent(new ClipboardEvent('paste',{bubbles:true,cancelable:true,clipboardData:data}));
+  });
+  await row(page,'末尾C').waitFor({state:'visible'});
+  assert.deepEqual(await outline(page).locator('.outline__content').allTextContents(),['先頭A','中央B','末尾C']);
+  await page.reload();
+  assert.deepEqual(await outline(page).locator('.outline__content').allTextContents(),['先頭A','中央B','末尾C']);
+});
 check('P2','兄弟を移動し、直前の移動を取り消せる',async(page)=>{
   await put(page,'上A');await put(page,'下B');
   const initial=await outline(page).locator('.outline__content').allTextContents();
   await row(page,initial[1]).focus();await page.keyboard.press('Control+Shift+ArrowUp');
   await page.waitForFunction(text=>document.querySelector('.outline__content')?.textContent===text,initial[1]);
-  await page.getByRole('button',{name:'直前の移動を戻す'}).click();
+  await page.getByRole('button',{name:/移動を戻す/}).click();
   await page.waitForFunction(text=>document.querySelector('.outline__content')?.textContent===text,initial[0]);
   assert.deepEqual(await outline(page).locator('.outline__content').allTextContents(),initial);
 });
@@ -163,9 +208,9 @@ check('P3','折りたたみと集中表示を解除できる',async(page)=>{
   await page.reload();
   await row(page,childText).waitFor({state:'visible'});
   assert.equal(await row(page,childText).getAttribute('aria-level'),'2','リロード後に親子関係が保たれる');
-  await row(page,parentText).getByRole('button',{name:'子を折りたたむ'}).click();
+  await row(page,parentText).getByRole('button',{name:/子項目を折りたたむ/}).click();
   assert.equal(await row(page,childText).count(),0);
-  await row(page,parentText).getByRole('button',{name:'子を展開'}).click();
+  await row(page,parentText).getByRole('button',{name:/子項目を展開/}).click();
   assert.equal(await row(page,childText).count(),1);
   await row(page,parentText).getByRole('button',{name:'この枝に集中'}).click();
   assert.equal(await page.getByRole('navigation',{name:'アウトラインのズーム位置'}).count(),1);

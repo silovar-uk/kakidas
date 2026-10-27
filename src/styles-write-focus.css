@@ -128,3 +128,15 @@
     box-shadow: none;
   }
 }
+
+/* B案：アウトラインは行そのものが書き口。desk-hostがなくても常に主役の面と文字色にする。 */
+@media (min-width: 921px) {
+  .editor-page:not(.editor-page--seisho) .editor-grid > .entry-column--sentence:not(.entry-column--collapsed) {
+    background: var(--write-focus-active-surface);
+    box-shadow: inset 0 0 0 1px rgb(61 52 42 / .055);
+  }
+  .editor-page:not(.editor-page--seisho) .editor-grid > .entry-column--sentence .entry-column__header h2,
+  .editor-page:not(.editor-page--seisho) .editor-grid > .entry-column--sentence .outline__content {
+    color: var(--color-ink);
+  }
+}
