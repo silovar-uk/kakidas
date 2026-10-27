@@ -553,7 +553,7 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
     finally { setBusy(false); }
   };
   const undoLast = async () => {
-    if (disabled || busy || editingId || savingRef.current || undoInFlightRef.current) return;
+    if (disabled || busy || editingId || pendingRef.current?.value.trim() || savingRef.current || undoInFlightRef.current) return;
     const last = undoStackRef.current.at(-1);
     if (!last) return;
     const target = nodeById.get(last.id);
@@ -576,7 +576,7 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
       setUndoDepth(undoStackRef.current.length);
       setMessage("");
       if (last.type === "create") {
-        // 書き口へ本文・補足を戻す。次の一行は元と同じ場所へ。
+        // 安全な削除のあと、書きかけはインラインの次の行へ復元する。
         const location = locationOf(last.id);
         setSelectedId(null);
         setCaret(location ? { parentId: location.parentId, index: location.index } : null);
@@ -655,6 +655,15 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
   };
   const onEditorKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>, row: EntryTreeNode) => {
     if (event.nativeEvent.isComposing || event.key === "Process" || event.nativeEvent.keyCode === 229) return;
+    if (event.key === "Backspace" && !editingValue && !row.has_children && onRemoveInline) {
+      event.preventDefault();
+      void onRemoveInline(row.id).then(() => {
+        setEditingId(null);
+        setSelectedId(null);
+        beginPending({ parentId: row.parent_id, index: siblingAfter(row).index - 1 });
+      }).catch(showError);
+      return;
+    }
     if (event.key === "Escape") {
       event.preventDefault(); skipBlurRef.current = true; setEditingId(null); setEditingValue(row.content); setSelectedId(row.id); focusRow(row.id); return;
     }
@@ -662,12 +671,32 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
       event.preventDefault(); void commitEditing().then((ok) => { if (ok) { move(row, event.shiftKey ? "outdent" : "indent"); focusRow(row.id); } }); return;
     }
     if (event.key === "Enter" && !event.shiftKey) {
-      // 直したら、次の一行へ。続けて次の行を書ける。保存を待たずにフォーカスを移し、続く打鍵を取りこぼさない。
       event.preventDefault();
-      if (!editingValue.trim()) { setMessage("空の項目は保存できません。Escで編集を取り消せます。"); return; }
-      setCaret(caretAfterRow(row));
-      onFocusDesk();
-      void commitEditing();
+      const field = event.currentTarget;
+      const offset = field.selectionStart;
+      const before = editingValue.slice(0, offset).trim();
+      const after = editingValue.slice(offset).trim();
+      const position = offset === 0 ? {
+        parentId: row.parent_id,
+        index: Math.max(0, siblingAfter(row).index - 1),
+      } : siblingAfter(row);
+      if (!before && offset > 0) {
+        setMessage("空の項目は保存できません。");
+        return;
+      }
+      // 行頭でEnterは前へ空行を挿入。中間では文字列を分割。行末では次行を追加。
+      if (offset === 0) {
+        setEditingId(null);
+        beginPending(position);
+      } else {
+        // 更新に失敗した場合は元の行を残す。
+        const firstHalf = before;
+        setEditingValue(firstHalf);
+        void onUpdate(row.id, { content: firstHalf }).then(() => {
+          if (firstHalf !== row.content) recordUndo({ type: "edit", id: row.id, previous: row.content });
+          beginPending(position, after);
+        }).catch(showError);
+      }
       return;
     }
     if (event.ctrlKey && event.shiftKey && (event.key === "ArrowUp" || event.key === "ArrowDown")) {
@@ -823,12 +852,11 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
           onBlur={() => { if (skipBlurRef.current) { skipBlurRef.current = false; return; } void commitEditing(); }}/>
         : <span className="outline__content"
             onClick={(event) => {
-              // スマホは、選んだ行をもう一度押すとその場で直す。PCは選んでフォーカスする。
-              if (isMobileViewport() && isSelected) { startEdit(row); return; }
-              selectRow(row);
-              if (!isMobileViewport()) event.currentTarget.closest<HTMLElement>('[role="treeitem"]')?.focus();
+              // クリックでもタップでも文章をその場で編集。選択専用モードは作らない。
+              event.stopPropagation();
+              startEdit(row);
             }}
-            onDoubleClick={() => startEdit(row)} title="ダブルクリックで編集 / Enterで編集">{row.content}</span>}
+            onDoubleClick={() => startEdit(row)} title="クリックして編集">{row.content}</span>}
         <span className="outline__marks">
           {isBound ? <button type="button" className="outline__mark outline__mark--para" aria-label="段落を開く" title="この行の段落へ" onClick={() => onGrowRow?.(row.id)}>¶</button> : null}
           {row.has_children && collapsed.has(row.id) ? <span className="outline__child-count">{row.child_count}</span> : null}
