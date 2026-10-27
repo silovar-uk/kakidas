@@ -9,7 +9,8 @@ export const isMobile = (page) => page.evaluate(() => matchMedia('(max-width: 92
 export async function selectKind(page, kind) {
   if (await isMobile(page)) await page.getByRole('tab', {name: new RegExp('^' + LABEL[kind])}).click();
   else await page.keyboard.press(KEY[kind]);
-  await page.getByRole('textbox', {name: '書く', exact: true}).waitFor();
+  if (kind === 'sentence') await page.locator('.entry-column--sentence .outline__edit').first().waitFor({state:'visible'});
+  else await region(page,kind).getByRole('textbox',{name:'書く',exact:true}).first().waitFor({state:'visible'});
 }
 
 export const region = (page, kind) => page.getByRole('region', {name: LABEL[kind], exact: true});
@@ -18,6 +19,7 @@ export const region = (page, kind) => page.getByRole('region', {name: LABEL[kind
 export async function deskIsFor(page, kind) {
   const radios = page.getByRole('radiogroup', {name: '置き先'});
   if (await radios.count()) return (await radios.getByRole('radio', {name: LABEL[kind], exact: true}).getAttribute('aria-checked')) === 'true';
+  if (kind === 'sentence') return (await region(page,kind).locator('.outline__edit').count()) > 0;
   return (await region(page, kind).getByRole('textbox', {name: '書く', exact: true}).count()) > 0;
 }
 
