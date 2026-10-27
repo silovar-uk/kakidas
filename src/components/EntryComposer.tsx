@@ -29,6 +29,7 @@ import {
 } from "../lib/memoTags";
 import { getEntryTagToneClassName } from "../lib/entryTagGroups";
 import { releaseDeskFocus } from "../lib/deskFocus";
+import { rowsFromOutlinePaste } from "../lib/outlinePaste.js";
 import { useDraftPersistence } from "../hooks/useDraftPersistence";
 import {
   buildEntryDraftId,
@@ -183,6 +184,7 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
     const [activeMetaPicker, setActiveMetaPicker] = useState<MetaPicker>(null);
     const [linkError, setLinkError] = useState<string | null>(null);
     const [referenceNotice, setReferenceNotice] = useState<string | null>(null);
+    const [outlinePasteNotice, setOutlinePasteNotice] = useState<string | null>(null);
     const [duplicateCandidate, setDuplicateCandidate] = useState<string | null>(null);
     const [isComposing, setIsComposing] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -773,6 +775,74 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
       void saveReferenceBatch(urls);
     };
 
+
+    /** 複数行ペーストを、現在選んでいる階層へ連続した兄弟項目として追加する。 */
+    const handleOutlinePaste = (event: ClipboardEvent<HTMLTextAreaElement>) => {
+      if (!isDesk || slot !== "sentence" || disabled || isSubmitting || isComposingRef.current) return;
+      const pasted = event.clipboardData.getData("text/plain");
+      const field = event.currentTarget;
+      const original = latestValueRef.current;
+      const lines = rowsFromOutlinePaste(original, field.selectionStart, field.selectionEnd, pasted);
+      if (!lines) return;
+      event.preventDefault();
+
+      // 保存失敗に備え、貼り付けた文字列を先に下書きへ反映する。
+      const merged = original.slice(0, field.selectionStart) + pasted + original.slice(field.selectionEnd);
+      latestValueRef.current = merged;
+      setValue(merged);
+      markDraftEdited();
+      setOutlinePasteNotice(null);
+      const previous = pendingSubmitRef.current;
+
+      let saved = 0;
+      const run = (async () => {
+        setIsSubmitting(true);
+        try {
+          if (previous) await previous.catch(() => undefined);
+          await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
+          await flushDraft();
+          const normalizedLink = normalizeLinkUrlForSave(linkValue);
+          for (const [index, line] of lines.entries()) {
+            const entryId = crypto.randomUUID();
+            // 全件成功するまで本来の下書きを消さない。補足情報は最初の行にだけ付ける。
+            await onSubmit(line, {
+              heading: "",
+              tag: lockedTag ?? normalizeEntryTag(tagValue),
+              note: index === 0 ? noteValue.trim() : "",
+              link_url: index === 0 ? normalizedLink : "",
+            }, `${draftId}:pasted:${entryId}`, "sentence", entryId);
+            saved += 1;
+          }
+          latestValueRef.current = "";
+          setValue("");
+          setHeadingValue("");
+          setTagValue(""); setNoteValue(""); setLinkValue("");
+          setTagDraft(""); setNoteDraft(""); setLinkDraft("");
+          setActiveMetaPicker(null);
+          markDraftEdited();
+          setOutlinePasteNotice(`${saved}行を追加しました。`);
+          onPlaced?.("sentence");
+          scheduleParagraphTextareaResize({ allowShrink: true });
+        } catch (error) {
+          // 成功済みの行は重複させず、未保存の行だけを入力欄に残す。
+          const remaining = lines.slice(saved).join("\n");
+          latestValueRef.current = remaining;
+          setValue(remaining);
+          if (saved > 0) { setNoteValue(""); setLinkValue(""); }
+          markDraftEdited();
+          const reason = error instanceof Error ? error.message : "保存に失敗しました。";
+          setOutlinePasteNotice(`${saved}行を追加。残り${lines.length - saved}行は入力欄に保持しました。 ${reason}`);
+        } finally {
+          setIsSubmitting(false);
+          window.requestAnimationFrame(() => inputRef.current?.focus({ preventScroll: true }));
+        }
+      })();
+      pendingSubmitRef.current = run;
+      void run.finally(() => {
+        if (pendingSubmitRef.current === run) pendingSubmitRef.current = null;
+      });
+    };
+
     const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
       event.preventDefault();
       void submit();
@@ -932,7 +1002,7 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
 
     const commonProps = {
       value,
-      disabled,
+      disabled: disabled || isSubmitting,
       placeholder: isDesk ? DESK_PLACEHOLDER[isMobile ? "mobile" : "pc"][slot] : ENTRY_KIND_PLACEHOLDER[kind],
       onChange: handleChange,
       onKeyDown: handleKeyDown,
@@ -997,8 +1067,10 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
                   onKeyDown={handleHeadingKeyDown} />
               </div>
               <textarea {...commonProps} className="entry-composer__textarea" ref={element => {inputRef.current = element;}}
-                aria-label="書く" rows={1} onBlur={() => scheduleParagraphTextareaResize({allowShrink:true})}
+                aria-label="書く" rows={1} onPaste={handleOutlinePaste} onBlur={() => scheduleParagraphTextareaResize({allowShrink:true})}
                 aria-description={slot === "sentence" ? caretDescription : undefined} />
+              {isDesk && slot === "sentence" && isMobile && caretDescription ? <p className="entry-composer__outline-position">追加位置：{caretDescription}</p> : null}
+              {outlinePasteNotice && isDesk && slot === "sentence" ? <p role="status" className="entry-composer__outline-paste-status">{outlinePasteNotice}</p> : null}
               {flyingCopy ? <div className="entry-composer__copy-flight"
                 style={{viewTransitionName:`e-${flyingCopy.id}`}} aria-hidden="true">{flyingCopy.text}</div> : null}
             </div>
@@ -1047,7 +1119,7 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
           <button
             type="submit"
             className="entry-composer__submit"
-            disabled={!canSubmit}
+            disabled={!canSubmit || isSubmitting}
             aria-label={isDesk ? "置く" : isReferenceUrl ? "参考URLを保存" : `${ENTRY_KIND_LABEL[kind]}を置く`}
           >
             {isDesk ? "置く" : isReferenceUrl ? "保存" : "置く"}
