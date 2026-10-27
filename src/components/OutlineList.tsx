@@ -922,7 +922,7 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
     rows.push(rowElement(row));
     if (!pendingNode) rows.push(
       <button key={`insert-after-${row.id}`} type="button" className="outline__insert-between"
-        tabIndex={0} aria-label={`「${row.content.slice(0, 24)}」の後に項目を挿入`}
+        tabIndex={-1} aria-label={`「${row.content.slice(0, 24)}」の後に項目を挿入`}
         onClick={() => beginPending(siblingAfter(row))}>＋</button>
     );
   });
