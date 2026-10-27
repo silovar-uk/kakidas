@@ -137,6 +137,27 @@ check('P2','字下げ・字上げは親子関係を保存する',async(page)=>{
   await page.reload();
   assert.equal(await row(page,'子B').getAttribute('aria-level'),'1','再読込後の字上げ');
 });
+check('P2','追加した項目のUndoはインラインの下書きに文章を戻す',async(page)=>{
+  await put(page,'復元する行');
+  await page.getByRole('button',{name:/追加した行を戻す/}).click();
+  const pending=page.locator('.entry-column--sentence .outline__edit--pending');
+  await pending.waitFor({state:'visible'});
+  assert.equal(await pending.inputValue(),'復元する行');
+  assert.equal(await row(page,'復元する行').count(),0);
+});
+check('P2','文章の途中でEnterすると、末尾を次の行へ分割できる',async(page)=>{
+  await put(page,'左右');
+  await row(page,'左右').locator('.outline__content').click();
+  const editing=page.getByRole('textbox',{name:'アウトラインの本文を編集'});
+  await editing.evaluate(el=>el.setSelectionRange(1,1));
+  await editing.press('Enter');
+  const pending=page.locator('.entry-column--sentence .outline__edit--pending');
+  await pending.waitFor({state:'visible'});
+  assert.equal(await pending.inputValue(),'右');
+  await pending.press('Enter');
+  await row(page,'左').waitFor({state:'visible'});
+  await row(page,'右').waitFor({state:'visible'});
+});
 check('P2','複数行ペーストは空白行と記号を除いて兄弟項目になる',async(page)=>{
   await selectKind(page,'sentence');
   await page.evaluate(() => {
