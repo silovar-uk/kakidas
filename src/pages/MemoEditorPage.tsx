@@ -1605,6 +1605,7 @@ export function MemoEditorPage() {
             deskNode={isMobile?undefined:(
               <DeskSlot active host={deskHosts[kind]}
                 label={DESK_OPEN_LABEL[kind]} text={DESK_OPEN_TEXT[kind]}
+                outlinePlacement={kind === 'sentence'}
                 onActivate={()=>moveDeskTo(kind)} />
             )}
             outlineRef={kind==='sentence'?outlineRef:undefined}
