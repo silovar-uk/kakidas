@@ -13,7 +13,7 @@ const checks = [];
 function check(phase, name, fn) { checks.push({ phase, name, fn }); }
 const outline = page => page.locator('.outline__tree');
 const row = (page, text) => outline(page).locator('[role="treeitem"]').filter({ has: page.locator('.outline__content', { hasText: text }) }).first();
-const entries = page => outline(page).locator('[role="treeitem"]');
+const entries = page => outline(page).locator('[role="treeitem"][data-outline-id]');
 async function outlineCompletedMenu(page, { toggle = false } = {}) {
   await page.getByRole('button',{name:'アウトラインの操作'}).click();
   const item=page.getByRole('menuitemcheckbox',{name:'完了済みを表示'});
@@ -24,9 +24,10 @@ async function outlineCompletedMenu(page, { toggle = false } = {}) {
 }
 async function put(page, content) {
   await selectKind(page, 'sentence');
-  const desk = page.getByRole('textbox', { name: '書く', exact: true });
-  await desk.fill(content);
-  await desk.press('Enter');
+  const line = page.locator('.entry-column--sentence .outline__edit--pending');
+  await line.waitFor({state:'visible'});
+  await line.fill(content);
+  await line.press('Enter');
   await row(page, content).waitFor({ state: 'visible' });
 }
 async function fresh(browser, width = 1366) {
@@ -46,7 +47,10 @@ check('P1','3領域の入力先をキーボードで選択できる',async(page)
     // 書き口が使う欄(v0.8.0以降は書き口が運ばれた欄、それ以前は置き先の選択)を確かめる
     for(let i=0;i<20&&!(await deskIsFor(page,kind));i++)await page.waitForTimeout(100);
     assert.equal(await deskIsFor(page,kind),true,label+' '+key);
-    assert.equal(await page.getByRole('textbox',{name:'書く',exact:true}).evaluate(e=>document.activeElement===e),true,key+' フォーカス');
+    const target=kind==='sentence'
+      ? page.locator('.entry-column--sentence .outline__edit').first()
+      : page.getByRole('region',{name:label,exact:true}).getByRole('textbox',{name:'書く',exact:true}).first();
+    assert.equal(await target.evaluate(e=>document.activeElement===e),true,key+' フォーカス');
   }
 });
 check('P1','アウトラインに複数の行を入力できる',async(page)=>{
