@@ -158,21 +158,33 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
   };
   const [pendingMeta, setPendingMeta] = useState<EntryDraftSnapshot>(emptyMeta);
   const draftId = buildEntryDraftId(memoId, "sentence", "main");
+  const editedRow = editingId ? entries.find(row => row.id === editingId) : null;
+  const unsavedEdit = editedRow && editingValue !== editedRow.content ? editingValue : "";
   const draftSnapshot = useMemo<EntryDraftSnapshot>(() => ({
-    ...pendingMeta, content: pending?.value ?? "",
-  }), [pending?.value, pendingMeta]);
+    ...pendingMeta,
+    content: pending?.value ?? unsavedEdit,
+    // 編集中の既存行はIDを一時保存し、再読込時に同じ行へ戻す。
+    heading: pending ? "" : (unsavedEdit && editingId ? editingId : ""),
+  }), [pending?.value, pending, pendingMeta, editingId, unsavedEdit]);
   const { flush: flushInlineDraft, markCommitted: markInlineCommitted } = useDraftPersistence({
     id: draftId, memo_id: memoId, kind: "sentence", scope: "main", fixed_tag: null,
     base_memo_updated_at: memoUpdatedAt, snapshot: draftSnapshot,
     onRestore: (saved) => {
       if (!hasMeaningfulEntryDraft(saved) || pendingRef.current?.value.trim()) return;
+      const edited = saved.heading && entries.find(row => row.id === saved.heading);
+      if (edited && saved.content !== edited.content) {
+        setSelectedId(edited.id);
+        setEditingId(edited.id);
+        setEditingValue(saved.content);
+        return;
+      }
       setPendingMeta(saved);
       changePending({ parentId: null, index: entries.filter(r => r.parent_id === null).length, value: saved.content });
     },
   });
   useEffect(() => {
-    onInlineDraftChange?.(Boolean(pending?.value.trim()));
-  }, [pending?.value, onInlineDraftChange]);
+    onInlineDraftChange?.(Boolean((pending?.value ?? unsavedEdit).trim()));
+  }, [pending?.value, unsavedEdit, onInlineDraftChange]);
   const [, setCaretState] = useState<Caret | null>(null);
   // 続けて置くとき、描き直しを待たずに最新の位置を読めるよう、同じ値を持っておく。
   const caretRef = useRef<Caret | null>(null);
