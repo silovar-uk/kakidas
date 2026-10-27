@@ -819,7 +819,9 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
       if (!field) continue;
       const minimum = Number.parseFloat(window.getComputedStyle(field).minHeight) || 28;
       field.style.height = "0px";
-      field.style.height = `${Math.max(minimum, Math.ceil(field.scrollHeight))}px`;
+      const contentHeight = Math.ceil(field.scrollHeight);
+      // scrollHeightはborderを含まない。長文だけ境界分の余裕を足して最終行を切らない。
+      field.style.height = `${Math.max(minimum, contentHeight > minimum ? contentHeight + 4 : minimum)}px`;
     }
   }, [editingId, editingValue, pending?.value, dense]);
   const pendingNode = pending ? (
