@@ -42,6 +42,8 @@ export type EntryComposerHandle = {
   prefillParagraph: (heading: string) => void;
   /** 書き口へ文を入れる(どこで貼っても)。カーソルの位置へ差し込む。 */
   insertText: (text: string) => void;
+  /** 入力欄の外で貼り付けた複数行を、アウトラインへ構造化する。 */
+  pasteOutlineText: (text: string) => boolean;
   /** 打った字・見出し・添えるものが何もないか。空の書き口は、行を選ぶとついてくる。 */
   isEmpty: () => boolean;
   /** 下書きを明示的に移すときだけ使用。入力状態は自動共有しない。 */
@@ -193,6 +195,7 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
     const latestValueRef = useRef("");
     /** 連続投稿の途中なら、表示上は空欄でもUndoで上書きしない。 */
     const pendingSubmitRef = useRef<Promise<void> | null>(null);
+    const pasteOutlineRef = useRef<(text: string) => boolean>(() => false);
 
     const inputRef = useRef<HTMLInputElement | HTMLTextAreaElement | null>(null);
     const headingInputRef = useRef<HTMLInputElement | null>(null);
@@ -392,6 +395,7 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
         setHeadingValue(headingText);
         scheduleParagraphTextareaResize({ allowShrink: true });
       },
+      pasteOutlineText: (text: string) => pasteOutlineRef.current(text),
       insertText: (text: string) => {
         markDraftEdited();
         const el = inputRef.current;
@@ -777,17 +781,15 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
 
 
     /** 複数行ペーストを、現在選んでいる階層へ連続した兄弟項目として追加する。 */
-    const handleOutlinePaste = (event: ClipboardEvent<HTMLTextAreaElement>) => {
-      if (!isDesk || slot !== "sentence" || disabled || isSubmitting || isComposingRef.current) return;
-      const pasted = event.clipboardData.getData("text/plain");
-      const field = event.currentTarget;
+
+    const queueOutlinePaste = (pasted: string, selectionStart: number, selectionEnd: number): boolean => {
+      if (!isDesk || slot !== "sentence" || disabled || isSubmitting || isComposingRef.current) return false;
       const original = latestValueRef.current;
-      const lines = rowsFromOutlinePaste(original, field.selectionStart, field.selectionEnd, pasted);
-      if (!lines) return;
-      event.preventDefault();
+      const lines = rowsFromOutlinePaste(original, selectionStart, selectionEnd, pasted);
+      if (!lines) return false;
 
       // 保存失敗に備え、貼り付けた文字列を先に下書きへ反映する。
-      const merged = original.slice(0, field.selectionStart) + pasted + original.slice(field.selectionEnd);
+      const merged = original.slice(0, selectionStart) + pasted + original.slice(selectionEnd);
       latestValueRef.current = merged;
       setValue(merged);
       markDraftEdited();
@@ -841,6 +843,20 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
       void run.finally(() => {
         if (pendingSubmitRef.current === run) pendingSubmitRef.current = null;
       });
+      return true;
+    };
+
+    pasteOutlineRef.current = (pasted) => {
+      const field = inputRef.current;
+      const isFocused = field !== null && document.activeElement === field;
+      const start = isFocused ? field.selectionStart : latestValueRef.current.length;
+      const end = isFocused ? field.selectionEnd : start;
+      return queueOutlinePaste(pasted, start, end);
+    };
+
+    const handleOutlinePaste = (event: ClipboardEvent<HTMLTextAreaElement>) => {
+      if (queueOutlinePaste(event.clipboardData.getData("text/plain"),
+        event.currentTarget.selectionStart, event.currentTarget.selectionEnd)) event.preventDefault();
     };
 
     const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
