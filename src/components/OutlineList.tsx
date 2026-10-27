@@ -704,13 +704,14 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
         setEditingId(null);
         beginPending(position);
       } else {
-        // 更新に失敗した場合は元の行を残す。
+        // 描画・フォーカス移動を保存通信より先に行い、高速な連続入力を取りこぼさない。
         const firstHalf = before;
+        savingRef.current = true;
         setEditingValue(firstHalf);
+        beginPending(position, after);
         void onUpdate(row.id, { content: firstHalf }).then(() => {
           if (firstHalf !== row.content) recordUndo({ type: "edit", id: row.id, previous: row.content });
-          beginPending(position, after);
-        }).catch(showError);
+        }).catch(showError).finally(() => { savingRef.current = false; });
       }
       return;
     }
