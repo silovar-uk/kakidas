@@ -182,10 +182,18 @@ check('P2','複数行ペーストは空白行と記号を除いて兄弟項目�
     data.setData('text/plain','先頭A\n\n• 中央B\n- 末尾C');
     el.dispatchEvent(new ClipboardEvent('paste',{bubbles:true,cancelable:true,clipboardData:data}));
   });
-  await row(page,'末尾C').waitFor({state:'visible'});
-  assert.deepEqual(await outline(page).locator('.outline__content').allTextContents(),['先頭A','中央B','末尾C']);
+  const expected=['先頭A','中央B','末尾C'];
+  // 連続DB保存の途中でReactが一時的に一覧を再描画するため、3行の安定を待つ。
+  const hasAll = items => JSON.stringify(items) === JSON.stringify(expected);
+  await page.waitForFunction((items) =>
+    JSON.stringify([...document.querySelectorAll('.outline__content')].map(el=>el.textContent))===JSON.stringify(items),
+    expected);
+  assert.ok(hasAll(await outline(page).locator('.outline__content').allTextContents()));
   await page.reload();
-  assert.deepEqual(await outline(page).locator('.outline__content').allTextContents(),['先頭A','中央B','末尾C']);
+  await page.waitForFunction((items) =>
+    JSON.stringify([...document.querySelectorAll('.outline__content')].map(el=>el.textContent))===JSON.stringify(items),
+    expected);
+  assert.ok(hasAll(await outline(page).locator('.outline__content').allTextContents()));
 });
 check('P2','兄弟行は密着し、子グループを抜けるところだけ5px空く',async(page)=>{
   for(const content of ['大項目A','子項目A1','子項目A2','大項目B'])await put(page,content);
