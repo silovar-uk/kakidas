@@ -849,8 +849,8 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
     pasteOutlineRef.current = (pasted) => {
       const field = inputRef.current;
       const isFocused = field !== null && document.activeElement === field;
-      const start = isFocused ? field.selectionStart : latestValueRef.current.length;
-      const end = isFocused ? field.selectionEnd : start;
+      const start = isFocused ? (field.selectionStart ?? latestValueRef.current.length) : latestValueRef.current.length;
+      const end = isFocused ? (field.selectionEnd ?? start) : start;
       return queueOutlinePaste(pasted, start, end);
     };
 
