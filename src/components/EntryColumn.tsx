@@ -1299,6 +1299,18 @@ export function EntryColumn({
             onOpenDetails={openDetails}
             onToggleCompleted={toggleCompleted}
             onUpdate={onUpdate}
+            onPasteRows={async (row, rows) => {
+              const siblings = primaryEntries.filter((item) => item.parent_id === row.parent_id)
+                .sort((a, b) => a.sort_order - b.sort_order || a.created_at.localeCompare(b.created_at));
+              const at = siblings.findIndex((item) => item.id === row.id);
+              if (at < 0) throw new Error("挿入する元の行が見つかりません。");
+              await onUpdate(row.id, { content: rows[0] });
+              outlineRef?.current?.recordExternalEdit(row.id, row.content);
+              for (let i = 1; i < rows.length; i += 1) {
+                const created = await onCreate("sentence", rows[i], {}, row.parent_id, "bottom", undefined, undefined, at + i) as EntryTreeNode;
+                outlineRef?.current?.recordExternalCreate(created.id);
+              }
+            }}
             onUndoCreate={onUndoCreateOutline}
             deskNode={deskNode}
             paragraphsByRowId={bindings?.paragraphsByRowId}
