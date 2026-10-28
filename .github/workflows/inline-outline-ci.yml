@@ -9,6 +9,7 @@ on:
       - 'src/styles-outline.css'
       - 'src/styles-write-focus.css'
       - 'docs/outline/qa.mjs'
+      - 'docs/reference/qa.mjs'
       - 'docs/amu/kinds.mjs'
       - '.github/workflows/inline-outline-ci.yml'
   push:
@@ -45,3 +46,4 @@ jobs:
             sleep 1
           done
           BASE_URL=http://127.0.0.1:4173/ node docs/outline/qa.mjs
+          BASE_URL=http://127.0.0.1:4173/ node docs/reference/qa.mjs

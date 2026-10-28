@@ -323,12 +323,22 @@ export type Database = {
   };
 };
 
+export type ReferenceProgressRow = {
+  entry_id: string;
+  memo_id: string;
+  opened_at: string | null;
+  reviewed_at: string | null;
+  starred_at: string | null;
+};
+
 export type BackupPayload = {
-  version: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
+  version: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
   exported_at: string;
   /** v1〜v5はメモタグを、v1〜v6は項目タグを、v1〜v7は段落タイトルを持たないため、読み込み時に補完する。 */
   memos: LegacyMemoRow[];
   entries: LegacyEntryRow[];
+  /** v9以降。URLの閲覧記録もバックアップへ含める。 */
+  reference_progress?: ReferenceProgressRow[];
 };
 
 /** 画面に出す名前だけを日本語にする。kind / DB値は従来のまま。 */

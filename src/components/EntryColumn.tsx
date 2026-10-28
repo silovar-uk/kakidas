@@ -10,6 +10,7 @@ import {
   type EntryComposerHandle,
 } from "./EntryComposer";
 import { EntryItem } from "./EntryItem";
+import { ReferenceWorkspace } from "./ReferenceWorkspace";
 import { MobileEntryActionSheet } from "./MobileEntryActionSheet";
 import type { EntryTagSummary } from "../lib/memoTags";
 import {
@@ -1289,7 +1290,25 @@ export function EntryColumn({
       </div>
 
       <div className="entry-list" aria-live="polite">
-        {kind === "sentence" && onRelocateOutline ? (
+        {kind === "word" && !compactView ? (
+          <ReferenceWorkspace
+            key={memoId}
+            memoId={memoId}
+            entries={primaryEntries}
+            deskNode={deskNode}
+            disabled={disabled || isDeletingAll}
+            renderEntry={(entry) => renderEntry(entry)}
+            onAdd={async (url) => {
+              const created = await onCreate("word", getLinkHostname(url) || url, { link_url: url });
+              if (created && typeof created === "object" && "id" in created && typeof created.id === "string") {
+                void enrichReferenceTitle(created.id, url);
+              }
+              return created;
+            }}
+            onDelete={onDelete}
+            onRestore={onRestore}
+          />
+        ) : kind === "sentence" && onRelocateOutline ? (
           <OutlineList key={memoId} ref={outlineRef} entries={primaryEntries}
             memoId={memoId} memoUpdatedAt={memoUpdatedAt}
             onCreateInline={async (content, parentId, index, draftId, metadata) =>
