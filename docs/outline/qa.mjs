@@ -426,6 +426,7 @@ check('P2','未記入の段落だけ非フォーカス時に控えめになり�
   await composer.waitFor({state:'visible'});
   await page.waitForFunction(()=>document.querySelector('.desk-host .entry-composer--desk[data-slot="paragraph"]')?.getAttribute('data-draft')==='false');
   await field.focus();
+  await page.waitForTimeout(220); // CSSの140msトランジションが終了してから色を比較
   const style=()=>composer.evaluate(el=>({
     background:getComputedStyle(el).backgroundColor,
     border:getComputedStyle(el).borderLeftColor,
@@ -436,12 +437,14 @@ check('P2','未記入の段落だけ非フォーカス時に控えめになり�
   assert.notEqual(focused.shadow,'none','既存のフォーカス強調を維持');
   await field.evaluate(el=>el.blur());
   await page.mouse.move(0,0);
+  await page.waitForTimeout(220);
   const rest=await style();
   assert.equal(rest.shadow,'none','空の非フォーカス状態は影なし');
   assert.notEqual(rest.background,focused.background,'空の非フォーカス状態は背景が静かになる');
   assert.notEqual(rest.border,focused.border,'空の非フォーカス状態は左線も弱める');
   assert.ok(Math.abs(rest.height-focused.height)<=1,'フォーカスで段落の高さが跳ねない');
   await field.focus();
+  await page.waitForTimeout(220);
   const refocused=await style();
   assert.equal(refocused.background,focused.background,'フォーカスすると元の背景に戻る');
   assert.equal(refocused.border,focused.border,'フォーカスすると元の左アクセントに戻る');
@@ -449,6 +452,7 @@ check('P2','未記入の段落だけ非フォーカス時に控えめになり�
   await page.waitForFunction(()=>document.querySelector('.desk-host .entry-composer--desk[data-slot="paragraph"]')?.getAttribute('data-draft')==='true');
   await field.evaluate(el=>el.blur());
   await page.mouse.move(0,0);
+  await page.waitForTimeout(220);
   const hasDraft=await style();
   assert.equal(hasDraft.background,focused.background,'書きかけがあれば非フォーカスでも本文の面を保護');
   assert.notEqual(hasDraft.shadow,'none','書きかけの強調は維持');
@@ -459,13 +463,16 @@ check('P3','スマホでも空の段落は静か、タップ後のフォーカ�
   const field=composer.getByRole('textbox',{name:'書く',exact:true});
   await composer.waitFor({state:'visible'});
   await field.focus();
+  await page.waitForTimeout(220);
   const focused=await composer.evaluate(el=>({bg:getComputedStyle(el).backgroundColor,shadow:getComputedStyle(el).boxShadow}));
   await field.evaluate(el=>el.blur());
   await page.mouse.move(0,0);
+  await page.waitForTimeout(220);
   const rest=await composer.evaluate(el=>({bg:getComputedStyle(el).backgroundColor,shadow:getComputedStyle(el).boxShadow}));
   assert.notEqual(rest.bg,focused.bg,'スマホも空の非フォーカス時だけトーンを落とす');
   assert.equal(rest.shadow,'none');
   await field.focus();
+  await page.waitForTimeout(220);
   assert.equal(await composer.evaluate(el=>getComputedStyle(el).backgroundColor),focused.bg,'スマホでフォーカスが元に戻る');
 });
 const browser=await chromium.launch({headless:true});
