@@ -133,3 +133,52 @@
 @media (prefers-reduced-motion: reduce) { .reference-workspace *, .reference-workspace *::before { transition: none !important; } }
 
 @media (max-width: 920px) { .reference-workspace__desktop-only { display: none !important; } }
+
+/* メモ編集中は道具の密集を防ぎ、既存のURL行を主役にする。 */
+.reference-workspace--compact {
+  gap: 5px;
+  padding: 2px 0 8px;
+}
+.reference-workspace__compact-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 5px;
+  min-width: 0;
+  padding: 0 2px;
+}
+.reference-workspace__compact-count {
+  font-size: 10px;
+  color: var(--color-ink-2, #59646d);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.reference-workspace__compact-header button {
+  flex: 0 0 auto;
+  border: 0;
+  background: transparent;
+  color: var(--color-shu, #a34132);
+  font-weight: 650;
+  font-size: 11px;
+  padding: 5px 2px;
+}
+.reference-workspace__compact-list { min-width: 0; }
+.reference-workspace__compact-row { min-width: 0; border-bottom: 1px solid var(--rw-line); padding: 0 0 5px; }
+.reference-workspace__compact-row .entry-item--reference-url {
+  padding: 7px 32px 2px 4px;
+  margin: 0;
+}
+.reference-workspace__compact-status {
+  display: block;
+  font-size: 10px;
+  color: var(--color-ink-2, #69747c);
+  padding: 0 4px 3px 25px;
+}
+.reference-workspace--compact .reference-workspace__desk {
+  margin: 0;
+}
+.reference-workspace--compact .reference-workspace__undo {
+  position: relative;
+  bottom: auto;
+}
