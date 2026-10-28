@@ -17,17 +17,17 @@ test("アウトライナー用: Tabで階層を表すプレーンテキスト", 
 });
 test("テキストメモ用: 番号は常に1から、階層ごとに連番", () => {
   const result=buildOutlineCopy(rows,{mode:"textMemo"});
-  assert.equal(result.text,"1 市場調査\n  1.1 競合分析\n    1.1.1 国内企業\n    1.1.2 海外企業\n  1.2 TAM推計\n2 結論");
+  assert.equal(result.text,"1. 市場調査\n  1.1 競合分析\n    1.1.1 国内企業\n    1.1.2 海外企業\n  1.2 TAM推計\n2. 結論");
 });
 test("枝コピー: 選択した親と子孫だけを相対階層で出す", () => {
   const result=buildOutlineCopy(rows,{mode:"textMemo",rootId:"r2"});
-  assert.equal(result.text,"1 競合分析\n  1.1 国内企業\n  1.2 海外企業");
+  assert.equal(result.text,"1. 競合分析\n  1.1 国内企業\n  1.2 海外企業");
   assert.equal(buildOutlineCopy(rows,{mode:"outliner",rootId:"r2"}).text,"競合分析\n\t国内企業\n\t海外企業");
 });
 test("完了済みの親を除外しても子を保持し番号を振り直す", () => {
   const edited=rows.map(r=>({ ...r, is_completed:r.id==="r2"||r.id==="r5" }));
-  assert.equal(buildOutlineCopy(edited,{mode:"textMemo"}).text,"1 市場調査\n  1.1 国内企業\n  1.2 海外企業\n2 結論");
-  assert.equal(buildOutlineCopy(edited,{mode:"textMemo",rootId:"r2"}).text,"1 国内企業\n2 海外企業");
+  assert.equal(buildOutlineCopy(edited,{mode:"textMemo"}).text,"1. 市場調査\n  1.1 国内企業\n  1.2 海外企業\n2. 結論");
+  assert.equal(buildOutlineCopy(edited,{mode:"textMemo",rootId:"r2"}).text,"1. 国内企業\n2. 海外企業");
   assert.equal(buildOutlineCopy(edited,{mode:"textMemo",includeCompleted:true}).count,6);
 });
 test("折りたたみなどUI状態に依存しない・本文の改行は1行へ", () => {
@@ -54,5 +54,5 @@ test("100件の枝も欠落・重複しない", () => {
 test("赤太字の保存記号はコピー先には持ち込まない",()=>{
   const data=[{id:"x",parent_id:null,content:"**市場**調査",is_completed:false}];
   assert.equal(buildOutlineCopy(data,{mode:"outliner"}).text,"市場調査");
-  assert.equal(buildOutlineCopy(data,{mode:"textMemo"}).text,"1 市場調査");
+  assert.equal(buildOutlineCopy(data,{mode:"textMemo"}).text,"1. 市場調査");
 });
