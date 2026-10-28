@@ -377,7 +377,7 @@ export function ReferenceWorkspace({ memoId, entries, deskNode, renderEntry, onA
       <div className="reference-workspace__filters">
         <label className="reference-workspace__search">
           <span className="sr-only">URL・タイトル・備考を検索</span>
-          <input type="search" placeholder="URL・タイトル・備考を検索" value={query} onChange={e => setQuery(e.target.value)} />
+          <input type="search" placeholder="URL・タイトル・備考を検索" value={query} onChange={e => { setQuery(e.target.value); setSelected(new Set()); }} />
         </label>
         <div className="reference-workspace__chips" role="group" aria-label="表示するURL">
           {([
