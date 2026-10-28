@@ -22,8 +22,9 @@ export function toggleOutlineEmphasis(value, start, end) {
   if (a === b) {
     const wrapped = /^\*\*([^*\n]+)\*\*$/.exec(content);
     if (wrapped) return { value: wrapped[1], start: 0, end: wrapped[1].length };
-    const next = "**" + content + "**";
-    return { value: next, start: 2, end: 2 + content.length };
+    const plain = stripOutlineEmphasis(content);
+    const next = "**" + plain + "**";
+    return { value: next, start: 2, end: 2 + plain.length };
   }
   const prior = content.slice(0, a), selected = content.slice(a, b), after = content.slice(b);
   if (selected.startsWith("**") && selected.endsWith("**") && selected.length > 4) {
