@@ -61,7 +61,7 @@ export function buildOutlineCopy(rows, { mode, rootId = null, includeCompleted =
 
   const text = prepared.map(node => mode === "outliner"
     ? "\t".repeat(node.depth) + node.content
-    : "  ".repeat(node.depth) + node.numbers.join(".") + " " + node.content
+    : "  ".repeat(node.depth) + node.numbers.join(".") + (node.depth === 0 ? "." : "") + " " + node.content
   ).join("\n");
 
   return { text, count: prepared.length };
