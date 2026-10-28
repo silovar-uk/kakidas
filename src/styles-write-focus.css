@@ -77,6 +77,33 @@
   border-left-color: var(--color-shu);
   box-shadow: 0 0 0 2px rgb(178 78 41 / .08), 0 4px 16px rgb(45 38 31 / .05);
 }
+
+/*
+ * まだ書いていない段落は、フォーカスがないときだけ背景に溶け込ませる。
+ * フォーカス中や復元済みの下書きは既存の「書く紙」のまま。
+ * 文字色・高さ・クリック領域・フォーカスリングは変えない。
+ */
+.editor-page:not(.editor-page--seisho) .desk-host
+.entry-composer--desk[data-slot="paragraph"][data-draft="false"]:not(:focus-within) {
+  background: var(--write-focus-rest-surface);
+  border-left-color: var(--write-focus-rest-line);
+  box-shadow: none;
+}
+@media (hover: hover) and (pointer: fine) {
+  .editor-page:not(.editor-page--seisho) .desk-host
+  .entry-composer--desk[data-slot="paragraph"][data-draft="false"]:not(:focus-within):hover {
+    background: var(--write-focus-active-surface);
+    border-left-color: var(--write-focus-edge);
+  }
+}
+/* 印刷・ハイコントラストでは色面を足さない。 */
+@media print, (forced-colors: active) {
+  .editor-page:not(.editor-page--seisho) .desk-host
+  .entry-composer--desk[data-slot="paragraph"][data-draft="false"]:not(:focus-within) {
+    background: transparent;
+    box-shadow: none;
+  }
+}
 .editor-page:not(.editor-page--seisho) .desk-host .entry-composer__desk-fields,
 .editor-page:not(.editor-page--seisho) .desk-host .entry-composer__textarea {
   background: transparent;
