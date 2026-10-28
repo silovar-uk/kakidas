@@ -112,6 +112,45 @@ type UndoableAction =
 
 const isMobileViewport = () => window.matchMedia("(max-width: 920px)").matches;
 
+/**
+ * テキストエリア内の折り返しを含む「表示上の最初/最後の行」だけで、
+ * 隣のビュレットへカーソルを渡す。IME変換中には呼び出さない。
+ * selectionStart と改行だけでは、画面幅に応じたソフトラップを判定できない。
+ */
+function isOnOuterVisualLine(field: HTMLTextAreaElement, direction: "up" | "down"): boolean {
+  if (field.selectionStart !== field.selectionEnd) return false;
+  const style = window.getComputedStyle(field);
+  const mirror = document.createElement("div");
+  Object.assign(mirror.style, {
+    position: "fixed", top: "-10000px", left: "0", visibility: "hidden",
+    pointerEvents: "none", boxSizing: "border-box", width: `${field.getBoundingClientRect().width}px`,
+    padding: style.padding, border: style.border, font: style.font,
+    letterSpacing: style.letterSpacing, whiteSpace: "pre-wrap",
+    overflowWrap: style.overflowWrap, wordBreak: style.wordBreak, tabSize: style.tabSize,
+  });
+  const mark = document.createElement("span");
+  mark.textContent = "\u200b";
+  const end = document.createElement("span");
+  end.textContent = "\u200b";
+  mirror.append(document.createTextNode(field.value.slice(0, field.selectionStart)), mark);
+  mirror.append(document.createTextNode(field.value.slice(field.selectionStart)), end);
+  document.body.append(mirror);
+  const top = mark.offsetTop;
+  const endTop = end.offsetTop;
+  const lineHeight = Number.parseFloat(style.lineHeight) || 20;
+  const paddingTop = Number.parseFloat(style.paddingTop) || 0;
+  mirror.remove();
+  return direction === "up" ? top <= paddingTop + lineHeight * 0.55
+    : endTop - top < lineHeight * 0.55;
+}
+
+function adjacentCursorOffset(content: string, column: number, direction: "up" | "down"): number {
+  const start = direction === "up" ? content.lastIndexOf("\n") + 1 : 0;
+  const nextBreak = content.indexOf("\n", start);
+  const end = nextBreak < 0 ? content.length : nextBreak;
+  return Math.min(end, start + column);
+}
+
 /** 親子構造はDBの parent_id / sort_order に保存し、このコンポーネントには一時的な開閉・選択・次の一行の位置だけを置く。 */
 export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function OutlineList({
   entries,
@@ -215,6 +254,7 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const editorRef = useRef<HTMLTextAreaElement | null>(null);
+  const requestedSelectionRef = useRef<{ id: string; offset: number } | null>(null);
   const savingRef = useRef(false);
   const skipBlurRef = useRef(false);
   const lastInsertRef = useRef<Caret | null>(null);
@@ -318,7 +358,17 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
   })();
   useEffect(() => { onCaretDescribed?.(caretDescription); }, [caretDescription]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  useEffect(() => { if (editingId) editorRef.current?.focus(); }, [editingId]);
+  useLayoutEffect(() => {
+    if (!editingId || !editorRef.current) return;
+    const field = editorRef.current;
+    field.focus({ preventScroll: true });
+    const request = requestedSelectionRef.current;
+    if (request?.id === editingId) {
+      const offset = Math.min(request.offset, field.value.length);
+      field.setSelectionRange(offset, offset);
+      requestedSelectionRef.current = null;
+    }
+  }, [editingId]);
   // 消えた行を選んだままにしない。
   useEffect(() => {
     if (selectedId && !nodeById.has(selectedId)) setSelectedId(null);
@@ -353,10 +403,10 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
     : resolvedCaret();
   const savePending = async (keepWriting: boolean) => {
     const current = pendingRef.current;
-    if (!current || creatingRef.current || disabled) return;
+    if (!current || creatingRef.current || disabled) return false;
     if (!current.value.trim()) {
       if (!keepWriting) changePending(null);
-      return;
+      return true;
     }
     creatingRef.current = true;
     setPendingSaving(true);
@@ -378,10 +428,12 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
         window.requestAnimationFrame(() => pendingEditorRef.current?.focus({ preventScroll: true }));
       } else changePending(null);
       setMessage("");
+      return true;
     } catch (error) {
       showError(error);
       // 失敗した場合も変更前の書きかけと追加位置をそのまま保持する。
       changePending(current);
+      return false;
     } finally { creatingRef.current = false; setPendingSaving(false); }
   };
   const savePastedPending = async (parts: string[]) => {
@@ -644,13 +696,49 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
       void moveTo(row.id, row.parent_id, index + 1);
     }
   };
-  const startEdit = (row: EntryTreeNode) => {
+  const startEdit = (row: EntryTreeNode, offset = row.content.length) => {
     if (disabled || creatingRef.current) return;
     if (pendingRef.current?.value.trim()) void savePending(false);
     else if (pendingRef.current) changePending(null);
+    requestedSelectionRef.current = { id: row.id, offset };
     setSelectedId(row.id);
     setEditingValue(row.content);
     setEditingId(row.id);
+  };
+
+  /** キー移動では編集画面を閉じずに保存。通信完了を待ってカーソルを奪わない。 */
+  const saveOnNavigation = (row: EntryTreeNode): boolean => {
+    const next = editingValue.trim();
+    if (!next) { setMessage("空の項目は保存できません。Escで編集を取り消せます。"); return false; }
+    if (next !== row.content) {
+      void onUpdate(row.id, { content: next }).then(() => {
+        recordUndo({ type: "edit", id: row.id, previous: row.content });
+      }).catch(showError);
+    }
+    return true;
+  };
+  const navigateEditor = (row: EntryTreeNode, direction: "up" | "down", field: HTMLTextAreaElement) => {
+    const index = visible.findIndex(item => item.id === row.id);
+    const next = visible[index + (direction === "up" ? -1 : 1)];
+    if (!next || !saveOnNavigation(row)) return false;
+    const logicalStart = editingValue.lastIndexOf("\n", field.selectionStart - 1) + 1;
+    const column = field.selectionStart - logicalStart;
+    // textareaを再マウントしても、選択状態ではなく文字カーソルを復元する。
+    skipBlurRef.current = true;
+    startEdit(next, adjacentCursorOffset(next.content, column, direction));
+    window.requestAnimationFrame(() => { skipBlurRef.current = false; });
+    return true;
+  };
+  const reorderFromEditor = (row: EntryTreeNode, direction: "up" | "down") => {
+    if (busy || savingRef.current || disabled) return;
+    const next = editingValue.trim();
+    if (!next) { setMessage("空の項目は保存できません。"); return; }
+    if (next === row.content) { move(row, direction); return; }
+    savingRef.current = true;
+    void onUpdate(row.id, { content: next }).then(() => {
+      recordUndo({ type: "edit", id: row.id, previous: row.content });
+      move(row, direction);
+    }).catch(showError).finally(() => { savingRef.current = false; });
   };
   const toggleCollapsed = (id: string) => setCollapsed((previous) => {
     const next = new Set(previous); if (next.has(id)) next.delete(id); else next.add(id); return next;
@@ -662,8 +750,12 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
     if ((event.ctrlKey || event.metaKey) && !event.shiftKey && event.key.toLowerCase() === "z") {
       event.preventDefault(); void undoLast(); return;
     }
-    if (event.ctrlKey && event.shiftKey && (event.key === "ArrowUp" || event.key === "ArrowDown")) {
-      event.preventDefault(); move(row, event.key === "ArrowUp" ? "up" : "down"); focusRow(row.id); return;
+    if (event.shiftKey && (event.altKey || event.ctrlKey) && !event.metaKey
+      && (event.key === "ArrowUp" || event.key === "ArrowDown")) {
+      event.preventDefault();
+      move(row, event.key === "ArrowUp" ? "up" : "down");
+      startEdit(row);
+      return;
     }
     if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
       event.preventDefault(); void onToggleCompleted?.(row.id).catch(showError); return;
@@ -686,8 +778,8 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
       event.preventDefault();
       const idx = visible.findIndex((item) => item.id === row.id);
       const next = visible[idx + (event.key === "ArrowUp" ? -1 : 1)];
-      if (next) { selectRow(next); focusRow(next.id); }
-      else if (event.key === "ArrowDown") { beginPending(siblingAfter(row), "", true); }
+      if (next) startEdit(next, event.key === "ArrowUp" ? next.content.length : 0);
+      else if (event.key === "ArrowDown") beginPending(siblingAfter(row), "", true);
     }
   };
   const onEditorKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>, row: EntryTreeNode) => {
@@ -703,6 +795,20 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
     }
     if (event.key === "Escape") {
       event.preventDefault(); skipBlurRef.current = true; setEditingId(null); setEditingValue(row.content); setSelectedId(row.id); focusRow(row.id); return;
+    }
+    if (event.shiftKey && (event.altKey || event.ctrlKey) && !event.metaKey
+      && (event.key === "ArrowUp" || event.key === "ArrowDown")) {
+      event.preventDefault();
+      reorderFromEditor(row, event.key === "ArrowUp" ? "up" : "down");
+      return;
+    }
+    if (!event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey
+      && (event.key === "ArrowUp" || event.key === "ArrowDown")) {
+      const direction = event.key === "ArrowUp" ? "up" : "down";
+      if (isOnOuterVisualLine(event.currentTarget, direction)) {
+        if (navigateEditor(row, direction, event.currentTarget)) event.preventDefault();
+      }
+      return;
     }
     if (event.key === "Tab") {
       event.preventDefault(); void commitEditing().then((ok) => { if (ok) { move(row, event.shiftKey ? "outdent" : "indent"); focusRow(row.id); } }); return;
@@ -737,9 +843,6 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
       }
       return;
     }
-    if (event.ctrlKey && event.shiftKey && (event.key === "ArrowUp" || event.key === "ArrowDown")) {
-      event.preventDefault(); void commitEditing().then((ok) => { if (ok) move(row, event.key === "ArrowUp" ? "up" : "down"); });
-    }
   };
 
   const onEditorPaste = (event: import("react").ClipboardEvent<HTMLTextAreaElement>, row: EntryTreeNode) => {
@@ -766,6 +869,21 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
 
   const onPendingKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.nativeEvent.isComposing || event.key === "Process" || event.nativeEvent.keyCode === 229) return;
+    if (!event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey
+      && (event.key === "ArrowUp" || event.key === "ArrowDown")
+      && isOnOuterVisualLine(event.currentTarget, event.key === "ArrowUp" ? "up" : "down")) {
+      const next = visible[spot.at + (event.key === "ArrowUp" ? -1 : 0)];
+      if (next) {
+        event.preventDefault();
+        if (pendingRef.current?.value.trim()) {
+          void savePending(false).then(saved => { if (saved) startEdit(next); });
+        } else {
+          changePending(null);
+          startEdit(next);
+        }
+      }
+      return;
+    }
     if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
       void savePending(true);
@@ -937,16 +1055,21 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
     rows.push(rowElement(row, index));
     if (!pendingNode) rows.push(
       <button key={`insert-after-${row.id}`} type="button" className="outline__insert-between"
-        tabIndex={-1} aria-label={`「${row.content.slice(0, 24)}」の後に項目を挿入`}
-        onClick={() => beginPending(siblingAfter(row))}>＋</button>
+        style={{ "--outline-depth": rowDepth(row) } as CSSProperties}
+        tabIndex={-1}
+        aria-label={`「${row.content.slice(0, 24)}」と同じ第${rowDepth(row) + 1}階層に項目を追加`}
+        title={row.parent_id ? `「${nodeById.get(row.parent_id)?.content ?? "親"}」の子項目として追加` : "最上位の項目として追加"}
+        onClick={() => beginPending(siblingAfter(row))}><span className="outline__insert-label">＋ 同じ階層に追加</span></button>
     );
   });
   if (pendingNode && spot.at >= visible.length) rows.push(pendingNode);
   if (caretNode && spot.at >= visible.length && !pendingNode) rows.push(caretNode);
   if (!pendingNode && visible.length > 0) rows.push(
     <button key="outline-add-last" type="button" className="outline__add-last"
+      style={{ "--outline-depth": 0 } as CSSProperties}
+      aria-label={zoom ? `「${zoom.content}」の子項目を追加` : "最上位に項目を追加"}
       onClick={() => beginPending({ parentId: scopeId, index: childrenOf(scopeId).length })}>
-      ＋ 項目を追加
+      ＋ {zoom ? `「${zoom.content.slice(0, 20)}」に子項目を追加` : "最上位に項目を追加"}
     </button>
   );
 
