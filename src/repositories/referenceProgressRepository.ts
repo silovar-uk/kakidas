@@ -1,12 +1,7 @@
 import { getDatabase, requestToPromise, transactionToPromise, STORE_NAMES } from "../lib/db";
+import type { ReferenceProgressRow } from "../types/memo";
 
-export type ReferenceProgress = {
-  entry_id: string;
-  memo_id: string;
-  opened_at: string | null;
-  reviewed_at: string | null;
-  starred_at: string | null;
-};
+export type ReferenceProgress = ReferenceProgressRow;
 
 /**
  * 閲覧した／内容を確認した／注目した、は既存の「完了」から独立。
