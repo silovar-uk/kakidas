@@ -12,6 +12,7 @@ import {
 } from "react";
 import type { EntryRow, EntryTreeNode, EntryUpdate } from "../types/memo";
 import { normalizeOutlineLines, rowsFromOutlinePaste } from "../lib/outlinePaste.js";
+import { outlineEmphasisSegments, toggleOutlineEmphasis, stripOutlineEmphasis } from "../lib/outlineEmphasis.js";
 import { useDraftPersistence } from "../hooks/useDraftPersistence";
 import { buildEntryDraftId, type EntryDraftSnapshot } from "../repositories/draftRepository";
 import { flushSync } from "react-dom";
@@ -747,6 +748,15 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
 
   const onRowKeyDown = (event: KeyboardEvent<HTMLDivElement>, row: EntryTreeNode) => {
     if (disabled || busy || event.nativeEvent.isComposing) return;
+    if ((event.ctrlKey || event.metaKey) && !event.shiftKey && !event.altKey && event.key.toLowerCase() === "b") {
+      event.preventDefault();
+      if (busy || disabled) return;
+      const next = toggleOutlineEmphasis(row.content, 0, 0).value;
+      void onUpdate(row.id, { content: next }).then(() => {
+        recordUndo({ type: "edit", id: row.id, previous: row.content });
+      }).catch(showError);
+      return;
+    }
     if ((event.ctrlKey || event.metaKey) && !event.shiftKey && event.key.toLowerCase() === "z") {
       event.preventDefault(); void undoLast(); return;
     }
@@ -786,6 +796,17 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
   };
   const onEditorKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>, row: EntryTreeNode) => {
     if (event.nativeEvent.isComposing || event.key === "Process" || event.nativeEvent.keyCode === 229) return;
+    if ((event.ctrlKey || event.metaKey) && !event.shiftKey && !event.altKey && event.key.toLowerCase() === "b") {
+      event.preventDefault();
+      if (disabled || busy || savingRef.current) return;
+      const field = event.currentTarget;
+      const result = toggleOutlineEmphasis(editingValue, field.selectionStart, field.selectionEnd);
+      setEditingValue(result.value);
+      window.requestAnimationFrame(() => {
+        if (editorRef.current === field) field.setSelectionRange(result.start, result.end);
+      });
+      return;
+    }
     if (event.key === "Backspace" && !editingValue && !row.has_children && onRemoveInline) {
       event.preventDefault();
       void onRemoveInline(row.id).then(() => {
@@ -1010,7 +1031,7 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
         {row.has_children ? (
           <button type="button" tabIndex={-1}
             className={`outline__marker outline__marker--toggle ${numbered ? "outline__marker--number" : "outline__marker--bullet"}`}
-            aria-label={`「${row.content.slice(0, 24)}」の子項目を${collapsed.has(row.id) ? "展開" : "折りたたむ"}`}
+            aria-label={`「${stripOutlineEmphasis(row.content).slice(0, 24)}」の子項目を${collapsed.has(row.id) ? "展開" : "折りたたむ"}`}
             aria-expanded={!collapsed.has(row.id)}
             title={collapsed.has(row.id) ? "子項目を展開" : "子項目を折りたたむ"}
             onClick={() => toggleCollapsed(row.id)}
@@ -1032,7 +1053,11 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
               event.stopPropagation();
               startEdit(row);
             }}
-            onDoubleClick={() => startEdit(row)} title="クリックして編集">{row.content}</span>}
+            onDoubleClick={() => startEdit(row)} title="クリックして編集">{outlineEmphasisSegments(row.content).map((part, i) =>
+              part.emphasized
+                ? <strong key={i} className="outline__red-bold">{part.text}</strong>
+                : <span key={i}>{part.text}</span>
+            )}</span>}
         <span className="outline__marks">
           {isBound ? <button type="button" className="outline__mark outline__mark--para" aria-label="段落を開く" title="この行の段落へ" onClick={() => onGrowRow?.(row.id)}>¶</button> : null}
           {row.has_children && collapsed.has(row.id) ? <span className="outline__child-count">{row.child_count}</span> : null}
