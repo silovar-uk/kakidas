@@ -46,8 +46,8 @@
   /* 追加先の字下げとガイドの始点を、実際に挿入される兄弟の階層に揃える。 */
   .outline__insert-between {
     display: block; position: relative;
-    margin: -4px 0 -4px calc(var(--outline-depth, 0) * 15px + 13px); padding: 0;
-    height: 8px; width: calc(100% - var(--outline-depth, 0) * 15px - 23px);
+    margin: -4px 0 -4px calc(var(--outline-indent-px, 0px) + 13px); padding: 0;
+    height: 8px; width: calc(100% - var(--outline-indent-px, 0px) - 23px);
     border: 0; opacity: 0; background: transparent; text-align: left; cursor: pointer;
     color: var(--color-shu-ink); font: 500 11px/1.2 var(--font-sans);
     z-index: 1;
