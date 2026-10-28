@@ -10,16 +10,14 @@ const rows = [
   { id:"r5", parent_id:"r1", content:"TAM推計", is_completed:false },
   { id:"r6", parent_id:null, content:"結論", is_completed:false },
 ];
-test("アウトライナー用: Tabで階層を表し、HTMLは入れ子のリスト", () => {
+test("アウトライナー用: Tabで階層を表すプレーンテキスト", () => {
   const result=buildOutlineCopy(rows,{mode:"outliner"});
   assert.equal(result.text,"市場調査\n\t競合分析\n\t\t国内企業\n\t\t海外企業\n\tTAM推計\n結論");
   assert.equal(result.count,6);
-  assert.match(result.html, /<ul><li>市場調査<ul><li>競合分析<ul><li>国内企業<\/li><li>海外企業<\/li><\/ul><\/li><li>TAM推計<\/li><\/ul><\/li><li>結論<\/li><\/ul>/);
 });
 test("テキストメモ用: 番号は常に1から、階層ごとに連番", () => {
   const result=buildOutlineCopy(rows,{mode:"textMemo"});
   assert.equal(result.text,"1 市場調査\n  1.1 競合分析\n    1.1.1 国内企業\n    1.1.2 海外企業\n  1.2 TAM推計\n2 結論");
-  assert.equal(result.html,null);
 });
 test("枝コピー: 選択した親と子孫だけを相対階層で出す", () => {
   const result=buildOutlineCopy(rows,{mode:"textMemo",rootId:"r2"});
@@ -39,10 +37,10 @@ test("折りたたみなどUI状態に依存しない・本文の改行は1行�
   assert.match(result.text,/\t\ta b c/);
   assert.doesNotMatch(result.text,/99/);
 });
-test("HTMLはエスケープ・無効な枝の指定は空", () => {
+test("HTML形式を使わず、無効な枝の指定は空", () => {
   const data=[{id:"x",parent_id:null,content:"<hello>&\"",is_completed:false}];
-  assert.match(buildOutlineCopy(data,{mode:"outliner"}).html,/&lt;hello&gt;&amp;&quot;/);
-  assert.deepEqual(buildOutlineCopy(data,{mode:"outliner",rootId:"missing"}),{text:"",html:null,count:0});
+  assert.equal(buildOutlineCopy(data,{mode:"outliner"}).text, '<hello>&"');
+  assert.deepEqual(buildOutlineCopy(data,{mode:"outliner",rootId:"missing"}),{text:"",count:0});
   assert.throws(()=>buildOutlineCopy(data,{mode:"unknown"}));
 });
 test("100件の枝も欠落・重複しない", () => {
@@ -51,4 +49,10 @@ test("100件の枝も欠落・重複しない", () => {
   const result=buildOutlineCopy(many,{mode:"textMemo",rootId:"root"});
   assert.equal(result.count,101);
   assert.equal(result.text.split("\n").at(-1),"  1.100 Entry 99");
+});
+
+test("赤太字の保存記号はコピー先には持ち込まない",()=>{
+  const data=[{id:"x",parent_id:null,content:"**市場**調査",is_completed:false}];
+  assert.equal(buildOutlineCopy(data,{mode:"outliner"}).text,"市場調査");
+  assert.equal(buildOutlineCopy(data,{mode:"textMemo"}).text,"1 市場調査");
 });
