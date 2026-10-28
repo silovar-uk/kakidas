@@ -74,6 +74,23 @@ export function ReferenceWorkspace({ memoId, entries, deskNode, renderEntry, onA
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const openFocusRef = useRef<HTMLButtonElement | null>(null);
+  const transferRequests = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    const received = (event: MessageEvent) => {
+      if (event.source !== window || event.origin !== location.origin) return;
+      const message = event.data;
+      if (!message || message.type !== "kakidas:research-queue-import-ack:v1" ||
+          typeof message.requestId !== "string" || !transferRequests.current.has(message.requestId)) return;
+      transferRequests.current.delete(message.requestId);
+      setNotice(message.error
+        ? "リサーチブラウザへ送れませんでした。コピーしたURLを手動で追加してください。"
+        : `リサーチブラウザへ${Number(message.added) || 0}件追加しました（重複等${Number(message.duplicate) || 0}件）。`);
+    };
+    window.addEventListener("message", received);
+    return () => window.removeEventListener("message", received);
+  }, []);
+
 
   useEffect(() => {
     let active = true;
@@ -196,6 +213,33 @@ export function ReferenceWorkspace({ memoId, entries, deskNode, renderEntry, onA
       await copyToClipboard(rows.map(row => row.link_url).join("\n"));
       setNotice(`${rows.length}件のURLをコピーしました。リサーチブラウザにも一括貼り付けできます。`);
     } catch { setNotice("コピーに失敗しました。"); }
+  }
+
+  function sendToResearchBrowser(rows: EntryTreeNode[]) {
+    if (!rows.length) return;
+    // コピーはユーザーのタップ直後に実行。iPhone Safariのクリップボード制約に対応。
+    void copyUrls(rows);
+    const requestId = crypto.randomUUID();
+    transferRequests.current.add(requestId);
+    window.postMessage({
+      type: "kakidas:research-queue-import:v1",
+      requestId,
+      urls: rows.map(row => row.link_url),
+    }, location.origin);
+  }
+
+  function openTabBatch(rows: EntryTreeNode[]) {
+    const targets = rows.slice(0, 8);
+    let openedCount = 0;
+    for (const entry of targets) {
+      const tab = window.open("about:blank", "_blank");
+      if (!tab) break;
+      tab.opener = null;
+      tab.location.replace(entry.link_url);
+      opened(entry.id);
+      openedCount++;
+    }
+    setNotice(`${openedCount}件をタブで開きました。${openedCount < rows.length ? "残りはポップアップ制限により開かれていない可能性があります。連続閲覧を利用してください。" : ""}`);
   }
 
   async function addBulk() {
@@ -383,6 +427,8 @@ export function ReferenceWorkspace({ memoId, entries, deskNode, renderEntry, onA
         <div className="reference-workspace__bottom-bar" role="toolbar" aria-label="選択したURLの一括操作">
           <strong>{selectedEntries.length}件</strong>
           <button type="button" onClick={() => beginSession(selectedEntries.map(entry => entry.id))} disabled={!selectedEntries.length}>順に読む</button>
+          <button type="button" onClick={() => sendToResearchBrowser(selectedEntries)} disabled={!selectedEntries.length}>リサーチへ送る</button>
+          <button type="button" className="reference-workspace__desktop-only" onClick={() => openTabBatch(selectedEntries)} disabled={!selectedEntries.length}>最大8タブ</button>
           <button type="button" onClick={() => void copyUrls(selectedEntries)} disabled={!selectedEntries.length}>URLコピー</button>
           <button type="button" className="reference-workspace__danger" onClick={() => void deleteSelected()} disabled={!selectedEntries.length || busy || disabled}>削除</button>
         </div>
@@ -394,7 +440,7 @@ export function ReferenceWorkspace({ memoId, entries, deskNode, renderEntry, onA
         </div>
       )}
       {notice && <div className="reference-workspace__notice" role="status">{notice}<button type="button" onClick={() => setNotice(null)} aria-label="通知を閉じる">×</button></div>}
-      {session && <div className="reference-workspace__handoff"><button type="button" onClick={() => void copyUrls(session.ids.map(id => byId.get(id)).filter((entry): entry is EntryTreeNode => Boolean(entry)))}>このセッションのURLをコピー（リサーチブラウザ用）</button></div>}
+      {session && <div className="reference-workspace__handoff"><button type="button" onClick={() => sendToResearchBrowser(session.ids.map(id => byId.get(id)).filter((entry): entry is EntryTreeNode => Boolean(entry)))}>このセッションをリサーチブラウザへ送る（コピーも実行）</button></div>}
     </section>
   );
   return focusMode ? createPortal(content, document.body) : content;
