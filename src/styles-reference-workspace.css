@@ -131,3 +131,5 @@
   .reference-workspace__item .entry-item--reference-url { padding-right: 32px; }
 }
 @media (prefers-reduced-motion: reduce) { .reference-workspace *, .reference-workspace *::before { transition: none !important; } }
+
+@media (max-width: 920px) { .reference-workspace__desktop-only { display: none !important; } }
