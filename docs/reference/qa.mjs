@@ -26,7 +26,7 @@ async function createMemo(browser, width) {
 
 async function addBatch(workspace) {
   await workspace.getByRole('button', { name: '＋ まとめて追加' }).click();
-  await workspace.locator('textarea').fill([
+  await workspace.locator('.reference-workspace__import textarea').fill([
     'https://example.com/article-one?utm_source=test',
     'https://example.com/article-one',
     'https://example.org/article-two',
@@ -81,7 +81,7 @@ try {
   {
     const { context, workspace } = await createMemo(browser, 375);
     await workspace.getByRole('button', { name: '＋ まとめて追加' }).click();
-    await workspace.locator('textarea').fill('https://example.net/mobile');
+    await workspace.locator('.reference-workspace__import textarea').fill('https://example.net/mobile');
     await workspace.getByRole('button', { name: '1件を追加' }).click();
     await workspace.locator('.reference-workspace__item').first().waitFor();
     await workspace.getByRole('button', { name: '選択', exact: true }).click();
