@@ -754,7 +754,9 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
       && (event.key === "ArrowUp" || event.key === "ArrowDown")) {
       event.preventDefault();
       move(row, event.key === "ArrowUp" ? "up" : "down");
-      startEdit(row);
+      // 既存 Ctrl+Shift 操作は選択状態を維持し、Alt+Shift は直ちに編集へ戻る。
+      if (event.altKey) startEdit(row);
+      else focusRow(row.id);
       return;
     }
     if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
@@ -1055,7 +1057,7 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
     rows.push(rowElement(row, index));
     if (!pendingNode) rows.push(
       <button key={`insert-after-${row.id}`} type="button" className="outline__insert-between"
-        style={{ "--outline-depth": rowDepth(row) } as CSSProperties}
+        style={{ "--outline-depth": rowDepth(row), "--outline-indent-px": `${rowDepth(row) * 15}px` } as CSSProperties}
         tabIndex={-1}
         aria-label={`「${row.content.slice(0, 24)}」と同じ第${rowDepth(row) + 1}階層に項目を追加`}
         title={row.parent_id ? `「${nodeById.get(row.parent_id)?.content ?? "親"}」の子項目として追加` : "最上位の項目として追加"}
