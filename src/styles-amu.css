@@ -204,6 +204,17 @@ a.outline__mark:hover { background: var(--color-shu-wash); color: var(--color-sh
 .entry-inspector__chip:hover:not(:disabled) { background: var(--color-line); }
 .entry-inspector__chip svg { width: 16px; height: 16px; }
 .entry-inspector__chip--danger { background: transparent; color: var(--color-danger); }
+/* 枝コピーは書き添えや単一項目コピーとは別のグループ。選びやすい2択にする。 */
+.entry-inspector__copy-branch {
+  flex: 1 1 100%; display: flex; flex-wrap: wrap; gap: 6px;
+  padding: 8px 0 4px; border-top: 1px solid var(--color-line);
+}
+.entry-inspector__copy-branch .entry-inspector__caption {
+  flex: 1 1 100%; margin: 0 0 2px;
+}
+.entry-inspector__copy-branch .entry-inspector__chip {
+  flex: 1 1 auto; justify-content: center; white-space: normal; text-align: center;
+}
 .entry-inspector__moves { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; padding: 4px; }
 .entry-inspector__moves button {
   display: grid; place-items: center; gap: 2px; padding: 8px 2px;
