@@ -109,7 +109,8 @@ type MoveHistory = { id: string; parentId: string | null; index: number };
 type UndoableAction =
   | { type: "edit"; id: string; previous: string }
   | ({ type: "move" } & MoveHistory)
-  | { type: "create"; id: string };
+  | { type: "create"; id: string }
+  | { type: "complete"; id: string; previous: boolean };
 
 const isMobileViewport = () => window.matchMedia("(max-width: 920px)").matches;
 
@@ -279,6 +280,7 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
     const description = !last ? null
       : last.type === "edit" ? "本文の変更を戻す"
       : last.type === "move" ? "行の移動を戻す"
+      : last.type === "complete" ? "完了・再開を元に戻す"
       : "直前に追加した行を戻す";
     onUndoAvailabilityChange?.(undoDepth > 0 && !busy && !disabled && editingId === null, description);
   }, [undoDepth, busy, disabled, editingId, onUndoAvailabilityChange]);
@@ -402,7 +404,7 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
   const pendingPosition = (): Caret => pendingRef.current
     ? { parentId: pendingRef.current.parentId, index: pendingRef.current.index }
     : resolvedCaret();
-  const savePending = async (keepWriting: boolean) => {
+  const savePending = async (keepWriting: boolean, completeAfterSave = false) => {
     const current = pendingRef.current;
     if (!current || creatingRef.current || disabled) return false;
     if (!current.value.trim()) {
@@ -411,6 +413,7 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
     }
     creatingRef.current = true;
     setPendingSaving(true);
+    let createdId: string | null = null;
     try {
       await flushInlineDraft();
       const metadata: EntryCreateMetadata = {
@@ -419,10 +422,17 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
         link_url: pendingMeta.link_value.trim(),
       };
       const created = await onCreateInline(current.value.trim(), current.parentId, current.index, draftId, metadata);
+      createdId = created.id;
       recordUndo({ type: "create", id: created.id });
       setPendingMeta(emptyMeta);
       markInlineCommitted();
-      if (keepWriting) {
+      if (completeAfterSave) {
+        // 作成直後の行は親コンポーネントのentriesにまだないことがあるため、
+        // 更新IDを直接渡し、生成直後でも確実に完了できるようにする。
+        await onUpdate(created.id, { is_completed: true });
+        recordUndo({ type: "complete", id: created.id, previous: false });
+      }
+      if (keepWriting || completeAfterSave) {
         const next = { parentId: current.parentId, index: current.index + 1, value: "" };
         changePending(next);
         setCaret(next);
@@ -432,8 +442,14 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
       return true;
     } catch (error) {
       showError(error);
-      // 失敗した場合も変更前の書きかけと追加位置をそのまま保持する。
-      changePending(current);
+      // 作成済みなのに完了だけ失敗した場合、元の文を再度追加して重複させない。
+      if (createdId) {
+        changePending(null);
+        setMessage("項目は保存されましたが、完了の更新に失敗しました。");
+      } else {
+        // 作成失敗時は書きかけをそのまま保持する。
+        changePending(current);
+      }
       return false;
     } finally { creatingRef.current = false; setPendingSaving(false); }
   };
@@ -625,6 +641,51 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
     try { return await updateText(editingId, editingValue); }
     finally { savingRef.current = false; }
   };
+  /** 選択中でも本文編集中でも同じCtrl+Enter。保存後に完了し、次の文字入力先へ移る。 */
+  const toggleRowCompletion = async (row: EntryTreeNode, fromEditor = false) => {
+    if (disabled || busy || savingRef.current || !onToggleCompleted) return;
+    const idx = visible.findIndex(item => item.id === row.id);
+    const next = visible.slice(idx + 1).find(item => !item.is_completed)
+      ?? visible.slice(0, Math.max(0, idx)).reverse().find(item => !item.is_completed);
+    savingRef.current = true;
+    // 編集欄を外す際のblur処理と二重保存しない。
+    skipBlurRef.current = fromEditor;
+    try {
+      if (fromEditor) {
+        const content = editingValue.trim();
+        if (!content) {
+          setMessage("空の項目は完了できません。先に内容を入力してください。");
+          return;
+        }
+        if (content !== row.content) {
+          await onUpdate(row.id, { content });
+          recordUndo({ type: "edit", id: row.id, previous: row.content });
+        }
+      }
+      await onToggleCompleted(row.id);
+      recordUndo({ type: "complete", id: row.id, previous: row.is_completed });
+      setEditingId(null);
+      setMessage(row.is_completed ? "項目を再開しました。" : "完了しました。操作を戻すこともできます。");
+      // 完了した行が一覧から消えても、キーボード操作を途切れさせない。
+      window.requestAnimationFrame(() => {
+        if (next && document.querySelector(`[data-outline-id="${CSS.escape(next.id)}"]`)) {
+          startEdit(next, next.content.length);
+        } else if (document.querySelector(`[data-outline-id="${CSS.escape(row.id)}"]`)) {
+          startEdit({ ...row, content: fromEditor ? editingValue.trim() : row.content });
+        } else {
+          beginPending({ parentId: scopeId, index: childrenOf(scopeId).length });
+        }
+        skipBlurRef.current = false;
+      });
+    } catch (error) {
+      showError(error);
+      if (fromEditor) setEditingId(null);
+      skipBlurRef.current = false;
+    } finally {
+      savingRef.current = false;
+    }
+  };
+
   const moveTo = async (id: string, parentId: string | null, index: number) => {
     if (busy || disabled || undoInFlightRef.current) return;
     const previous = locationOf(id);
@@ -644,12 +705,12 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
     const last = undoStackRef.current.at(-1);
     if (!last) return;
     const target = nodeById.get(last.id);
-    if (!target) {
+    if (!target && last.type !== "complete") {
       // 反映待ちの行を誤って履歴から捨てない。次回そのまま再試行できる。
       setMessage("対象の行がまだ表示されていません。更新後にもう一度お試しください。");
       return;
     }
-    if (last.type === "create" && (target.has_children || !onUndoCreate)) {
+    if (last.type === "create" && (!target || target.has_children || !onUndoCreate)) {
       setMessage("子がある行は安全のためUndoしません。項目の操作から確認してください。");
       return;
     }
@@ -659,7 +720,8 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
     try {
       if (last.type === "edit") await onUpdate(last.id, { content: last.previous });
       else if (last.type === "move") await onRelocate(last.id, last.parentId, last.index);
-      else await onUndoCreate!(target);
+      else if (last.type === "complete") await onUpdate(last.id, { is_completed: last.previous });
+      else await onUndoCreate!(target!);
       undoStackRef.current.pop();
       setUndoDepth(undoStackRef.current.length);
       setMessage("");
@@ -670,6 +732,10 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
           if (restored) changePending({ ...restored, parentId: originalLocation.parentId, index: originalLocation.index });
           setCaret({ parentId: originalLocation.parentId, index: originalLocation.index });
         }
+      } else if (last.type === "complete") {
+        // 非表示だった行もUndoで復元できる。実際のDOM反映後に編集位置を戻す。
+        setSelectedId(last.id);
+        window.requestAnimationFrame(() => focusRow(last.id));
       } else {
         setSelectedId(last.id);
         focusRow(last.id);
@@ -770,7 +836,7 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
       return;
     }
     if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
-      event.preventDefault(); void onToggleCompleted?.(row.id).catch(showError); return;
+      event.preventDefault(); void toggleRowCompletion(row); return;
     }
     if (event.key === "Enter") { event.preventDefault(); startEdit(row); return; }
     if (event.key === "Tab") { event.preventDefault(); move(row, event.shiftKey ? "outdent" : "indent"); focusRow(row.id); return; }
@@ -805,6 +871,11 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
       window.requestAnimationFrame(() => {
         if (editorRef.current === field) field.setSelectionRange(result.start, result.end);
       });
+      return;
+    }
+    if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && event.key === "Enter") {
+      event.preventDefault();
+      void toggleRowCompletion(row, true);
       return;
     }
     if (event.key === "Backspace" && !editingValue && !row.has_children && onRemoveInline) {
@@ -892,6 +963,11 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
 
   const onPendingKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.nativeEvent.isComposing || event.key === "Process" || event.nativeEvent.keyCode === 229) return;
+    if ((event.ctrlKey || event.metaKey) && !event.shiftKey && !event.altKey && event.key === "Enter") {
+      event.preventDefault();
+      if (pendingRef.current?.value.trim()) void savePending(false, true);
+      return;
+    }
     if (!event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey
       && (event.key === "ArrowUp" || event.key === "ArrowDown")
       && isOnOuterVisualLine(event.currentTarget, event.key === "ArrowUp" ? "up" : "down")) {
@@ -1096,26 +1172,9 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
     if (pendingNode && spot.at === index) rows.push(pendingNode);
     if (caretNode && spot.at === index && !pendingNode) rows.push(caretNode);
     rows.push(rowElement(row, index));
-    if (!pendingNode) rows.push(
-      <button key={`insert-after-${row.id}`} type="button" className="outline__insert-between"
-        style={{ "--outline-depth": rowDepth(row), "--outline-indent-px": `${rowDepth(row) * 15}px` } as CSSProperties}
-        tabIndex={-1}
-        aria-label={`「${row.content.slice(0, 24)}」と同じ第${rowDepth(row) + 1}階層に項目を追加`}
-        title={row.parent_id ? `「${nodeById.get(row.parent_id)?.content ?? "親"}」の子項目として追加` : "最上位の項目として追加"}
-        onClick={() => beginPending(siblingAfter(row))}><span className="outline__insert-label">＋ 同じ階層に追加</span></button>
-    );
   });
   if (pendingNode && spot.at >= visible.length) rows.push(pendingNode);
   if (caretNode && spot.at >= visible.length && !pendingNode) rows.push(caretNode);
-  if (!pendingNode && visible.length > 0) rows.push(
-    <button key="outline-add-last" type="button" className="outline__add-last"
-      style={{ "--outline-depth": 0 } as CSSProperties}
-      aria-label={zoom ? `「${zoom.content}」の子項目を追加` : "最上位に項目を追加"}
-      onClick={() => beginPending({ parentId: scopeId, index: childrenOf(scopeId).length })}>
-      ＋ {zoom ? `「${zoom.content.slice(0, 20)}」に子項目を追加` : "最上位に項目を追加"}
-    </button>
-  );
-
   return <div className={`outline ${dense ? "outline--dense" : "outline--normal"}`}
     style={{ "--outline-marker-width": markerWidth } as CSSProperties}
     aria-label="アウトライン編集">
@@ -1125,8 +1184,7 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
     </nav> : null}
     <div className="outline__tree" role="tree" aria-label="アウトラインの項目">
       {rows}
-      {visible.length === 0 && !pendingNode ? <button type="button" className="outline__add-last"
-        onClick={() => beginPending({ parentId: scopeId, index: 0 })}>最初の項目を書く</button> : null}
+
     </div>
     {completedOutlineCount > 0 && onToggleShowCompletedOutline ? (
       <div className="outline__completed-filter">
