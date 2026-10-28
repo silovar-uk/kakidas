@@ -22,8 +22,9 @@ async function createMemo(browser, width) {
     await page.getByRole('tab', { name: /^参考URL/ }).click();
     await page.locator('.entry-column--word.entry-column--active').waitFor({state:'visible'});
   }
-  await page.locator('.reference-workspace').waitFor();
-  return { context, page, workspace: page.locator('.reference-workspace') };
+  await page.getByRole('button', { name: '調査を開く' }).click();
+  await page.locator('.reference-workspace--focused').waitFor();
+  return { context, page, workspace: page.locator('.reference-workspace--focused') };
 }
 
 async function addBatch(workspace) {
@@ -53,7 +54,8 @@ try {
     await workspace.getByRole('button', { name: '★ 注目' }).click();
     assert.equal(await workspace.locator('.reference-workspace__item').count(), 1, '★だけの絞り込み');
     await page.reload();
-    const reloaded = page.locator('.reference-workspace');
+    await page.getByRole('button', { name: '調査を開く' }).click();
+    const reloaded = page.locator('.reference-workspace--focused');
     await reloaded.getByRole('button', { name: '★ 注目' }).click();
     await reloaded.locator('.reference-workspace__item').first().waitFor();
     assert.equal(await reloaded.locator('.reference-workspace__item').count(), 1, '注目はIndexedDBへ保存');
@@ -72,8 +74,9 @@ try {
     await reloaded.getByRole('button', { name: '未確認を読む' }).click();
     assert.match(await reloaded.locator('.reference-workspace__session').innerText(), /連続閲覧/);
     await page.reload();
+    assert.equal(await page.getByRole('button', { name: '調査を開く' }).count(), 1, 'セッションの入口が残る');
+    await page.getByRole('button', { name: '調査を開く' }).click();
     assert.equal(await page.locator('.reference-workspace__session').count(), 1, 'セッション再開');
-    await page.locator('.reference-workspace__head').getByRole('button', { name: '調査を大きく表示' }).click();
     assert.equal(await page.locator('body > .reference-workspace--focused').count(), 1, '全画面表示');
     await page.keyboard.press('Escape');
     assert.equal(await page.locator('.reference-workspace--focused').count(), 0, 'Escapeで戻れる');
