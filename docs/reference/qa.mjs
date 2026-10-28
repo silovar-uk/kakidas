@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
 import { resolve } from 'node:path';
+import { selectKind } from '../amu/kinds.mjs';
 
 const base = process.env.PW_FROM ? pathToFileURL(resolve(process.env.PW_FROM) + '/').href : import.meta.url;
 const { chromium } = createRequire(base)('playwright');
@@ -18,6 +19,7 @@ async function createMemo(browser, width) {
   await page.goto(url);
   await page.getByRole('button', { name: /新しいメモ/ }).first().click();
   await page.waitForURL(/\/memos\//);
+  if (width < 920) await selectKind(page, 'word');
   await page.locator('.reference-workspace').waitFor();
   return { context, page, workspace: page.locator('.reference-workspace') };
 }
@@ -51,6 +53,7 @@ try {
     await page.reload();
     const reloaded = page.locator('.reference-workspace');
     await reloaded.getByRole('button', { name: '★ 注目' }).click();
+    await reloaded.locator('.reference-workspace__item').first().waitFor();
     assert.equal(await reloaded.locator('.reference-workspace__item').count(), 1, '注目はIndexedDBへ保存');
     assert.match(await reloaded.locator('.reference-workspace__item').innerText(), /✓ 見た/, '見たも永続化');
     await reloaded.getByRole('button', { name: 'すべて' }).click();
