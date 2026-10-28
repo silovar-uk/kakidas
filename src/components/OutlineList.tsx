@@ -710,7 +710,7 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
       setMessage("対象の行がまだ表示されていません。更新後にもう一度お試しください。");
       return;
     }
-    if (last.type === "create" && (target.has_children || !onUndoCreate)) {
+    if (last.type === "create" && (!target || target.has_children || !onUndoCreate)) {
       setMessage("子がある行は安全のためUndoしません。項目の操作から確認してください。");
       return;
     }
