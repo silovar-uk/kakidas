@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { EntryMetaCard, type EntryMetaKind } from "./EntryMetaCard";
 import { LinkIcon, NoteIcon, TagIcon } from "./icons";
 import { formatEntryCreatedAt } from "../lib/formatDate";
+import type { OutlineCopyMode } from "../lib/outlineCopy.js";
 import type { EntryTagSummary } from "../lib/memoTags";
 import {
   type EntryKind,
@@ -32,6 +33,8 @@ export type EntryActions = {
   onPull?: (entryId: string) => void;
   /** falseを返したときは、確認を取り消したものとして閉じない。 */
   onCopy: (entryId: string) => Promise<boolean>;
+  /** 選択した項目を根として、その子孫も含めてコピーする。 */
+  onCopyBranch?: (entryId: string, mode: OutlineCopyMode) => Promise<boolean>;
   onCreateMemoFromEntry: (entryId: string) => Promise<boolean>;
   onMoveToKind: (entryId: string, targetKind: EntryKind) => Promise<boolean>;
   onDelete: (entryId: string) => Promise<unknown>;
@@ -194,8 +197,15 @@ export function EntryActionsPanel({
 
       <section className="entry-inspector__section entry-inspector__chips">
         <button type="button" className="entry-inspector__chip" disabled={busy} onClick={() => void run(() => actions.onCopy(entry.id))}>
-          コピー
+          {isOutline ? "本文だけコピー" : "コピー"}
         </button>
+        {isOutline && actions.onCopyBranch ? (
+          <div className="entry-inspector__copy-branch" role="group" aria-label="この項目以下をコピー">
+            <p className="entry-inspector__caption">この項目以下をコピー</p>
+            <button type="button" className="entry-inspector__chip" disabled={busy} onClick={() => void run(() => actions.onCopyBranch?.(entry.id, "outliner"))}>アウトライナー用 <span aria-hidden="true">↳</span></button>
+            <button type="button" className="entry-inspector__chip" disabled={busy} onClick={() => void run(() => actions.onCopyBranch?.(entry.id, "textMemo"))}>テキストメモ用 <span aria-hidden="true">1.1</span></button>
+          </div>
+        ) : null}
         {!isReferenceUrl ? (
           <button type="button" className="entry-inspector__chip" disabled={busy} onClick={() => void run(() => actions.onCreateMemoFromEntry(entry.id))}>
             新しいメモにする
