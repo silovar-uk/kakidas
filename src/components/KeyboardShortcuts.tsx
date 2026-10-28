@@ -22,6 +22,7 @@ export function KeyboardShortcuts(){
  <section role="dialog" aria-modal="true" aria-label="ショートカット" onClick={e=>e.stopPropagation()}>
  <h2>ショートカット</h2><p>Ctrl+Shift+1 / 2 / 3：書き口をアウトライン・段落・参考URLの欄へ運ぶ。</p>
  <p>書き口(アウトライン)：Enterで次の行、Tab / Shift+Tabで入れる深さ、Shift+Enterで段落へ、空のまま↑で上の行へ戻る、Escで離れる。</p>
+ <p>アウトライン編集中：文字を選択してCtrl+Bで赤太字（もう一度押すと解除）。文字を選ばずにCtrl+Bなら行全体を強調。編集中は**で表示、編集を離れると赤太字で表示。</p>
  <p>選んだ行：Enterで直す、Tabで字下げ、Ctrl+Shift+↑↓で並べ替え、Ctrl+Enterで完了、←→で開閉。</p>
  <p>段落：Ctrl+Enter（Shift+Enter）で置く。どこでも：URLを貼ると参考URLへ入る。Alt+Q：余白。Ctrl+/：この説明を開く。Esc：閉じる。</p>
  <button onClick={()=>setOpen(false)}>閉じる</button></section></div>:null;
