@@ -201,28 +201,10 @@ export async function copyToClipboard(
 
 
 /**
- * OneNoteなどへ階層を渡すためのコピー。text/plainはTab字下げ、
- * text/htmlは<ul><li>の親子構造を同時に渡す。
- * 権限・ブラウザ非対応時は必ずplain textコピーへフォールバックする。
- * 個別コピーのイベント差し替えを巻き込まないよう、コピー状態を明示的に消す。
+ * アウトライナー向けのTab階層をそのまま text/plain でコピー。
+ * HTMLは一切登録せず、貼り付け先がプレーンテキストを選べるようにする。
  */
-export async function copyOutlineToClipboard(
-  plainText: string,
-  html: string | null,
-): Promise<"rich" | "plain"> {
+export async function copyOutlineToClipboard(plainText: string): Promise<void> {
   clearPendingIndividualCopyText();
-  if (html && navigator.clipboard?.write && typeof ClipboardItem !== "undefined" && window.isSecureContext) {
-    try {
-      const item = new ClipboardItem({
-        "text/plain": new Blob([plainText], { type: "text/plain" }),
-        "text/html": new Blob([html], { type: "text/html" }),
-      });
-      await navigator.clipboard.write([item]);
-      return "rich";
-    } catch {
-      // 拒否・未対応でもTab付きテキストはコピーできるようにする。
-    }
-  }
   await copyToClipboard(plainText);
-  return "plain";
 }
