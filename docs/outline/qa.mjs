@@ -221,16 +221,16 @@ check('P2','折り返す長文は編集時に本文が隠れない',async(page)=
 check('P2','上下キーで項目間の編集カーソルが移動し、書き続けられる',async(page)=>{
   for(const content of ['カーソルA','カーソルB','カーソルC']) await put(page,content);
   const order=await outline(page).locator('.outline__content').allTextContents();
+  const firstId=await row(page,order[0]).getAttribute('data-outline-id');
+  const targetId=await row(page,order[1]).getAttribute('data-outline-id');
   await row(page,order[0]).locator('.outline__content').click();
   const edit=page.getByRole('textbox',{name:'アウトラインの本文を編集'});
   await edit.press('ArrowDown');
-  const targetId=await row(page,order[1]).getAttribute('data-outline-id');
   assert.equal(await edit.evaluate(el=>el.closest('[data-outline-id]')?.getAttribute('data-outline-id')),targetId,'下の行へ編集カーソル移動');
   assert.equal(await edit.evaluate(el=>document.activeElement===el),true,'移動先ですぐに入力できる');
   await page.keyboard.type('追記');
   await edit.press('Home');
   await edit.press('ArrowUp');
-  const firstId=await row(page,order[0]).getAttribute('data-outline-id');
   assert.equal(await edit.evaluate(el=>el.closest('[data-outline-id]')?.getAttribute('data-outline-id')),firstId,'上の行へ編集カーソル移動');
   await page.waitForFunction(()=>[...document.querySelectorAll('.outline__content')].some(el=>el.textContent?.includes('追記')));
 });
@@ -267,11 +267,12 @@ check('P2','追加ボタンは挿入先階層に揃っている',async(page)=>{
   await put(page,'追加階層親');await put(page,'追加階層子');
   const order=await outline(page).locator('.outline__content').allTextContents();
   await row(page,order[1]).focus();await page.keyboard.press('Tab');
+  await page.waitForFunction(text=>[...document.querySelectorAll('[data-outline-id][aria-level="2"]')].some(el=>el.textContent?.includes(text)),order[1]);
   assert.equal(await page.getByRole('button',{name:'最上位に項目を追加'}).count(),1);
   const positions=await outline(page).locator('.outline__insert-between').evaluateAll(nodes=>nodes.map(el=>({
     level:Number(el.style.getPropertyValue('--outline-depth')),left:parseFloat(getComputedStyle(el).marginLeft)
   })));
-  assert.ok(positions.some(p=>p.level===1&&p.left>=positions.find(x=>x.level===0).left+14),'子階層の追加口は15px右側');
+  assert.ok(positions.some(p=>p.level===1&&p.left>=positions.find(x=>x.level===0).left+14),'子階層の追加口は15px右側: '+JSON.stringify(positions));
 });
 check('P2','兄弟を移動し、直前の移動を取り消せる',async(page)=>{
   await put(page,'上A');await put(page,'下B');
