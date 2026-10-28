@@ -65,6 +65,10 @@
 .entry-column__header-menu {position:relative}
 .entry-column__menu button {width:100%}
 .entry-column__menu button svg {width:16px;height:16px}
+/* コピーの2種類を短い2アクションで識別。狭い画面からはみ出さない。 */
+.entry-column--sentence .entry-column__menu {width:min(348px,calc(100vw - 28px));max-width:calc(100vw - 28px)}
+.entry-column--sentence .entry-column__menu button {white-space:normal;line-height:1.4}
+.entry-column__menu button:disabled {opacity:.45;cursor:default}
 .entry-column__menu [aria-checked="true"]:before {content:'✓';color:var(--color-shu)}
 .entry-item__satisfaction-mark {position:absolute;right:8px;bottom:5px;color:var(--color-ink-3);font-size:10px;line-height:1}
 .entry-item--satisfaction-1 {background:var(--sat-1)}
