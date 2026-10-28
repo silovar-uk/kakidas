@@ -24,3 +24,6 @@ test("クリップボードへのコピー時にはマークアップを除去",
  assert.equal(stripOutlineEmphasis("**重要**です"),"重要です");
  assert.equal(stripOutlineEmphasis("通常テキスト"),"通常テキスト");
 });
+test("部分強調した行を、選択なしCtrl+Bで全行強調へ変える",()=>{
+ assert.equal(toggleOutlineEmphasis("前**強調**後",0,0).value,"**前強調後**");
+});
