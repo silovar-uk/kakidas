@@ -263,16 +263,19 @@ check('P2','折り返した項目内では上下キーを通常の文字カー�
   await edit.press('ArrowDown');
   assert.equal(await edit.evaluate(el=>el.closest('[data-outline-id]').getAttribute('data-outline-id')),before,'途中の表示行は同一項目内に留まる');
 });
-check('P2','追加ボタンは挿入先階層に揃っている',async(page)=>{
+check('P2','行間・末尾の追加ボタンを撤去し、Enterで階層付き項目を追加する',async(page)=>{
   await put(page,'追加階層親');await put(page,'追加階層子');
-  const order=await outline(page).locator('.outline__content').allTextContents();
-  await row(page,order[1]).focus();await page.keyboard.press('Tab');
-  await page.waitForFunction(text=>[...document.querySelectorAll('[data-outline-id][aria-level="2"]')].some(el=>el.textContent?.includes(text)),order[1]);
-  assert.equal(await page.getByRole('button',{name:'最上位に項目を追加'}).count(),1);
-  const positions=await outline(page).locator('.outline__insert-between').evaluateAll(nodes=>nodes.map(el=>({
-    level:Number(el.style.getPropertyValue('--outline-depth')),left:parseFloat(getComputedStyle(el).marginLeft)
-  })));
-  assert.ok(positions.some(p=>p.level===1&&p.left>=positions.find(x=>x.level===0).left+14),'子階層の追加口は15px右側: '+JSON.stringify(positions));
+  assert.equal(await outline(page).locator('.outline__insert-between, .outline__add-last').count(),0);
+  await row(page,'追加階層子').focus();await page.keyboard.press('Tab');
+  await page.waitForFunction(()=>!![...document.querySelectorAll('[data-outline-id][aria-level="2"]')].find(el=>el.textContent?.includes('追加階層子')));
+  await row(page,'追加階層子').locator('.outline__content').click();
+  const field=page.getByRole('textbox',{name:'アウトラインの本文を編集'});
+  await field.press('End');await field.press('Enter');
+  const pending=page.getByRole('textbox',{name:'新しいアウトライン項目'});
+  await pending.fill('子の追加項目');await pending.press('Enter');
+  await row(page,'子の追加項目').waitFor({state:'visible'});
+  assert.equal(await row(page,'子の追加項目').getAttribute('aria-level'),'2');
+  assert.equal(await outline(page).locator('.outline__insert-between, .outline__add-last').count(),0);
 });
 check('P2','兄弟を移動し、直前の移動を取り消せる',async(page)=>{
   await put(page,'上A');await put(page,'下B');
@@ -363,6 +366,60 @@ check('P2','枝コピーは選択項目と子孫だけを含む',async(page)=>{
   await page.getByRole('dialog',{name:'項目の詳細'}).getByRole('button',{name:/アウトライナー用/}).click();
   await page.waitForFunction(()=>window.__outlineCopied?.length===1);
   assert.equal(await page.evaluate(()=>window.__outlineCopied[0]),order[0]+'\n\t'+order[1]);
+});
+check('P2','本文を編集中のCtrl+Enterは文字を保存して完了し次の行へ移動する',async(page)=>{
+  await put(page,'編集完了対象');await put(page,'次の編集先');
+  const originalId=await row(page,'編集完了対象').getAttribute('data-outline-id');
+  const nextId=await row(page,'次の編集先').getAttribute('data-outline-id');
+  await row(page,'編集完了対象').locator('.outline__content').click();
+  const field=page.getByRole('textbox',{name:'アウトラインの本文を編集'});
+  await field.fill('編集後の内容');await field.press('Control+Enter');
+  await page.waitForFunction(id=>document.querySelector(`[data-outline-id="${id}"]`)===null,originalId);
+  const focused=page.getByRole('textbox',{name:'アウトラインの本文を編集'});
+  await focused.waitFor({state:'visible'});
+  assert.equal(await focused.evaluate(el=>el.closest('[data-outline-id]')?.getAttribute('data-outline-id')),nextId,'次の項目をそのまま編集できる');
+  assert.equal(await focused.evaluate(el=>document.activeElement===el),true);
+  await page.getByRole('button',{name:'アウトラインの操作'}).click();
+  await page.getByRole('menuitemcheckbox',{name:'完了済みを表示'}).click();
+  await row(page,'編集後の内容').waitFor({state:'visible'});
+  assert.ok((await row(page,'編集後の内容').getAttribute('class')).includes('outline__item--completed'));
+});
+check('P2','新規入力中のCtrl+Enterは作成直後に完了し、空欄は追加しない',async(page)=>{
+  await selectKind(page,'sentence');
+  const pending=page.getByRole('textbox',{name:'新しいアウトライン項目'});
+  await pending.waitFor({state:'visible'});
+  await pending.press('Control+Enter');
+  assert.equal(await outline(page).locator('[data-outline-id]').count(),0,'空の行は作成しない');
+  await pending.fill('新規から完了');await pending.press('Control+Enter');
+  await page.waitForFunction(()=>!!document.querySelector('.outline__edit--pending'));
+  assert.equal(await outline(page).locator('[data-outline-id]').count(),0,'完了済み非表示なので行が消える');
+  await page.getByRole('button',{name:'アウトラインの操作'}).click();
+  await page.getByRole('menuitemcheckbox',{name:'完了済みを表示'}).click();
+  await row(page,'新規から完了').waitFor({state:'visible'});
+  assert.equal(await row(page,'新規から完了').count(),1,'作成・完了が一度だけ実行された');
+});
+check('P2','行選択のCtrl+Enterで完了後も次の項目へ移り、Ctrl+Zで完了を元に戻せる',async(page)=>{
+  await put(page,'完了して戻す');await put(page,'作業を続ける');
+  const id=await row(page,'完了して戻す').getAttribute('data-outline-id');
+  await row(page,'完了して戻す').focus();
+  await page.keyboard.press('Control+Enter');
+  await page.waitForFunction(rowId=>!document.querySelector(`[data-outline-id="${rowId}"]`),id);
+  const focused=page.getByRole('textbox',{name:'アウトラインの本文を編集'});
+  assert.equal(await focused.evaluate(el=>document.activeElement===el),true);
+  await focused.press('Escape');
+  await row(page,'作業を続ける').focus();
+  await page.keyboard.press('Control+z');
+  await row(page,'完了して戻す').waitFor({state:'visible'});
+  assert.equal(await row(page,'完了して戻す').count(),1);
+});
+check('P3','スマホでも追加ボタンに依存せず新規項目を保存・完了できる',async(page)=>{
+  await selectKind(page,'sentence');
+  assert.equal(await outline(page).locator('.outline__insert-between, .outline__add-last').count(),0);
+  const pending=page.getByRole('textbox',{name:'新しいアウトライン項目'});
+  await pending.fill('モバイル完了');
+  await pending.press('Control+Enter');
+  await page.waitForFunction(()=>!!document.querySelector('.outline__edit--pending'));
+  assert.equal(await outline(page).locator('.outline__insert-between, .outline__add-last').count(),0);
 });
 check('P2','Ctrl+Bで選択した文字を赤太字にし、再読込しても残る',async(page)=>{
   await put(page,'重要な観察');
