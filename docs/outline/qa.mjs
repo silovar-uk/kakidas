@@ -218,6 +218,62 @@ check('P2','折り返す長文は編集時に本文が隠れない',async(page)=
   assert.ok(size.scroll>33,'長文は複数行に折り返される '+JSON.stringify(size));
   assert.ok(size.client>=size.scroll-2,'入力欄が全体を表示する '+JSON.stringify(size));
 });
+check('P2','上下キーで項目間の編集カーソルが移動し、書き続けられる',async(page)=>{
+  for(const content of ['カーソルA','カーソルB','カーソルC']) await put(page,content);
+  const order=await outline(page).locator('.outline__content').allTextContents();
+  const firstId=await row(page,order[0]).getAttribute('data-outline-id');
+  const targetId=await row(page,order[1]).getAttribute('data-outline-id');
+  await row(page,order[0]).locator('.outline__content').click();
+  const edit=page.getByRole('textbox',{name:'アウトラインの本文を編集'});
+  await edit.press('ArrowDown');
+  assert.equal(await edit.evaluate(el=>el.closest('[data-outline-id]')?.getAttribute('data-outline-id')),targetId,'下の行へ編集カーソル移動');
+  assert.equal(await edit.evaluate(el=>document.activeElement===el),true,'移動先ですぐに入力できる');
+  await page.keyboard.type('追記');
+  await edit.press('Home');
+  await edit.press('ArrowUp');
+  assert.equal(await edit.evaluate(el=>el.closest('[data-outline-id]')?.getAttribute('data-outline-id')),firstId,'上の行へ編集カーソル移動');
+  await page.waitForFunction(()=>[...document.querySelectorAll('.outline__content')].some(el=>el.textContent?.includes('追記')));
+});
+check('P2','Shift+Alt+上下で親子のまとまりごと兄弟順を入れ替える',async(page)=>{
+  for(const content of ['移動親','移動子','移動先']) await put(page,content);
+  const order=await outline(page).locator('.outline__content').allTextContents();
+  await row(page,order[1]).focus();await page.keyboard.press('Tab');
+  const parentId=await row(page,order[0]).getAttribute('data-outline-id');
+  await page.waitForFunction(([id,txt])=>[...document.querySelectorAll('[data-outline-id]')].some(el=>el.getAttribute('data-outline-parent-id')===id&&el.textContent?.includes(txt)),[parentId,order[1]]);
+  await row(page,order[0]).locator('.outline__content').click();
+  await page.keyboard.press('Alt+Shift+ArrowDown');
+  await page.waitForFunction(([last,head])=>[...document.querySelectorAll('.outline__tree [data-outline-id]')].filter(el=>!el.getAttribute('data-outline-parent-id')).map(el=>el.textContent).join('|').indexOf(last)<[...document.querySelectorAll('.outline__tree [data-outline-id]')].filter(el=>!el.getAttribute('data-outline-parent-id')).map(el=>el.textContent).join('|').indexOf(head),[order[2],order[0]]);
+  await page.keyboard.press('Escape');
+  assert.equal(await row(page,order[1]).getAttribute('data-outline-parent-id'),parentId,'子項目の所属は維持');
+  await page.reload();
+  assert.equal(await row(page,order[1]).getAttribute('data-outline-parent-id'),parentId,'保存後も親子関係を維持');
+  const rootLabels=await outline(page).locator('[data-outline-id][data-outline-parent-id=""] .outline__content').allTextContents();
+  assert.deepEqual(rootLabels,[order[2],order[0]],'入れ替えた兄弟順を保存');
+});
+check('P2','折り返した項目内では上下キーを通常の文字カーソルに使う',async(page)=>{
+  await put(page,'折り返し検証');
+  await put(page,'隣の項目');
+  const order=await outline(page).locator('.outline__content').allTextContents();
+  await row(page,order[0]).locator('.outline__content').click();
+  const edit=page.getByRole('textbox',{name:'アウトラインの本文を編集'});
+  const multiline='テスト文章'.repeat(100);
+  await edit.fill(multiline);
+  await edit.evaluate(el=>el.setSelectionRange(Math.floor(el.value.length/2),Math.floor(el.value.length/2)));
+  const before=await edit.evaluate(el=>el.closest('[data-outline-id]').getAttribute('data-outline-id'));
+  await edit.press('ArrowDown');
+  assert.equal(await edit.evaluate(el=>el.closest('[data-outline-id]').getAttribute('data-outline-id')),before,'途中の表示行は同一項目内に留まる');
+});
+check('P2','追加ボタンは挿入先階層に揃っている',async(page)=>{
+  await put(page,'追加階層親');await put(page,'追加階層子');
+  const order=await outline(page).locator('.outline__content').allTextContents();
+  await row(page,order[1]).focus();await page.keyboard.press('Tab');
+  await page.waitForFunction(text=>[...document.querySelectorAll('[data-outline-id][aria-level="2"]')].some(el=>el.textContent?.includes(text)),order[1]);
+  assert.equal(await page.getByRole('button',{name:'最上位に項目を追加'}).count(),1);
+  const positions=await outline(page).locator('.outline__insert-between').evaluateAll(nodes=>nodes.map(el=>({
+    level:Number(el.style.getPropertyValue('--outline-depth')),left:parseFloat(getComputedStyle(el).marginLeft)
+  })));
+  assert.ok(positions.some(p=>p.level===1&&p.left>=positions.find(x=>x.level===0).left+14),'子階層の追加口は15px右側: '+JSON.stringify(positions));
+});
 check('P2','兄弟を移動し、直前の移動を取り消せる',async(page)=>{
   await put(page,'上A');await put(page,'下B');
   const initial=await outline(page).locator('.outline__content').allTextContents();
