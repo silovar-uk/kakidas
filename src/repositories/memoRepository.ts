@@ -1563,12 +1563,13 @@ class IndexedDbMemoRepository implements MemoRepository {
     const db = await getDatabase();
 
     const transaction = db.transaction(
-      [STORE_NAMES.memos, STORE_NAMES.entries],
+      [STORE_NAMES.memos, STORE_NAMES.entries, STORE_NAMES.referenceProgress],
       "readonly",
     );
 
     const memoStore = transaction.objectStore(STORE_NAMES.memos);
     const entryStore = transaction.objectStore(STORE_NAMES.entries);
+    const referenceStore = transaction.objectStore(STORE_NAMES.referenceProgress);
 
     const memos = await requestToPromise(
       memoStore.getAll() as IDBRequest<LegacyMemoRow[]>,
@@ -1578,11 +1579,16 @@ class IndexedDbMemoRepository implements MemoRepository {
       entryStore.getAll() as IDBRequest<LegacyEntryRow[]>,
     );
 
+    const referenceProgress = await requestToPromise(
+      referenceStore.getAll() as IDBRequest<import("../types/memo").ReferenceProgressRow[]>,
+    );
+
     return {
-      version: 8,
+      version: 9,
       exported_at: nowIso(),
       memos: memos.map(normalizeMemoRow),
       entries: entries.map(normalizeEntryRow),
+      reference_progress: referenceProgress,
     };
   }
 
@@ -1595,7 +1601,8 @@ class IndexedDbMemoRepository implements MemoRepository {
         payload.version !== 5 &&
         payload.version !== 6 &&
         payload.version !== 7 &&
-        payload.version !== 8) ||
+        payload.version !== 8 &&
+        payload.version !== 9) ||
       !Array.isArray(payload.memos) ||
       !Array.isArray(payload.entries)
     ) {
@@ -1611,6 +1618,25 @@ class IndexedDbMemoRepository implements MemoRepository {
         STORE_NAMES.entries,
         normalizeEntryRow(rawEntry),
       );
+    }
+
+    if (Array.isArray(payload.reference_progress) && payload.reference_progress.length > 0) {
+      const db = await getDatabase();
+      const transaction = db.transaction(STORE_NAMES.referenceProgress, "readwrite");
+      const store = transaction.objectStore(STORE_NAMES.referenceProgress);
+      payload.reference_progress.forEach((row) => {
+        if (!row || typeof row.entry_id !== "string" || !row.entry_id ||
+            typeof row.memo_id !== "string" || !row.memo_id) return;
+        const timestamp = (value: unknown) => typeof value === "string" ? value : null;
+        store.put({
+          entry_id: row.entry_id,
+          memo_id: row.memo_id,
+          opened_at: timestamp(row.opened_at),
+          reviewed_at: timestamp(row.reviewed_at),
+          starred_at: timestamp(row.starred_at),
+        } satisfies import("../types/memo").ReferenceProgressRow);
+      });
+      await transactionToPromise(transaction);
     }
   }
 
