@@ -15,7 +15,8 @@ import {useCloudMemos} from "../hooks/useCloudMemos";
 import {type MemoSyncMetaRow,getLinkHostname} from "../types/memo";
 import { type CSSProperties, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { resetBodyScrollLock } from "../lib/bodyScrollLock";
-import { copyToClipboard } from "../lib/clipboard";
+import { copyOutlineToClipboard, copyToClipboard } from "../lib/clipboard";
+import { buildOutlineCopy, type OutlineCopyMode } from "../lib/outlineCopy.js";
 import {
   readCopyIncludeCompleted,
   readEntrySortMode,
@@ -887,6 +888,39 @@ export function MemoEditorPage() {
     }
   };
 
+  /**
+   * アウトラインだけをコピーする。元メモ全体のコピーや段落の出力設定とは独立。
+   * 表示モード・開閉状態ではなくDBから全階層を再構成する。
+   */
+  const copyOutline = async (mode: OutlineCopyMode, rootId: string | null): Promise<boolean> => {
+    if (!memo) return false;
+    const rows = getEntryTree(memo.entries, "sentence", "manual");
+    const result = buildOutlineCopy(rows, { mode, rootId, includeCompleted: includeCompletedInCopy });
+    if (!result.count) {
+      setNotice("コピーできるアウトライン項目がありません。完了済みを含める設定も確認してください。");
+      return false;
+    }
+    try {
+      if (mode === "outliner") await copyOutlineToClipboard(result.text);
+      else await copyToClipboard(result.text);
+      const label = mode === "outliner" ? "アウトライナー用（Tab階層）" : "テキストメモ用（階層番号）";
+      const range = rootId === null ? "全体" : "この項目以下";
+      setNotice(`アウトライン${range}・${result.count}件を${label}でコピーしました。`);
+      return true;
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "アウトラインをコピーできませんでした。");
+      return false;
+    }
+  };
+  const handleCopyOutline = async (mode: OutlineCopyMode): Promise<void> => {
+    if (!memo || copyingKind !== null) return;
+    setCopyingKind("sentence");
+    try { await copyOutline(mode, null); }
+    finally { setCopyingKind(null); }
+  };
+  const handleCopyOutlineBranch = (rootId: string, mode: OutlineCopyMode): Promise<boolean> =>
+    copyOutline(mode, rootId);
+
   /** 「…」から個別にコピーする場合は、本文だけをそのまま渡す。 */
   const handleCopyEntry = async (content: string): Promise<boolean> => {
     try {
@@ -1641,6 +1675,8 @@ export function MemoEditorPage() {
             copyableEntryCount={copyableEntryCountsByKind[kind]}
             copyIncludesCompleted={includeCompletedInCopy}
             onCopy={handleCopyKind}
+            onCopyOutline={handleCopyOutline}
+            onCopyOutlineBranch={handleCopyOutlineBranch}
             onCopyEntry={handleCopyEntry}
             onCreateMemoFromEntry={handleCreateMemoFromEntry}
             isCopying={copyingKind === kind}

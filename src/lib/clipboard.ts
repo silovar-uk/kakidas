@@ -198,3 +198,13 @@ export async function copyToClipboard(
     "コピーできませんでした。ブラウザの再読み込み後、もう一度お試しください。",
   );
 }
+
+
+/**
+ * アウトライナー向けのTab階層をそのまま text/plain でコピー。
+ * HTMLは一切登録せず、貼り付け先がプレーンテキストを選べるようにする。
+ */
+export async function copyOutlineToClipboard(plainText: string): Promise<void> {
+  clearPendingIndividualCopyText();
+  await copyToClipboard(plainText);
+}

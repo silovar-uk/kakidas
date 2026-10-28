@@ -1,4 +1,5 @@
 import { OutlineList, type OutlineHandle } from "./OutlineList";
+import type { OutlineCopyMode } from "../lib/outlineCopy.js";
 import { EntryInspector, type EntryActions, type RowMove, type RowMoveState } from "./EntryInspector";
 import { EntryMetaCard, type EntryMetaKind } from "./EntryMetaCard";
 import type { OutlineBindings } from "../lib/outlineBinding";
@@ -134,6 +135,10 @@ type EntryColumnProps = {
   copyIncludesCompleted: boolean;
   /** 単語 / 文 / 段落ごとのテキストをコピーする。 */
   onCopy: (kind: EntryKind) => Promise<void>;
+  /** アウトライン全体を、構造付き／番号付きのどちらかでコピー。 */
+  onCopyOutline: (mode: OutlineCopyMode) => Promise<void>;
+  /** 選択した項目と子孫を相対階層でコピー。 */
+  onCopyOutlineBranch: (entryId: string, mode: OutlineCopyMode) => Promise<boolean>;
   /** 「…」から、1項目の本文だけをコピーする。trueならコピー成功。 */
   onCopyEntry: (content: string) => Promise<boolean>;
   /** 元の項目を残したまま、新しい大きなメモへ展開する。 */
@@ -224,6 +229,8 @@ export function EntryColumn({
   copyableEntryCount,
   copyIncludesCompleted,
   onCopy,
+  onCopyOutline,
+  onCopyOutlineBranch,
   onCopyEntry,
   onCreateMemoFromEntry,
   isCopying = false,
@@ -868,6 +875,7 @@ export function EntryColumn({
     growLabel: (bindings?.paragraphsByRowId.get(entry.id)?.length ?? 0) > 0 ? "段落を開く" : "段落にする",
     onPull: kind === "word" && onPullToOutline ? (id: string) => onPullToOutline(id) : undefined,
     onCopy: requestCopyEntry,
+    onCopyBranch: kind === "sentence" ? onCopyOutlineBranch : undefined,
     onCreateMemoFromEntry: requestCreateMemoFromEntry,
     onMoveToKind: requestMoveToKind,
     onDelete: requestDelete,
@@ -1281,7 +1289,20 @@ export function EntryColumn({
               {kind === "sentence" ? <button role="menuitemcheckbox" aria-checked={outlineDense} onClick={() => {setOutlineDense((current) => !current);setIsHeaderMenuOpen(false)}}>高密度で表示</button> : null}
               <button role="menuitemcheckbox" aria-checked={isTagGrouped} onClick={() => {changeDisplayMode(isTagGrouped ? "plain" : "tag_grouped");setIsHeaderMenuOpen(false)}}>タグでまとめる</button>
               {isTagGrouped ? <button role="menuitemcheckbox" aria-checked={isTagOrderLocked} onClick={() => {toggleTagOrderLock();setIsHeaderMenuOpen(false)}}>順番固定</button> : null}
-              <button role="menuitem" onClick={() => {void handleCopy();setIsHeaderMenuOpen(false)}}><CopyIcon />{ENTRY_KIND_LABEL[kind]}をコピー</button>
+              {kind === "sentence" ? (
+                <>
+                  <button role="menuitem" disabled={disabled || isCopying || copyableEntryCount === 0}
+                    onClick={() => {setIsHeaderMenuOpen(false);void onCopyOutline("outliner");}}>
+                    <CopyIcon />全体をコピー：アウトライナー用（Tab階層）
+                  </button>
+                  <button role="menuitem" disabled={disabled || isCopying || copyableEntryCount === 0}
+                    onClick={() => {setIsHeaderMenuOpen(false);void onCopyOutline("textMemo");}}>
+                    <CopyIcon />全体をコピー：テキストメモ用（階層番号）
+                  </button>
+                </>
+              ) : (
+                <button role="menuitem" onClick={() => {void handleCopy();setIsHeaderMenuOpen(false)}}><CopyIcon />{ENTRY_KIND_LABEL[kind]}をコピー</button>
+              )}
               <button role="menuitem" onClick={() => {onToggleCollapsed?.();setIsHeaderMenuOpen(false)}}>畳む</button>
               <button role="menuitem" onClick={() => {void handleDeleteAll();setIsHeaderMenuOpen(false)}}>{ENTRY_KIND_LABEL[kind]}をすべて削除</button>
             </div> : null}

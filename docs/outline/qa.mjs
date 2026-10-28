@@ -327,6 +327,56 @@ check('P3','スマホでもアウトライン項目が表示される',async(pag
   const bb=await item.boundingBox();
   assert.ok(bb.height>=44 && bb.height<=50,'スマホの行高はタップ領域を残して約44px '+bb.height);
 });
+check('P2','アウトライン全体をTab階層と階層番号の2形式でコピーできる',async(page)=>{
+  await put(page,'コピー親');
+  await put(page,'コピー子');
+  const order=await outline(page).locator('.outline__content').allTextContents();
+  await row(page,order[1]).focus();
+  await page.keyboard.press('Tab');
+  await page.waitForFunction(text => [...document.querySelectorAll('[data-outline-id][aria-level="2"]')].some(el=>el.textContent?.includes(text)),order[1]);
+  await page.evaluate(()=>{
+    window.__outlineCopied=[];
+    Object.defineProperty(navigator,'clipboard',{configurable:true,value:{
+      writeText:async text=>{window.__outlineCopied.push(text);}
+    }});
+  });
+  await page.getByRole('button',{name:'アウトラインの操作'}).click();
+  await page.getByRole('menuitem',{name:/全体をコピー：アウトライナー用/}).click();
+  await page.waitForFunction(()=>window.__outlineCopied?.length===1);
+  const first=await page.evaluate(()=>window.__outlineCopied[0]);
+  assert.equal(first,order[0]+'\n\t'+order[1]);
+  await page.getByRole('button',{name:'アウトラインの操作'}).click();
+  await page.getByRole('menuitem',{name:/全体をコピー：テキストメモ用/}).click();
+  await page.waitForFunction(()=>window.__outlineCopied?.length===2);
+  assert.equal(await page.evaluate(()=>window.__outlineCopied[1]),'1. '+order[0]+'\n  1.1 '+order[1]);
+});
+check('P2','枝コピーは選択項目と子孫だけを含む',async(page)=>{
+  for(const content of ['枝の親','枝の子','独立した項目'])await put(page,content);
+  const order=await outline(page).locator('.outline__content').allTextContents();
+  await row(page,order[1]).focus();await page.keyboard.press('Tab');
+  await page.waitForFunction(text=>[...document.querySelectorAll('[data-outline-id][aria-level="2"]')].some(el=>el.textContent?.includes(text)),order[1]);
+  await page.evaluate(()=>{
+    window.__outlineCopied=[];
+    Object.defineProperty(navigator,'clipboard',{configurable:true,value:{writeText:async text=>{window.__outlineCopied.push(text)}}});
+  });
+  await row(page,order[0]).getByRole('button',{name:'項目の詳細'}).click();
+  await page.getByRole('dialog',{name:'項目の詳細'}).getByRole('button',{name:/アウトライナー用/}).click();
+  await page.waitForFunction(()=>window.__outlineCopied?.length===1);
+  assert.equal(await page.evaluate(()=>window.__outlineCopied[0]),order[0]+'\n\t'+order[1]);
+});
+check('P2','Ctrl+Bで選択した文字を赤太字にし、再読込しても残る',async(page)=>{
+  await put(page,'重要な観察');
+  await row(page,'重要な観察').locator('.outline__content').click();
+  const input=page.getByRole('textbox',{name:'アウトラインの本文を編集'});
+  await input.evaluate(el=>{el.focus();el.setSelectionRange(0,2);});
+  await input.press('Control+b');
+  assert.equal(await input.inputValue(),'**重要**な観察');
+  await input.press('Tab');
+  await page.waitForFunction(()=>!!document.querySelector('.outline__red-bold'));
+  assert.equal(await page.locator('.outline__red-bold').first().textContent(),'重要');
+  await page.reload();
+  assert.equal(await page.locator('.outline__red-bold').first().textContent(),'重要');
+});
 const browser=await chromium.launch({headless:true});
 let failed=0, passed=0;
 try {
