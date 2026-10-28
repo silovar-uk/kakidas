@@ -198,3 +198,31 @@ export async function copyToClipboard(
     "コピーできませんでした。ブラウザの再読み込み後、もう一度お試しください。",
   );
 }
+
+
+/**
+ * OneNoteなどへ階層を渡すためのコピー。text/plainはTab字下げ、
+ * text/htmlは<ul><li>の親子構造を同時に渡す。
+ * 権限・ブラウザ非対応時は必ずplain textコピーへフォールバックする。
+ * 個別コピーのイベント差し替えを巻き込まないよう、コピー状態を明示的に消す。
+ */
+export async function copyOutlineToClipboard(
+  plainText: string,
+  html: string | null,
+): Promise<"rich" | "plain"> {
+  clearPendingIndividualCopyText();
+  if (html && navigator.clipboard?.write && typeof ClipboardItem !== "undefined" && window.isSecureContext) {
+    try {
+      const item = new ClipboardItem({
+        "text/plain": new Blob([plainText], { type: "text/plain" }),
+        "text/html": new Blob([html], { type: "text/html" }),
+      });
+      await navigator.clipboard.write([item]);
+      return "rich";
+    } catch {
+      // 拒否・未対応でもTab付きテキストはコピーできるようにする。
+    }
+  }
+  await copyToClipboard(plainText);
+  return "plain";
+}
