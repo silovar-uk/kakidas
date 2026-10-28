@@ -956,14 +956,30 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
   // 単一行は固定リズム。折り返す項目だけ行数に応じて成長させる。
   // textarea の初期1行高さのまま本文が隠れる問題と、編集開始時の跳ねを防ぐ。
   useLayoutEffect(() => {
-    for (const field of [editorRef.current, pendingEditorRef.current]) {
-      if (!field) continue;
-      const minimum = Number.parseFloat(window.getComputedStyle(field).minHeight) || 28;
-      field.style.height = "0px";
-      const contentHeight = Math.ceil(field.scrollHeight);
-      // scrollHeightはborderを含まない。長文だけ境界分の余裕を足して最終行を切らない。
-      field.style.height = `${Math.max(minimum, contentHeight > minimum ? contentHeight + 4 : minimum)}px`;
-    }
+    const fitToText = () => {
+      for (const field of [editorRef.current, pendingEditorRef.current]) {
+        if (!field) continue;
+        const minimum = Number.parseFloat(window.getComputedStyle(field).minHeight) || 28;
+        field.style.height = "0px";
+        const contentHeight = Math.ceil(field.scrollHeight);
+        // 折り返し後の最終行まで表示。単一行の行高は変えない。
+        field.style.height = `${Math.max(minimum, contentHeight > minimum ? contentHeight + 4 : minimum)}px`;
+      }
+    };
+    fitToText();
+    // 横幅が変わっても、編集内容に触れずに高さを再計算する。
+    // 値や編集対象の変更時は上のfitToTextが直ちに走る。
+    const tree = (editorRef.current ?? pendingEditorRef.current)?.closest(".outline__tree");
+    if (!tree || typeof ResizeObserver === "undefined") return;
+    let width = tree.getBoundingClientRect().width;
+    const observer = new ResizeObserver((entries) => {
+      const nextWidth = entries[0]?.contentRect.width ?? width;
+      if (Math.abs(nextWidth - width) < 1) return;
+      width = nextWidth;
+      fitToText();
+    });
+    observer.observe(tree);
+    return () => observer.disconnect();
   }, [editingId, editingValue, pending?.value, dense]);
   const pendingNode = pending ? (
     <div key="pending-outline-row" className="outline__item outline__item--pending"

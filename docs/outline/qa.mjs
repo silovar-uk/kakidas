@@ -377,6 +377,48 @@ check('P2','Ctrl+Bで選択した文字を赤太字にし、再読込しても�
   await page.reload();
   assert.equal(await page.locator('.outline__red-bold').first().textContent(),'重要');
 });
+check('P2','長文は高密度・通常表示のどちらでも省略せず折り返す',async(page)=>{
+  const content='競技分析市場のプレイヤーごとの提供機能と差別化の背景を調査する。'.repeat(9);
+  await put(page,content);
+  const label=row(page,content).locator('.outline__content');
+  for(const dense of [true,false]){
+    const result=await label.evaluate(el=>{
+      const style=getComputedStyle(el);
+      return {text:el.textContent,height:el.getBoundingClientRect().height,lineHeight:parseFloat(style.lineHeight),
+        whiteSpace:style.whiteSpace,overflow:style.overflow,clamp:style.webkitLineClamp};
+    });
+    assert.equal(result.text,content,'長文の全文を保持');
+    assert.ok(result.whiteSpace!=='nowrap','折り返しを禁止しない: '+JSON.stringify(result));
+    assert.ok(result.height>=result.lineHeight*3,'3行以上でも表示を切らない: '+JSON.stringify(result));
+    if(dense){
+      await page.getByRole('button',{name:'アウトラインの操作'}).click();
+      await page.getByRole('menuitemcheckbox',{name:'高密度で表示'}).click();
+    }
+  }
+  await label.click();
+  const edit=page.getByRole('textbox',{name:'アウトラインの本文を編集'});
+  assert.equal(await edit.inputValue(),content,'編集中も本文を保持');
+  const initial=await edit.evaluate(el=>({height:el.clientHeight,scroll:el.scrollHeight}));
+  assert.ok(initial.height>=initial.scroll-4,'編集中も最終行が見える: '+JSON.stringify(initial));
+  await page.setViewportSize({width:950,height:633});
+  await page.waitForFunction(()=> {
+    const el=document.querySelector('.outline__edit:not(.outline__edit--pending)');
+    return el&&el.clientHeight>=el.scrollHeight-4;
+  });
+});
+check('P3','スマホでは長文・空白のない英数字も右端で折り返す',async(page)=>{
+  const content='VeryLongUnbrokenWord'.repeat(18);
+  await put(page,content);
+  const label=row(page,content).locator('.outline__content');
+  const stats=await label.evaluate(el=>{
+    const cs=getComputedStyle(el),rect=el.getBoundingClientRect(),outer=el.closest('.outline__item').getBoundingClientRect();
+    return {height:rect.height,lineHeight:parseFloat(cs.lineHeight),right:rect.right,outerRight:outer.right,
+      whiteSpace:cs.whiteSpace,wrap:cs.overflowWrap,clamp:cs.webkitLineClamp};
+  });
+  assert.ok(stats.height>stats.lineHeight*2,'スマホでも行高が伸びる: '+JSON.stringify(stats));
+  assert.ok(stats.right<=stats.outerRight+1,'横方向にはみ出さない: '+JSON.stringify(stats));
+  assert.equal(stats.wrap,'anywhere','英数字も途中で折り返す');
+});
 const browser=await chromium.launch({headless:true});
 let failed=0, passed=0;
 try {
