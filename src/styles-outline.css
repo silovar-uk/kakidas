@@ -43,38 +43,7 @@
   .outline__caret { position: relative; }
   /* 編集中だけ次の行を見せる。表示時と編集時の寸法は同じ基準で揃える。 */
   .outline__item--pending { background: transparent; }
-  /* 追加先の字下げとガイドの始点を、実際に挿入される兄弟の階層に揃える。 */
-  .outline__insert-between {
-    display: block; position: relative;
-    margin: -4px 0 -4px calc(var(--outline-indent-px, 0px) + 13px); padding: 0;
-    height: 8px; width: calc(100% - var(--outline-indent-px, 0px) - 23px);
-    border: 0; opacity: 0; background: transparent; text-align: left; cursor: pointer;
-    color: var(--color-shu-ink); font: 500 11px/1.2 var(--font-sans);
-    z-index: 1;
-  }
-  .outline__insert-label {
-    position: absolute; left: 0; top: -5px; white-space: nowrap;
-    padding: 1px 5px 1px 0; background: var(--color-sheet); border-radius: 3px;
-    pointer-events: none;
-  }
-  .outline__insert-between:hover, .outline__insert-between:focus-visible {
-    opacity: 1; outline: none;
-    background: linear-gradient(transparent 3px, var(--color-shu) 3px, var(--color-shu) 4px, transparent 4px);
-  }
-  .outline__add-last {
-    display: block;
-    margin: 3px 0 7px calc(var(--outline-depth, 0) * 15px + 13px);
-    padding: 6px 5px; max-width: calc(100% - 13px);
-    border: 0; border-radius: 6px; background: transparent;
-    color: var(--color-ink-3); font: 400 12px/1.3 var(--font-sans);
-    cursor: pointer; text-align: left;
-  }
-  .outline__add-last:hover, .outline__add-last:focus-visible {
-    color: var(--color-shu-ink); background: var(--color-shu-wash);
-  }
   @media (max-width:920px) {
-    .outline__insert-between { display: none; }
-    .outline__add-last { min-height: 40px; padding: 10px 8px; }
     .outline__item-wrap--group-start { margin-block-start:4px; }
   }
   /* 入力中ずっと位置を見せる。＋の記号だけに追加階層を伝えさせない。 */
