@@ -901,12 +901,11 @@ export function MemoEditorPage() {
       return false;
     }
     try {
-      const copiedFormat = mode === "outliner"
-        ? await copyOutlineToClipboard(result.text, result.html)
-        : (await copyToClipboard(result.text), "plain");
+      if (mode === "outliner") await copyOutlineToClipboard(result.text);
+      else await copyToClipboard(result.text);
       const label = mode === "outliner" ? "アウトライナー用（Tab階層）" : "テキストメモ用（階層番号）";
       const range = rootId === null ? "全体" : "この項目以下";
-      setNotice(`アウトライン${range}・${result.count}件を${label}でコピーしました。${mode === "outliner" && copiedFormat === "plain" ? "（Tabテキスト形式）" : ""}`);
+      setNotice(`アウトライン${range}・${result.count}件を${label}でコピーしました。`);
       return true;
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "アウトラインをコピーできませんでした。");
