@@ -314,6 +314,44 @@ export function ReferenceWorkspace({ memoId, entries, deskNode, renderEntry, onA
     });
   }
 
+  // 通常のメモ画面では、書き口と保存済みURLだけを表示する。
+  // 一括操作・検索・連続閲覧は専用画面に閉じ込め、PCでもスマホでも道具を増やしすぎない。
+  if (!focusMode) {
+    return (
+      <section className="reference-workspace reference-workspace--compact" aria-label="参考URLの調査">
+        <div className="reference-workspace__compact-header">
+          <span className="reference-workspace__compact-count">全{actualEntries.length} · 未確認{unreviewed} · ★{starred}</span>
+          <button type="button" onClick={() => setFocusMode(true)} aria-label="調査を開く">
+            {session ? "調査の続き ›" : "調査を開く ›"}
+          </button>
+        </div>
+        <div className="reference-workspace__desk">{deskNode}</div>
+        <div className="reference-workspace__compact-list">
+          {actualEntries.map(entry => {
+            const p = progress[entry.id];
+            return (
+              <div key={entry.id} className="reference-workspace__compact-row" onClickCapture={e => onLinkClick(e, entry.id)}>
+                {renderEntry(entry)}
+                <span className="reference-workspace__compact-status">
+                  {p?.reviewed_at ? "✓ 見た" : p?.opened_at ? "◉ 開いた" : "○ 未閲覧"}
+                  {p?.starred_at ? " · ★" : ""}
+                </span>
+              </div>
+            );
+          })}
+          {!actualEntries.length && <p className="reference-workspace__empty">URLを貼ると、ここに集まります。</p>}
+        </div>
+        {undoIds.length > 0 && <div className="reference-workspace__undo" role="status">
+          <span>削除したURLを復元できます</span>
+          <button type="button" onClick={() => void undoDelete()} disabled={busy}>元に戻す</button>
+        </div>}
+        {notice && <div className="reference-workspace__notice" role="status">{notice}
+          <button type="button" onClick={() => setNotice(null)} aria-label="通知を閉じる">×</button>
+        </div>}
+      </section>
+    );
+  }
+
   const content = (
     <section className={`reference-workspace${focusMode ? " reference-workspace--focused" : ""}`} aria-label="調査ワークスペース">
       <div className="reference-workspace__head">
@@ -443,5 +481,5 @@ export function ReferenceWorkspace({ memoId, entries, deskNode, renderEntry, onA
       {session && <div className="reference-workspace__handoff"><button type="button" onClick={() => sendToResearchBrowser(session.ids.map(id => byId.get(id)).filter((entry): entry is EntryTreeNode => Boolean(entry)))}>このセッションをリサーチブラウザへ送る（コピーも実行）</button></div>}
     </section>
   );
-  return focusMode ? createPortal(content, document.body) : content;
+  return createPortal(content, document.body);
 }
