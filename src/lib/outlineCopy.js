@@ -4,20 +4,18 @@
  *
  * すべての出力は文字列として生成し、保存された項目を変更しない。
  */
-const normalizeContent = (value) => String(value ?? "")
+import { stripOutlineEmphasis } from "./outlineEmphasis.js";
+
+const normalizeContent = (value) => stripOutlineEmphasis(String(value ?? ""))
   .replace(/[\r\n]+/g, " ")
   .replace(/\t/g, " ")
   .trim();
-
-const escapeHtml = (value) => value.replace(/&/g, "&amp;")
-  .replace(/</g, "&lt;").replace(/>/g, "&gt;")
-  .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 
 export function buildOutlineCopy(rows, { mode, rootId = null, includeCompleted = false } = {}) {
   if (mode !== "outliner" && mode !== "textMemo") throw new Error("コピー形式を指定してください。");
   const byId = new Map(rows.map(row => [row.id, row]));
   if (rootId !== null && !byId.has(rootId)) {
-    return { text: "", html: null, count: 0 };
+    return { text: "", count: 0 };
   }
 
   // 親が完了済みで出力から外れる場合も、子孫は直近の表示対象の親へ繰り上げる。
@@ -66,14 +64,5 @@ export function buildOutlineCopy(rows, { mode, rootId = null, includeCompleted =
     : "  ".repeat(node.depth) + node.numbers.join(".") + " " + node.content
   ).join("\n");
 
-  // OneNoteなどがHTMLを受け取れる場合はネイティブの入れ子リストを渡す。
-  // HTML貼り付け非対応の環境は上のTab付きtext/plainにフォールバックする。
-  const renderList = nodes => "<ul>" + nodes.map(node =>
-    "<li>" + escapeHtml(node.content) +
-      (node.children.length ? renderList(node.children) : "") + "</li>"
-  ).join("") + "</ul>";
-  const html = mode === "outliner" && roots.length
-    ? "<div>" + renderList(roots) + "</div>"
-    : null;
-  return { text, html, count: prepared.length };
+  return { text, count: prepared.length };
 }
