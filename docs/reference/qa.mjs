@@ -3,7 +3,6 @@ import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
 import { resolve } from 'node:path';
-import { selectKind } from '../amu/kinds.mjs';
 
 const base = process.env.PW_FROM ? pathToFileURL(resolve(process.env.PW_FROM) + '/').href : import.meta.url;
 const { chromium } = createRequire(base)('playwright');
@@ -19,7 +18,10 @@ async function createMemo(browser, width) {
   await page.goto(url);
   await page.getByRole('button', { name: /新しいメモ/ }).first().click();
   await page.waitForURL(/\/memos\//);
-  if (width < 920) await selectKind(page, 'word');
+  if (width < 920) {
+    await page.getByRole('tab', { name: /^参考URL/ }).click();
+    await page.locator('.entry-column--word.entry-column--active').waitFor({state:'visible'});
+  }
   await page.locator('.reference-workspace').waitFor();
   return { context, page, workspace: page.locator('.reference-workspace') };
 }
