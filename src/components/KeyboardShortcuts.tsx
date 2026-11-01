@@ -1,29 +1,213 @@
-import {useEffect,useState} from "react";
-import {useLocation} from "react-router-dom";
-import {lockBodyScroll} from "../lib/bodyScrollLock";
-export function KeyboardShortcuts(){
- const {pathname}=useLocation();const[open,setOpen]=useState(false);
- useEffect(()=>{const action=(e:KeyboardEvent)=>{
-   if((e.ctrlKey||e.metaKey)&&e.key==='/'){e.preventDefault();setOpen(o=>!o);return;}
-   if(e.key==='Escape'){setOpen(false);return;}
-   if(!pathname.startsWith('/memos/')||e.isComposing)return;
-   const digit = /^Digit[123]$/.test(e.code) ? e.code.slice(-1) : e.key;
-   // Alt系は他のアプリ・OSとの競合を避ける。番号は画面の左から順に対応する。
-   if((e.ctrlKey||e.metaKey)&&e.shiftKey&&!e.altKey&&['1','2','3'].includes(digit)){
-     e.preventDefault();window.dispatchEvent(new CustomEvent('kakidas:choose-entry-kind',{
-       detail:({1:'sentence',2:'paragraph',3:'word'} as Record<string,string>)[digit]}));
-   }
- };const show=()=>setOpen(true);window.addEventListener('keydown',action);
- window.addEventListener('kakidas:show-shortcuts',show);
- return()=>{window.removeEventListener('keydown',action);window.removeEventListener('kakidas:show-shortcuts',show)};
- },[pathname]);
- useEffect(()=>{if(!open)return;const release=lockBodyScroll();return release},[open]);
- return open?<div className="shortcut-overlay" role="presentation" onClick={()=>setOpen(false)}>
- <section role="dialog" aria-modal="true" aria-label="ショートカット" onClick={e=>e.stopPropagation()}>
- <h2>ショートカット</h2><p>Ctrl+Shift+1 / 2 / 3：書き口をアウトライン・段落・参考URLの欄へ運ぶ。</p>
- <p>書き口(アウトライン)：Enterで次の行、Tab / Shift+Tabで入れる深さ、Shift+Enterで段落へ、空のまま↑で上の行へ戻る、Escで離れる。</p>
- <p>アウトライン編集中：文字を選択してCtrl+Bで赤太字（もう一度押すと解除）。文字を選ばずにCtrl+Bなら行全体を強調。編集中は**で表示、編集を離れると赤太字で表示。</p>
- <p>アウトライン：Enterで同じ階層の次の行を追加（文章の途中でも分割しない）、F2で選択中の行を編集、Shift+Enterで行内改行。Tabで字下げ、Shift+Tabで字上げ、Alt+Shift+↑↓で行を移動。Ctrl+Enterで選択中・編集中・新しい行も完了（Macは⌘+Enter）。完了後は次の項目へ移ります。←→で開閉。</p>
- <p>段落：Ctrl+Enter（Shift+Enter）で置く。どこでも：URLを貼ると参考URLへ入る。Alt+Q：余白。Ctrl+/：この説明を開く。Esc：閉じる。</p>
- <button onClick={()=>setOpen(false)}>閉じる</button></section></div>:null;
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
+import { lockBodyScroll } from "../lib/bodyScrollLock";
+import { memoRepository } from "../repositories/memoRepository";
+
+type CommandId = "new-memo" | "outline" | "paragraph" | "reference" | "numbering" | "help";
+type Command = { id: CommandId; label: string; detail: string; keys: string; keywords: string };
+
+const COMMANDS: Command[] = [
+  { id: "new-memo", label: "新しいメモを作成", detail: "新しいメモを開いて、タイトルから書く", keys: "Ctrl/⌘ + Alt/⌥ + N", keywords: "作成 追加 new memo" },
+  { id: "outline", label: "アウトラインへ移動", detail: "書き口をアウトラインに移して入力を始める", keys: "Ctrl/⌘ + Shift + 1", keywords: "箇条書き リスト outline" },
+  { id: "paragraph", label: "段落へ移動", detail: "書き口を段落に移して入力を始める", keys: "Ctrl/⌘ + Shift + 2", keywords: "文章 paragraph" },
+  { id: "reference", label: "参考URLへ移動", detail: "書き口を参考URLに移して入力を始める", keys: "Ctrl/⌘ + Shift + 3", keywords: "リンク URL 調査 reference" },
+  { id: "numbering", label: "階層番号・ビュレットを切り替え", detail: "アウトラインの「1.1」と「•」を切り替える", keys: "Ctrl/⌘ + Shift + 4", keywords: "数字 見出し 番号 ナンバリング bullet numbered" },
+  { id: "help", label: "ショートカット一覧を見る", detail: "行の移動・完了・階層変更なども確認", keys: "Ctrl/⌘ + /", keywords: "ヘルプ help 操作 説明" },
+];
+
+export function KeyboardShortcuts() {
+  const { pathname } = useLocation();
+  const navigate = useNavigate();
+  const isEditor = pathname.startsWith("/memos/");
+  const [panel, setPanel] = useState<"commands" | "help" | null>(null);
+  const [query, setQuery] = useState("");
+  const [selectedIndex, setSelectedIndex] = useState(0);
+  const [error, setError] = useState("");
+  const [isCreating, setIsCreating] = useState(false);
+  const creatingRef = useRef(false);
+  const searchRef = useRef<HTMLInputElement>(null);
+  const helpRef = useRef<HTMLButtonElement>(null);
+  const dialogRef = useRef<HTMLElement>(null);
+
+  const commands = useMemo(() => COMMANDS.filter(command =>
+    isEditor || !["outline", "paragraph", "reference", "numbering"].includes(command.id)
+  ), [isEditor]);
+  const matching = useMemo(() => {
+    const term = query.trim().toLocaleLowerCase();
+    return term
+      ? commands.filter(command => (command.label + " " + command.detail + " " + command.keywords).toLocaleLowerCase().includes(term))
+      : commands;
+  }, [commands, query]);
+  const activeIndex = Math.min(selectedIndex, Math.max(0, matching.length - 1));
+
+  const openCommands = () => {
+    setQuery("");
+    setSelectedIndex(0);
+    setError("");
+    setPanel("commands");
+  };
+
+  const runCommand = async (id: CommandId) => {
+    if (id === "help") { setPanel("help"); return; }
+    if (id === "new-memo") {
+      if (creatingRef.current) return;
+      creatingRef.current = true;
+      setIsCreating(true);
+      setError("");
+      try {
+        const memo = await memoRepository.createMemo();
+        setPanel(null);
+        navigate("/memos/" + memo.id, {
+          state: { focusTitle: true, discardUntitledEmptyDraft: true },
+        });
+      } catch (cause) {
+        setError(cause instanceof Error ? cause.message : "メモを作成できませんでした。");
+        setPanel("commands");
+      } finally {
+        creatingRef.current = false;
+        setIsCreating(false);
+      }
+      return;
+    }
+    if (!isEditor) return;
+    setPanel(null);
+    if (id === "numbering") {
+      window.dispatchEvent(new Event("kakidas:toggle-outline-numbering"));
+    } else {
+      const kind = ({ outline: "sentence", paragraph: "paragraph", reference: "word" } as const)[id];
+      window.dispatchEvent(new CustomEvent("kakidas:choose-entry-kind", { detail: kind }));
+    }
+  };
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.isComposing || event.key === "Process" || event.keyCode === 229 || event.getModifierState("AltGraph")) return;
+      const commandKey = event.ctrlKey || event.metaKey;
+      const key = event.key.toLowerCase();
+      const isPaletteKey = commandKey && !event.altKey && !event.shiftKey && key === "k";
+      const isHelpKey = commandKey && !event.altKey && !event.shiftKey && (event.code === "Slash" || event.key === "/");
+
+      if (isPaletteKey) {
+        if (document.querySelector('[aria-modal="true"]') && !panel) return;
+        event.preventDefault();
+        if (panel === "commands") setPanel(null);
+        else openCommands();
+        return;
+      }
+      if (isHelpKey) {
+        if (document.querySelector('[aria-modal="true"]') && !panel) return;
+        event.preventDefault();
+        setPanel(previous => previous === "help" ? null : "help");
+        return;
+      }
+      if (panel) {
+        if (event.key === "Escape") { event.preventDefault(); setPanel(null); }
+        return;
+      }
+      // 他のダイアログの入力操作やIME変換を横取りしない。
+      if (document.querySelector('[aria-modal="true"]') || event.repeat) return;
+      if (commandKey && event.altKey && !event.shiftKey && key === "n") {
+        event.preventDefault();
+        void runCommand("new-memo");
+        return;
+      }
+      const digit = /^Digit[1-4]$/.test(event.code) ? event.code.slice(-1) : event.key;
+      if (isEditor && commandKey && event.shiftKey && !event.altKey && ["1", "2", "3", "4"].includes(digit)) {
+        event.preventDefault();
+        void runCommand(({ "1": "outline", "2": "paragraph", "3": "reference", "4": "numbering" } as const)[digit as "1" | "2" | "3" | "4"]);
+      }
+    };
+    const showHelp = () => setPanel("help");
+    const showCommands = () => openCommands();
+    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("kakidas:show-shortcuts", showHelp);
+    window.addEventListener("kakidas:open-command-palette", showCommands);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("kakidas:show-shortcuts", showHelp);
+      window.removeEventListener("kakidas:open-command-palette", showCommands);
+    };
+  });
+
+  useEffect(() => {
+    if (!panel) return;
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const unlock = lockBodyScroll();
+    const frame = window.requestAnimationFrame(() => {
+      if (panel === "commands") searchRef.current?.focus({ preventScroll: true });
+      else helpRef.current?.focus({ preventScroll: true });
+    });
+    return () => {
+      window.cancelAnimationFrame(frame);
+      unlock();
+      if (previousFocus?.isConnected) previousFocus.focus({ preventScroll: true });
+    };
+  }, [panel]);
+
+  const handleDialogKeys = (event: ReactKeyboardEvent<HTMLElement>) => {
+    if (event.key !== "Tab") return;
+    const elements = Array.from(dialogRef.current?.querySelectorAll<HTMLElement>(
+      'button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])'
+    ) ?? []).filter(el => el.getClientRects().length > 0);
+    if (!elements.length) return;
+    const first = elements[0], last = elements[elements.length - 1];
+    if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+    else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+  };
+
+  return panel ? (
+    <div className="command-palette-backdrop" role="presentation" onMouseDown={event => {
+      if (event.target === event.currentTarget) setPanel(null);
+    }}>
+      <section ref={dialogRef} className="command-palette" role="dialog" aria-modal="true"
+        aria-labelledby="command-palette-title" onKeyDown={handleDialogKeys}>
+        <header className="command-palette__header">
+          <div>
+            <span className="command-palette__eyebrow">KAKIDAS / COMMANDS</span>
+            <h2 id="command-palette-title">{panel === "commands" ? "何をする？" : "キーボード操作"}</h2>
+          </div>
+          <button className="command-palette__close" type="button" onClick={() => setPanel(null)} aria-label="閉じる">Esc ×</button>
+        </header>
+        {panel === "commands" ? (
+          <>
+            <input ref={searchRef} type="search" aria-label="操作を検索"
+              className="command-palette__search" placeholder="操作を検索（例：番号、新しいメモ）"
+              value={query} onChange={event => { setQuery(event.target.value); setSelectedIndex(0); }}
+              onKeyDown={event => {
+                if (event.key === "ArrowDown") { event.preventDefault(); setSelectedIndex((activeIndex + 1) % Math.max(1, matching.length)); }
+                if (event.key === "ArrowUp") { event.preventDefault(); setSelectedIndex((activeIndex + matching.length - 1) % Math.max(1, matching.length)); }
+                if (event.key === "Enter" && matching[activeIndex] && !event.nativeEvent.isComposing) {
+                  event.preventDefault(); void runCommand(matching[activeIndex].id);
+                }
+              }}/>
+            <div className="command-palette__results" role="listbox" aria-label="実行できる操作">
+              {matching.length ? matching.map((command, index) =>
+                <button key={command.id} type="button" role="option" aria-selected={activeIndex === index}
+                  disabled={isCreating} className={"command-palette__item" + (activeIndex === index ? " command-palette__item--active" : "")}
+                  onMouseEnter={() => setSelectedIndex(index)} onClick={() => void runCommand(command.id)}>
+                  <span><strong>{command.label}</strong><small>{command.detail}</small></span>
+                  <kbd>{command.keys}</kbd>
+                </button>
+              ) : <p className="command-palette__empty">該当する操作がありません。別の言葉で検索してください。</p>}
+            </div>
+            {error && <p className="command-palette__error" role="alert">{error}</p>}
+            <footer className="command-palette__footer">↑ ↓ 選ぶ <span>Enter 実行</span><span>Esc 閉じる</span></footer>
+          </>
+        ) : (
+          <div className="command-palette__help">
+            <p>まずは <strong>Ctrl/⌘ + K</strong> だけ覚えればOK。操作名を検索して実行できます。</p>
+            {commands.filter(command => command.id !== "help").map(command =>
+              <div className="command-palette__help-row" key={command.id}>
+                <span>{command.label}</span><kbd>{command.keys}</kbd>
+              </div>
+            )}
+            <p>アウトライン内：Enterで次の行、Tab / Shift+Tabで階層変更、F2で編集、Ctrl/⌘+Enterで完了、Alt+Shift+↑↓で並び替え。</p>
+            <p>編集中：Ctrl/⌘+Bで強調、Shift+Enterで行内改行。余白はAlt+Q。</p>
+            <button ref={helpRef} type="button" className="command-palette__help-action"
+              onClick={openCommands}>操作を検索する <span>Ctrl/⌘ + K</span></button>
+          </div>
+        )}
+      </section>
+    </div>
+  ) : null;
 }
