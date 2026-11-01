@@ -211,6 +211,7 @@ check('P2','完了行を隠しても新規行は保存順の正しい位置へ�
   await put(page,'手前の行');await put(page,'完了行');await put(page,'後ろの行');
   await row(page,'完了行').focus();await page.keyboard.press('Control+Enter');
   await row(page,'完了行').waitFor({state:'detached'});
+  await page.waitForFunction(()=>document.querySelector('.outline__completed-toggle')?.textContent?.includes('1件'));
   await row(page,'手前の行').focus();await page.keyboard.press('Enter');
   const pending=page.getByRole('textbox',{name:'新しいアウトライン項目'});
   await pending.fill('非表示でも中間');await pending.press('Enter');
@@ -437,7 +438,7 @@ check('P2','新規入力中のCtrl+Enterは作成直後に完了し、空欄は�
   assert.equal(await outline(page).locator('[data-outline-id]').count(),0,'空の行は作成しない');
   await pending.fill('新規から完了');await pending.press('Control+Enter');
   // 新規行の保存→完了更新を待つ。処理前も0件なので「0件」だけでは同期条件にならない。
-  await page.getByRole('button',{name:'完了済み 1件を表示'}).waitFor({state:'visible'});
+  await page.waitForFunction(()=>document.querySelector('.outline__completed-toggle')?.textContent?.includes('1件'));
   assert.equal(await outline(page).locator('[data-outline-id]').count(),0,'完了済み非表示なので行が消える');
   await page.getByRole('button',{name:'アウトラインの操作'}).click();
   await page.getByRole('menuitemcheckbox',{name:'完了済みを表示'}).click();
