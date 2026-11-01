@@ -11,7 +11,7 @@ import {
   useState,
 } from "react";
 import type { EntryRow, EntryTreeNode, EntryUpdate } from "../types/memo";
-import { normalizeOutlineLines, rowsFromOutlinePaste } from "../lib/outlinePaste.js";
+import { normalizeOutlineItems, itemsFromOutlinePaste, serializeOutlineItems, type OutlinePasteItem } from "../lib/outlinePaste.js";
 import { siblingPositionAfter, visibleInsertionIndex } from "../lib/outlineInsert.js";
 import { outlineEmphasisSegments, toggleOutlineEmphasis, stripOutlineEmphasis } from "../lib/outlineEmphasis.js";
 import { useDraftPersistence } from "../hooks/useDraftPersistence";
@@ -87,7 +87,7 @@ type OutlineListProps = {
   onToggleCompleted?: (id: string) => Promise<void>;
   onUpdate: (id: string, patch: EntryUpdate) => Promise<unknown>;
   /** 既存行の編集中に複数行を貼り付けた際、先頭を更新し残りを兄弟行として追加する。 */
-  onPasteRows?: (row: EntryTreeNode, rows: string[]) => Promise<void>;
+  onPasteRows?: (row: EntryTreeNode, rows: OutlinePasteItem[]) => Promise<void>;
   /** 新規行を戻す前に下書きを復元し、子を巻き込まずソフト削除する。 */
   onUndoCreate?: (row: EntryTreeNode) => Promise<void>;
   /** 書き口(置き場所)。いる欄では運ばれてきた書き口が、いない欄では入口が入る。 */
@@ -454,39 +454,54 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
       return false;
     } finally { creatingRef.current = false; setPendingSaving(false); }
   };
-  const savePastedPending = async (parts: string[]) => {
+  /** Tab付きの貼り付けを、貼り付け元の相対階層のまま順に保存する。 */
+  const savePastedPending = async (parts: OutlinePasteItem[]) => {
     const current = pendingRef.current;
     if (!current || creatingRef.current || disabled || parts.length === 0) return;
     creatingRef.current = true;
     let done = 0;
-    // 一覧の再描画と下書きフックを同期させてから永続保存へ進む。
-    flushSync(() => changePending({ ...current, value: parts.join("\n") }));
+    let rootsCreated = 0;
+    const createdAtDepth: string[] = [];
+    const childIndices = new Map<string, number>();
+    // 書きかけを失わないため、まずTab付き原文を下書きに保存する。
+    flushSync(() => changePending({ ...current, value: serializeOutlineItems(parts) }));
     setPendingSaving(true);
     try {
       if (precedingEditSaveRef.current) await precedingEditSaveRef.current;
       await flushInlineDraft();
-      for (const line of parts) {
+      for (const part of parts) {
+        const isRoot = part.depth === 0;
+        const parentId = isRoot ? current.parentId : createdAtDepth[part.depth - 1];
+        if (parentId === undefined) throw new Error("貼り付けた文章の親項目が見つかりません。");
+        const index = isRoot ? current.index + rootsCreated : (childIndices.get(parentId as string) ?? 0);
         const metadata: EntryCreateMetadata = done === 0 ? {
           tag: pendingMeta.tag_value.trim() || undefined,
           note: pendingMeta.note_value.trim(),
           link_url: pendingMeta.link_value.trim(),
         } : {};
-        const created = await onCreateInline(line, current.parentId, current.index + done,
+        const created = await onCreateInline(part.content, parentId, index,
           done === parts.length - 1 ? draftId : undefined, metadata);
         recordUndo({ type: "create", id: created.id });
+        createdAtDepth[part.depth] = created.id;
+        createdAtDepth.length = part.depth + 1;
+        if (isRoot) rootsCreated++;
+        else childIndices.set(parentId as string, index + 1);
         done++;
       }
       markInlineCommitted();
       setPendingMeta(emptyMeta);
-      const next = { parentId: current.parentId, index: current.index + done, value: "" };
+      const next = { parentId: current.parentId, index: current.index + rootsCreated, value: "" };
       changePending(next);
       setCaret(next);
       window.requestAnimationFrame(() => pendingEditorRef.current?.focus({ preventScroll: true }));
-      setMessage("");
+      if (parts.some(part => part.depth > 0))
+        setMessage(`${done}行・${Math.max(...parts.map(part => part.depth)) + 1}階層を取り込みました。`);
+      else setMessage("");
     } catch (error) {
       if (done > 0) setPendingMeta(emptyMeta);
-      changePending({ ...current, index: current.index + done, value: parts.slice(done).join("\n") });
-      showError(error);
+      // 失敗分はTab付きのまま保持し、何が保存されたかを明示する。
+      changePending({ ...current, index: current.index + rootsCreated, value: serializeOutlineItems(parts.slice(done)) });
+      showError(new Error(`${done}行を保存しました。残り${parts.length - done}行は入力欄に保持しました。 ${error instanceof Error ? error.message : ""}`));
     } finally { creatingRef.current = false; setPendingSaving(false); }
   };
   useEffect(() => {
@@ -502,13 +517,14 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
   const pastePlainText = (text: string) => {
     if (!text.trim() || disabled) return false;
     const current = pendingRef.current;
-    const parts = normalizeOutlineLines(text);
+    const parts = normalizeOutlineItems(current ? current.value + text : text);
     if (parts.length < 2) {
       if (current) changePending({ ...current, value: current.value + text });
-      else beginPending(selectedId && nodeById.has(selectedId) ? siblingAfter(nodeById.get(selectedId)!) : { parentId: scopeId, index: childrenOf(scopeId).length }, text);
+      else beginPending(selectedId && nodeById.has(selectedId) ? siblingAfter(nodeById.get(selectedId)!) : { parentId: scopeId, index: persistedChildrenOf(scopeId).length }, text);
       return true;
     }
-    const position = current ?? { parentId: scopeId, index: childrenOf(scopeId).length, value: "" };
+    const selected = selectedId ? nodeById.get(selectedId) : null;
+    const position = current ?? { ...(selected ? siblingAfter(selected) : { parentId: scopeId, index: persistedChildrenOf(scopeId).length }), value: "" };
     if (!current) changePending(position);
     void savePastedPending(parts);
     return true;
@@ -953,7 +969,7 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
     if (!onPasteRows || disabled || savingRef.current) return;
     const field = event.currentTarget;
     const pasted = event.clipboardData.getData("text/plain");
-    const lines = rowsFromOutlinePaste(editingValue, field.selectionStart, field.selectionEnd, pasted);
+    const lines = itemsFromOutlinePaste(editingValue, field.selectionStart, field.selectionEnd, pasted);
     if (!lines) return;
     event.preventDefault();
     // 途中で保存できなかった場合、元の入力内容を消さず再編集できるようにする。
@@ -1031,7 +1047,7 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
   const onPendingPaste = (event: import("react").ClipboardEvent<HTMLTextAreaElement>) => {
     const field = event.currentTarget, current = pendingRef.current;
     if (!current) return;
-    const lines = rowsFromOutlinePaste(current.value, field.selectionStart, field.selectionEnd, event.clipboardData.getData("text/plain"));
+    const lines = itemsFromOutlinePaste(current.value, field.selectionStart, field.selectionEnd, event.clipboardData.getData("text/plain"));
     if (!lines) return;
     event.preventDefault();
     void savePastedPending(lines);
