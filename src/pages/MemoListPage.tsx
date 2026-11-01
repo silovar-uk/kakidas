@@ -897,6 +897,7 @@ export function MemoListPage() {
         </Link>
 
         <div className="app-header__right">
+          <button type="button" className="command-palette-trigger" aria-label="操作を検索する（CtrlまたはCommand + K）" title="操作を検索する（Ctrl / ⌘ + K）" onClick={()=>window.dispatchEvent(new Event("kakidas:open-command-palette"))}>操作 <kbd>⌘K</kbd></button>
           <button
             type="button"
             className={`cloud-account-button ${user ? "cloud-account-button--signed-in" : ""}`}
