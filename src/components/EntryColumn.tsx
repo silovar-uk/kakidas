@@ -1352,14 +1352,28 @@ export function EntryColumn({
             onToggleCompleted={toggleCompleted}
             onUpdate={onUpdate}
             onPasteRows={async (row, rows) => {
-              const siblings = primaryEntries.filter((item) => item.parent_id === row.parent_id)
+              // 表示中の行だけでなく、完了済みを含めた兄弟順位で挿入する。
+              const siblings = (allOutlineEntries ?? primaryEntries).filter((item) => item.parent_id === row.parent_id)
                 .sort((a, b) => a.sort_order - b.sort_order || a.created_at.localeCompare(b.created_at));
               const at = siblings.findIndex((item) => item.id === row.id);
               if (at < 0) throw new Error("挿入する元の行が見つかりません。");
-              await onUpdate(row.id, { content: rows[0] });
-              outlineRef?.current?.recordExternalEdit(row.id, row.content);
+              await onUpdate(row.id, { content: rows[0].content });
+              if (rows[0].content !== row.content) outlineRef?.current?.recordExternalEdit(row.id, row.content);
+              // 編集行が最初の親になる。Tabなしはその次の兄弟として追加。
+              const createdAtDepth: string[] = [row.id];
+              const childIndices = new Map<string, number>();
+              let rootOffset = 0;
               for (let i = 1; i < rows.length; i += 1) {
-                const created = await onCreate("sentence", rows[i], {}, row.parent_id, "bottom", undefined, undefined, at + i) as EntryTreeNode;
+                const part = rows[i];
+                const isRoot = part.depth === 0;
+                const parentId = isRoot ? row.parent_id : createdAtDepth[part.depth - 1];
+                if (parentId === undefined) throw new Error("貼り付けた文章の親項目が見つかりません。");
+                const index = isRoot ? at + 1 + rootOffset : (childIndices.get(parentId as string) ?? 0);
+                const created = await onCreate("sentence", part.content, {}, parentId, "bottom", undefined, undefined, index) as EntryTreeNode;
+                createdAtDepth[part.depth] = created.id;
+                createdAtDepth.length = part.depth + 1;
+                if (isRoot) rootOffset++;
+                else childIndices.set(parentId as string, index + 1);
                 outlineRef?.current?.recordExternalCreate(created.id);
               }
             }}
