@@ -247,6 +247,9 @@ export function MemoEditorPage() {
     updateTitle,
     updateMemo,
     createEntry,
+    pasteOutlineBatch,
+    undoOutlinePasteBatch,
+    redoOutlinePasteBatch,
     updateEntry,
     deleteEntry,
     restoreEntries,
@@ -1649,6 +1652,9 @@ export function MemoEditorPage() {
                 onActivate={()=>moveDeskTo(kind)} />
             )}
             outlineRef={kind==='sentence'?outlineRef:undefined}
+            onPasteOutlineBatch={kind==='sentence'?pasteOutlineBatch:undefined}
+            onUndoPasteOutlineBatch={kind==='sentence'?undoOutlinePasteBatch:undefined}
+            onRedoPasteOutlineBatch={kind==='sentence'?redoOutlinePasteBatch:undefined}
              showCompletedOutline={showCompletedOutline}
              completedOutlineCount={completedOutlineCount}
              onToggleShowCompletedOutline={() => setShowCompletedOutline((current) => !current)}
