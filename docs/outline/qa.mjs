@@ -282,6 +282,50 @@ check('P2','既存行の本文へTab付きテキストを貼っても子孫と�
   await page.reload();await row(page,'次の兄弟').waitFor({state:'visible'});
   assert.equal(await row(page,'孫A').getAttribute('data-outline-parent-id'),child);
 });
+check('P2','Markdownのスペース字下げが階層になり、一括Undo・Redoできる',async(page)=>{
+  await selectKind(page,'sentence');
+  await page.evaluate(()=>{
+    const el=document.querySelector('.entry-column--sentence .outline__edit--pending');
+    const data=new DataTransfer();
+    data.setData('text/plain','- 地域戦略\n  - 国内\n    - 市場規模\n- 競合');
+    el.dispatchEvent(new ClipboardEvent('paste',{bubbles:true,cancelable:true,clipboardData:data}));
+  });
+  await row(page,'競合').waitFor({state:'visible'});
+  const parent=await row(page,'地域戦略').getAttribute('data-outline-id');
+  const child=await row(page,'国内').getAttribute('data-outline-id');
+  assert.equal(await row(page,'国内').getAttribute('data-outline-parent-id'),parent);
+  assert.equal(await row(page,'市場規模').getAttribute('data-outline-parent-id'),child);
+  assert.deepEqual(await outline(page).locator('.outline__content').allTextContents(),['地域戦略','国内','市場規模','競合']);
+  // 一括操作はCtrl+Z一度で全て戻る。通常の行単位Undoでは子のある親は消せない。
+  await row(page,'地域戦略').focus();
+  await page.keyboard.press('Control+z');
+  await row(page,'地域戦略').waitFor({state:'detached'});
+  assert.equal(await entries(page).count(),0);
+  await page.getByRole('button',{name:'やり直す（Redo）'}).click();
+  await row(page,'競合').waitFor({state:'visible'});
+  assert.deepEqual(await outline(page).locator('.outline__content').allTextContents(),['地域戦略','国内','市場規模','競合']);
+  await page.reload();
+  assert.equal(await row(page,'市場規模').getAttribute('data-outline-parent-id'),child);
+});
+check('P2','普通の文章のスペース字下げは確認してから2スペースを選べる',async(page)=>{
+  await selectKind(page,'sentence');
+  await page.evaluate(()=>{
+    const el=document.querySelector('.entry-column--sentence .outline__edit--pending');
+    const data=new DataTransfer();
+    data.setData('text/plain','本題\n  原因\n    背景');
+    el.dispatchEvent(new ClipboardEvent('paste',{bubbles:true,cancelable:true,clipboardData:data}));
+  });
+  const dialog=page.getByRole('dialog',{name:'階層の取り込みを確認'});
+  await dialog.waitFor({state:'visible'});
+  assert.equal(await entries(page).count(),0,'確認前に保存しない');
+  await dialog.getByLabel('階層の解釈').selectOption('two');
+  await dialog.getByRole('button',{name:'この階層で取り込む'}).click();
+  await row(page,'背景').waitFor({state:'visible'});
+  const parent=await row(page,'本題').getAttribute('data-outline-id');
+  const child=await row(page,'原因').getAttribute('data-outline-id');
+  assert.equal(await row(page,'原因').getAttribute('data-outline-parent-id'),parent);
+  assert.equal(await row(page,'背景').getAttribute('data-outline-parent-id'),child);
+});
 check('P2','兄弟行は密着し、子グループを抜けるところだけ5px空く',async(page)=>{
   for(const content of ['大項目A','子項目A1','子項目A2','大項目B'])await put(page,content);
   for(const content of ['子項目A1','子項目A2']){
