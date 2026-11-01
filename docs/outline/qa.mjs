@@ -101,7 +101,10 @@ check('P1','完了済みは既定で非表示、表示・再非表示・再読�
   // 完了操作はIndexedDBへの非同期保存。DOMから外れたことを待って検証する。
   await row(page,'完了にする行').waitFor({state:'detached'});
   assert.equal(await row(page,'完了にする行').count(),0,'完了行は初期状態では表示されない');
-  assert.equal(await row(page,'未完了の行').count(),1,'未完了の行は残る');
+  // 完了後は未完了の次行が自動で編集状態へ移るため、.outline__content でなく行の存在を確認する。
+  assert.equal(await outline(page).locator('[data-outline-id]').count(),1,'未完了の行は残る');
+  const remaining=outline(page).locator('[data-outline-id]').first();
+  assert.equal(await remaining.locator('.outline__content, .outline__edit').first().evaluate(el=>el instanceof HTMLTextAreaElement ? el.value : el.textContent),'未完了の行');
   assert.equal(await outlineCompletedMenu(page),'false','PCのアウトラインメニューで初期非表示');
   await outlineCompletedMenu(page,{toggle:true});
   assert.equal(await row(page,'完了にする行').count(),1,'表示操作で完了行が戻る');
@@ -161,7 +164,7 @@ check('P2','追加した項目のUndoはインラインの下書きに文章を�
   assert.equal(await pending.inputValue(),'復元する行');
   assert.equal(await row(page,'復元する行').count(),0);
 });
-check('P2','文章の途中でEnterすると、末尾を次の行へ分割できる',async(page)=>{
+check('P2','文章の途中でEnterしても元の文章を分割しない',async(page)=>{
   await put(page,'左右');
   await row(page,'左右').locator('.outline__content').click();
   const editing=page.getByRole('textbox',{name:'アウトラインの本文を編集'});
@@ -169,10 +172,53 @@ check('P2','文章の途中でEnterすると、末尾を次の行へ分割でき
   await editing.press('Enter');
   const pending=page.locator('.entry-column--sentence .outline__edit--pending');
   await pending.waitFor({state:'visible'});
-  assert.equal(await pending.inputValue(),'右');
-  await pending.press('Enter');
-  await row(page,'左').waitFor({state:'visible'});
-  await row(page,'右').waitFor({state:'visible'});
+  assert.equal(await pending.inputValue(),'','新しい行は空');
+  await pending.fill('追加');await pending.press('Enter');
+  await row(page,'左右').waitFor({state:'visible'});
+  await row(page,'追加').waitFor({state:'visible'});
+  assert.deepEqual(await outline(page).locator('.outline__content').allTextContents(),['左右','追加']);
+});
+check('P2','展開した親行のEnterで子項目群の後ろへ兄弟を追加する',async(page)=>{
+  await put(page,'挿入親');await put(page,'挿入子');
+  await row(page,'挿入子').focus();await page.keyboard.press('Tab');
+  await page.waitForFunction(()=>document.querySelector('[data-outline-parent-id]:not([data-outline-parent-id=""])')?.textContent?.includes('挿入子'));
+  await row(page,'挿入親').locator('.outline__content').click();
+  const editing=page.getByRole('textbox',{name:'アウトラインの本文を編集'});
+  await editing.press('Home');await editing.press('Enter');
+  const pending=page.getByRole('textbox',{name:'新しいアウトライン項目'});
+  await pending.waitFor({state:'visible'});
+  assert.equal(await pending.getAttribute('aria-label'),'新しいアウトライン項目');
+  await pending.fill('次の兄弟');await pending.press('Enter');
+  await row(page,'次の兄弟').waitFor({state:'visible'});
+  assert.deepEqual(await outline(page).locator('.outline__content').allTextContents(),['挿入親','挿入子','次の兄弟']);
+  assert.equal(await row(page,'次の兄弟').getAttribute('aria-level'),'1');
+  await page.reload();
+  assert.deepEqual(await outline(page).locator('.outline__content').allTextContents(),['挿入親','挿入子','次の兄弟']);
+});
+check('P2','選択行のEnterはF2編集と異なり、新しい兄弟の空行を作る',async(page)=>{
+  await put(page,'選択行A');await put(page,'選択行B');
+  await row(page,'選択行A').focus();await page.keyboard.press('Enter');
+  const pending=page.getByRole('textbox',{name:'新しいアウトライン項目'});
+  await pending.waitFor({state:'visible'});
+  assert.equal(await pending.evaluate(el=>document.activeElement===el),true);
+  await pending.fill('間に追加');await pending.press('Enter');
+  await row(page,'間に追加').waitFor({state:'visible'});
+  assert.deepEqual(await outline(page).locator('.outline__content').allTextContents(),['選択行A','間に追加','選択行B']);
+  await row(page,'選択行A').focus();await page.keyboard.press('F2');
+  assert.equal(await page.getByRole('textbox',{name:'アウトラインの本文を編集'}).inputValue(),'選択行A');
+});
+check('P2','完了行を隠しても新規行は保存順の正しい位置へ入る',async(page)=>{
+  await put(page,'手前の行');await put(page,'完了行');await put(page,'後ろの行');
+  await row(page,'完了行').focus();await page.keyboard.press('Control+Enter');
+  await row(page,'完了行').waitFor({state:'detached'});
+  await page.waitForFunction(()=>document.querySelector('.outline__completed-toggle')?.textContent?.includes('1件'));
+  await row(page,'手前の行').focus();await page.keyboard.press('Enter');
+  const pending=page.getByRole('textbox',{name:'新しいアウトライン項目'});
+  await pending.fill('非表示でも中間');await pending.press('Enter');
+  await row(page,'非表示でも中間').waitFor({state:'visible'});
+  assert.deepEqual(await outline(page).locator('.outline__content').allTextContents(),['手前の行','非表示でも中間','後ろの行']);
+  await outlineCompletedMenu(page,{toggle:true});
+  assert.deepEqual(await outline(page).locator('.outline__content').allTextContents(),['手前の行','非表示でも中間','完了行','後ろの行']);
 });
 check('P2','複数行ペーストは空白行と記号を除いて兄弟項目になる',async(page)=>{
   await selectKind(page,'sentence');
@@ -288,8 +334,8 @@ check('P2','兄弟を移動し、直前の移動を取り消せる',async(page)=
 });
 check('P2','作成・位置指定・再読込で重複しない',async(page)=>{
   await put(page,'先頭');await put(page,'末尾');
-  // v0.8.0: 行を選んで直し、Enterで次の一行へ。そこへ書くと、直した行の直後に入る(行の下書きと項目の詳細は無くなった)
-  await row(page,'先頭').focus();await page.keyboard.press('Enter');
+  // 選択行のEnterは兄弟追加、F2は既存本文の編集。
+  await row(page,'先頭').focus();await page.keyboard.press('F2');
   const edit=page.getByRole('textbox',{name:'アウトラインの本文を編集'});
   await edit.fill('先頭改訂');await edit.press('Enter');
   await page.keyboard.type('途中');await page.keyboard.press('Enter');
@@ -391,7 +437,8 @@ check('P2','新規入力中のCtrl+Enterは作成直後に完了し、空欄は�
   await pending.press('Control+Enter');
   assert.equal(await outline(page).locator('[data-outline-id]').count(),0,'空の行は作成しない');
   await pending.fill('新規から完了');await pending.press('Control+Enter');
-  await page.waitForFunction(()=>!!document.querySelector('.outline__edit--pending'));
+  // 新規行の保存→完了更新を待つ。処理前も0件なので「0件」だけでは同期条件にならない。
+  await page.waitForFunction(()=>document.querySelector('.outline__completed-toggle')?.textContent?.includes('1件'));
   assert.equal(await outline(page).locator('[data-outline-id]').count(),0,'完了済み非表示なので行が消える');
   await page.getByRole('button',{name:'アウトラインの操作'}).click();
   await page.getByRole('menuitemcheckbox',{name:'完了済みを表示'}).click();

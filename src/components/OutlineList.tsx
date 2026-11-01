@@ -12,6 +12,7 @@ import {
 } from "react";
 import type { EntryRow, EntryTreeNode, EntryUpdate } from "../types/memo";
 import { normalizeOutlineLines, rowsFromOutlinePaste } from "../lib/outlinePaste.js";
+import { siblingPositionAfter, visibleInsertionIndex } from "../lib/outlineInsert.js";
 import { outlineEmphasisSegments, toggleOutlineEmphasis, stripOutlineEmphasis } from "../lib/outlineEmphasis.js";
 import { useDraftPersistence } from "../hooks/useDraftPersistence";
 import { buildEntryDraftId, type EntryDraftSnapshot } from "../repositories/draftRepository";
@@ -60,6 +61,8 @@ export type OutlineHandle = {
 
 type OutlineListProps = {
   entries: EntryTreeNode[];
+  /** 表示フィルターを通す前の全行。保存順の挿入位置を決める唯一の基準。 */
+  allEntries?: EntryTreeNode[];
   memoId: string;
   memoUpdatedAt: string;
   onCreateInline: (content: string, parentId: string | null, index: number, draftId?: string, metadata?: EntryCreateMetadata) => Promise<{ id: string }>;
@@ -156,6 +159,7 @@ function adjacentCursorOffset(content: string, column: number, direction: "up" |
 /** 親子構造はDBの parent_id / sort_order に保存し、このコンポーネントには一時的な開閉・選択・次の一行の位置だけを置く。 */
 export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function OutlineList({
   entries,
+  allEntries = entries,
   memoId,
   memoUpdatedAt,
   onCreateInline,
@@ -185,6 +189,8 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
   onFocusDesk,
 }, ref) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  /** 完了後の遅延フォーカスが、後から始まった入力を奪わないようにする世代番号。 */
+  const focusEpochRef = useRef(0);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingValue, setEditingValue] = useState("");
   type PendingRow = { parentId: string | null; index: number; value: string };
@@ -193,6 +199,7 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
   const pendingEditorRef = useRef<HTMLTextAreaElement | null>(null);
   const creatingRef = useRef(false);
   const [pendingSaving, setPendingSaving] = useState(false);
+  const [failedEdit, setFailedEdit] = useState<{ id: string; value: string } | null>(null);
   const changePending = (next: PendingRow | null) => { pendingRef.current = next; setPending(next); };
   const emptyMeta: EntryDraftSnapshot = {
     content: "", heading: "", tag_value: "", note_value: "", link_value: "",
@@ -258,12 +265,17 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
   const editorRef = useRef<HTMLTextAreaElement | null>(null);
   const requestedSelectionRef = useRef<{ id: string; offset: number } | null>(null);
   const savingRef = useRef(false);
+  /** 既存行の編集保存を完了してから、続きの新規行を保存する。 */
+  const precedingEditSaveRef = useRef<Promise<unknown> | null>(null);
   const skipBlurRef = useRef(false);
   const lastInsertRef = useRef<Caret | null>(null);
   const lastAdvanceRef = useRef(0);
   /** 置いたばかりで、一覧にはまだ描かれていない行の位置(Tabが続けて来ても親にできるように)。 */
   const recentRef = useRef(new Map<string, { parentId: string | null; index: number; at: number }>());
   const nodeById = useMemo(() => new Map(entries.map((row) => [row.id, row])), [entries]);
+  const allNodeById = useMemo(() => new Map(allEntries.map((row) => [row.id, row])), [allEntries]);
+  const persistedChildrenOf = (parentId: string | null) =>
+    allEntries.filter((row) => row.parent_id === parentId);
   /** 表示切替で本文を動かさないよう、どちらのモードでも同じガターを確保する。 */
   const markerWidth = useMemo(() => {
     if (!numbered) return "12px";
@@ -322,35 +334,23 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
     }
   }
 
-  /** 次の一行の位置。未指定、または親が消えたときは、範囲の末尾。 */
+  /** 非表示の完了行も含めた保存順で位置を管理する。 */
   const resolvedCaret = (): Caret => {
     const current = caretRef.current;
-    if (current && (current.parentId === null || nodeById.has(current.parentId))) {
-      return { parentId: current.parentId, index: Math.min(current.index, childrenOf(current.parentId).length) };
+    if (current && (current.parentId === null || allNodeById.has(current.parentId))) {
+      return { parentId: current.parentId, index: Math.max(0, Math.min(current.index, persistedChildrenOf(current.parentId).length)) };
     }
-    return { parentId: scopeId, index: childrenOf(scopeId).length };
+    return { parentId: scopeId, index: persistedChildrenOf(scopeId).length };
   };
   const rowDepth = (row: EntryTreeNode) => (zoom ? Math.max(0, row.depth - zoom.depth - 1) : row.depth);
 
-  /** 描く位置(visible の何番目の前か)・深さ・木の最後にあるか。 */
+  /** 保存上の挿入位置を、折りたたみ・完了非表示後の表示行番号に変換する。 */
   const caretSpot = () => {
     const { parentId, index } = resolvedCaret();
-    const list = childrenOf(parentId);
     const atScopeTop = parentId === null || parentId === scopeId;
-    const parent = parentId ? nodeById.get(parentId) : null;
+    const parent = parentId ? allNodeById.get(parentId) : null;
     const depth = atScopeTop || !parent ? 0 : rowDepth(parent) + 1;
-    if (index < list.length) {
-      const at = visible.findIndex((row) => row.id === list[index].id);
-      if (at >= 0) return { at, depth, end: false, parentId, index };
-    }
-    if (atScopeTop) return { at: visible.length, depth, end: true, parentId, index };
-    // 親の枝の最後に見えている子孫の直後。
-    const lastVisibleIn = (id: string): string => {
-      const children = childrenOf(id);
-      return children.length === 0 || collapsed.has(id) ? id : lastVisibleIn(children[children.length - 1].id);
-    };
-    const last = lastVisibleIn(parentId as string);
-    const at = visible.findIndex((row) => row.id === last) + 1;
+    const at = visibleInsertionIndex(allEntries, visible, parentId, index);
     return { at, depth, end: at >= visible.length, parentId, index };
   };
   const spot = caretSpot();
@@ -381,15 +381,15 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
   const focusRow = (id: string) => window.requestAnimationFrame(() => {
     document.querySelector<HTMLElement>(`[data-outline-id="${CSS.escape(id)}"]`)?.focus({ preventScroll: false });
   });
-  const siblingAfter = (row: EntryTreeNode): Caret => ({
-    parentId: row.parent_id,
-    index: childrenOf(row.parent_id).findIndex(item => item.id === row.id) + 1,
-  });
+  const siblingAfter = (row: EntryTreeNode): Caret =>
+    siblingPositionAfter(allEntries, row.id) ?? { parentId: row.parent_id, index: persistedChildrenOf(row.parent_id).length };
   const beginPending = (position: Caret, value = "", immediate = false) => {
     if (disabled || creatingRef.current) return;
+    focusEpochRef.current++;
     const render = () => {
       changePending({ ...position, value });
       setCaret(position);
+      setSelectedId(null);
       setEditingId(null);
     };
     if (immediate) {
@@ -415,6 +415,7 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
     setPendingSaving(true);
     let createdId: string | null = null;
     try {
+      if (precedingEditSaveRef.current) await precedingEditSaveRef.current;
       await flushInlineDraft();
       const metadata: EntryCreateMetadata = {
         tag: pendingMeta.tag_value.trim() || undefined,
@@ -462,6 +463,7 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
     flushSync(() => changePending({ ...current, value: parts.join("\n") }));
     setPendingSaving(true);
     try {
+      if (precedingEditSaveRef.current) await precedingEditSaveRef.current;
       await flushInlineDraft();
       for (const line of parts) {
         const metadata: EntryCreateMetadata = done === 0 ? {
@@ -495,7 +497,7 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
     if (pendingRef.current) { pendingEditorRef.current?.focus({ preventScroll: true }); return; }
     if (selectedId && nodeById.has(selectedId)) { startEdit(nodeById.get(selectedId)!); return; }
     const last = visible.at(-1);
-    beginPending(last ? siblingAfter(last) : { parentId: scopeId, index: 0 });
+    beginPending(last ? siblingAfter(last) : { parentId: scopeId, index: persistedChildrenOf(scopeId).length });
   };
   const pastePlainText = (text: string) => {
     if (!text.trim() || disabled) return false;
@@ -511,12 +513,9 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
     void savePastedPending(parts);
     return true;
   };
-  const caretAfterRow = (row: EntryTreeNode): Caret => {
-    // 開いている親を選んだら最初の子として、そうでなければ次の兄弟として入る(見えた場所に入る)。
-    if (row.has_children && !collapsed.has(row.id)) return { parentId: row.id, index: 0 };
-    return { parentId: row.parent_id, index: childrenOf(row.parent_id).findIndex((item) => item.id === row.id) + 1 };
-  };
+  const caretAfterRow = (row: EntryTreeNode): Caret => siblingAfter(row);
   const selectRow = (row: EntryTreeNode, { moveCaret = true }: { moveCaret?: boolean } = {}) => {
+    focusEpochRef.current++;
     setSelectedId(row.id);
     if (moveCaret) {
       setCaret(caretAfterRow(row));
@@ -535,11 +534,11 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
     },
     insertPosition: () => {
       // 続けて置くとき、直前に置いた行がまだ一覧に届いていないことがある。位置は丸めず、保存側で丸める。
-      const raw: Caret = caretRef.current ?? { parentId: scopeId, index: childrenOf(scopeId).length };
+      const raw: Caret = caretRef.current ?? { parentId: scopeId, index: persistedChildrenOf(scopeId).length };
       const recent = Date.now() - lastAdvanceRef.current < 2_000;
-      const position = raw.parentId === null || nodeById.has(raw.parentId) || recent
+      const position = raw.parentId === null || allNodeById.has(raw.parentId) || recent
         ? raw
-        : { parentId: scopeId, index: childrenOf(scopeId).length };
+        : { parentId: scopeId, index: persistedChildrenOf(scopeId).length };
       lastInsertRef.current = position;
       return position;
     },
@@ -644,6 +643,7 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
   /** 選択中でも本文編集中でも同じCtrl+Enter。保存後に完了し、次の文字入力先へ移る。 */
   const toggleRowCompletion = async (row: EntryTreeNode, fromEditor = false) => {
     if (disabled || busy || savingRef.current || !onToggleCompleted) return;
+    const focusEpoch = ++focusEpochRef.current;
     const idx = visible.findIndex(item => item.id === row.id);
     const next = visible.slice(idx + 1).find(item => !item.is_completed)
       ?? visible.slice(0, Math.max(0, idx)).reverse().find(item => !item.is_completed);
@@ -668,6 +668,10 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
       setMessage(row.is_completed ? "項目を再開しました。" : "完了しました。操作を戻すこともできます。");
       // 完了した行が一覧から消えても、キーボード操作を途切れさせない。
       window.requestAnimationFrame(() => {
+        if (focusEpoch !== focusEpochRef.current) {
+          skipBlurRef.current = false;
+          return;
+        }
         if (next && document.querySelector(`[data-outline-id="${CSS.escape(next.id)}"]`)) {
           startEdit(next, next.content.length);
         } else if (document.querySelector(`[data-outline-id="${CSS.escape(row.id)}"]`)) {
@@ -765,10 +769,12 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
   };
   const startEdit = (row: EntryTreeNode, offset = row.content.length) => {
     if (disabled || creatingRef.current) return;
+    focusEpochRef.current++;
     if (pendingRef.current?.value.trim()) void savePending(false);
     else if (pendingRef.current) changePending(null);
     requestedSelectionRef.current = { id: row.id, offset };
     setSelectedId(row.id);
+    setCaret(siblingAfter(row));
     setEditingValue(row.content);
     setEditingId(row.id);
   };
@@ -838,7 +844,10 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
     if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
       event.preventDefault(); void toggleRowCompletion(row); return;
     }
-    if (event.key === "Enter") { event.preventDefault(); startEdit(row); return; }
+    if (event.key === "Enter" && !event.shiftKey && !event.altKey && !event.ctrlKey && !event.metaKey) {
+      event.preventDefault(); beginPending(siblingAfter(row), "", true); return;
+    }
+    if (event.key === "F2") { event.preventDefault(); startEdit(row); return; }
     if (event.key === "Tab") { event.preventDefault(); move(row, event.shiftKey ? "outdent" : "indent"); focusRow(row.id); return; }
     if (event.key === "ArrowLeft") {
       event.preventDefault();
@@ -907,34 +916,35 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
     if (event.key === "Tab") {
       event.preventDefault(); void commitEditing().then((ok) => { if (ok) { move(row, event.shiftKey ? "outdent" : "indent"); focusRow(row.id); } }); return;
     }
-    if (event.key === "Enter" && !event.shiftKey) {
+    if (event.key === "Enter" && !event.shiftKey && !event.altKey && !event.ctrlKey && !event.metaKey) {
       event.preventDefault();
-      const field = event.currentTarget;
-      const offset = field.selectionStart;
-      const before = editingValue.slice(0, offset).trim();
-      const after = editingValue.slice(offset).trim();
-      const position = offset === 0 ? {
-        parentId: row.parent_id,
-        index: Math.max(0, siblingAfter(row).index - 1),
-      } : siblingAfter(row);
-      if (!before && offset > 0) {
-        setMessage("空の項目は保存できません。");
+      const nextContent = editingValue.trim();
+      if (!nextContent) {
+        setMessage("空の項目は保存できません。元の文章を残してください。");
         return;
       }
-      // 行頭でEnterは前へ空行を挿入。中間では文字列を分割。行末では次行を追加。
-      if (offset === 0) {
-        setEditingId(null);
-        beginPending(position, "", true);
-      } else {
-        // 描画・フォーカス移動を保存通信より先に行い、高速な連続入力を取りこぼさない。
-        const firstHalf = before;
+      // 文章中のカーソル位置には依存しない。元の行を分割せず、次の兄弟行を作る。
+      // 親行を展開している場合も、新しい行は子孫のまとまりの後に表示される。
+      const position = siblingAfter(row);
+      if (nextContent !== row.content) {
         savingRef.current = true;
-        setEditingValue(firstHalf);
-        beginPending(position, after, true);
-        void onUpdate(row.id, { content: firstHalf }).then(() => {
-          if (firstHalf !== row.content) recordUndo({ type: "edit", id: row.id, previous: row.content });
-        }).catch(showError).finally(() => { savingRef.current = false; });
+        const edited = nextContent;
+        const save = onUpdate(row.id, { content: edited }).then(() => {
+          recordUndo({ type: "edit", id: row.id, previous: row.content });
+          setFailedEdit(current => current?.id === row.id ? null : current);
+        }).catch(error => {
+          // 次の空行に打ち始めた文章を消さず、元行の未保存テキストも再試行できる形で保護。
+          setFailedEdit({ id: row.id, value: edited });
+          showError(new Error("元の行を保存できませんでした。文章は保持しました。再試行してください。"));
+          throw error;
+        }).finally(() => {
+          savingRef.current = false;
+          if (precedingEditSaveRef.current === save) precedingEditSaveRef.current = null;
+        });
+        precedingEditSaveRef.current = save;
+        void save.catch(() => undefined);
       }
+      beginPending(position, "", true);
       return;
     }
   };
@@ -1116,7 +1126,7 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
         aria-selected={isSelected}
         aria-expanded={row.has_children ? !collapsed.has(row.id) : undefined}
         tabIndex={isSelected || (selectedId === null && visible[0]?.id === row.id) ? 0 : -1}
-        onFocus={() => setSelectedId(row.id)}
+        onFocus={() => { focusEpochRef.current++; setSelectedId(row.id); if (editingId !== row.id) setCaret(siblingAfter(row)); }}
         onKeyDown={(event) => { if (event.target === event.currentTarget) onRowKeyDown(event, row); }}
         style={{ "--outline-depth": rowDepth(row) } as CSSProperties}
       >
@@ -1200,6 +1210,14 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
         </button>
       </div>
     ) : null}
-    {message ? <p className="outline__message" role="status">{message} <button type="button" onClick={() => setMessage("")}>閉じる</button></p> : null}
+    {message ? <p className="outline__message" role="status">{message}
+      {failedEdit ? <button type="button" onClick={() => {
+        const item = failedEdit;
+        void onUpdate(item.id, { content: item.value }).then(() => {
+          setFailedEdit(null); setMessage("元の行の変更を保存しました。");
+        }).catch(showError);
+      }}>元の行を再保存</button> : null}
+      <button type="button" onClick={() => setMessage("")}>閉じる</button>
+    </p> : null}
   </div>;
 });

@@ -1054,6 +1054,8 @@ export function MemoEditorPage() {
     [memo?.entries],
   );
 
+  const allOutlineEntries = useMemo(() => getEntryTree(memo?.entries ?? [], "sentence", "manual"), [memo?.entries]);
+
   const entriesByKind = useMemo(() => {
     const allEntries = memo?.entries ?? [];
     // アウトラインだけは初期状態で完了を隠す。段落・URLの旧設定とは独立。
@@ -1628,6 +1630,7 @@ export function MemoEditorPage() {
             memoUpdatedAt={memo.updated_at}
             kind={kind}
             entries={entriesByKind[kind]}
+            allOutlineEntries={kind === 'sentence' ? allOutlineEntries : undefined}
             isActiveOnMobile={activeKind === kind}
             isCollapsed={effectiveCollapsed[kind]}
             canCollapse={openEntryColumnCount > 1}
