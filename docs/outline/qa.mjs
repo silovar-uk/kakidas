@@ -246,7 +246,7 @@ check('P2','Tab付き複数行ペーストを親子孫の階層として保存�
   await page.evaluate(()=>{
     const el=document.querySelector('.entry-column--sentence .outline__edit--pending');
     const data=new DataTransfer();
-    data.setData('text/plain','市場分析\\n\\t国内\\n\\t\\t市場規模\\n\\t海外\\n競合分析');
+    data.setData('text/plain','市場分析\n\t国内\n\t\t市場規模\n\t海外\n競合分析');
     el.dispatchEvent(new ClipboardEvent('paste',{bubbles:true,cancelable:true,clipboardData:data}));
   });
   await row(page,'競合分析').waitFor({state:'visible'});
@@ -269,7 +269,7 @@ check('P2','既存行の本文へTab付きテキストを貼っても子孫と�
   await page.evaluate(()=>{
     const el=document.querySelector('.outline__edit:not(.outline__edit--pending)');
     const data=new DataTransfer();
-    data.setData('text/plain','新しい親\\n\\t子A\\n\\t\\t孫A\\n次の兄弟');
+    data.setData('text/plain','新しい親\n\t子A\n\t\t孫A\n次の兄弟');
     el.setSelectionRange(0,el.value.length);
     el.dispatchEvent(new ClipboardEvent('paste',{bubbles:true,cancelable:true,clipboardData:data}));
   });
