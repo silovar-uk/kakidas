@@ -189,6 +189,8 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
   onFocusDesk,
 }, ref) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  /** 完了後の遅延フォーカスが、後から始まった入力を奪わないようにする世代番号。 */
+  const focusEpochRef = useRef(0);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingValue, setEditingValue] = useState("");
   type PendingRow = { parentId: string | null; index: number; value: string };
@@ -383,6 +385,7 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
     siblingPositionAfter(allEntries, row.id) ?? { parentId: row.parent_id, index: persistedChildrenOf(row.parent_id).length };
   const beginPending = (position: Caret, value = "", immediate = false) => {
     if (disabled || creatingRef.current) return;
+    focusEpochRef.current++;
     const render = () => {
       changePending({ ...position, value });
       setCaret(position);
@@ -512,6 +515,7 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
   };
   const caretAfterRow = (row: EntryTreeNode): Caret => siblingAfter(row);
   const selectRow = (row: EntryTreeNode, { moveCaret = true }: { moveCaret?: boolean } = {}) => {
+    focusEpochRef.current++;
     setSelectedId(row.id);
     if (moveCaret) {
       setCaret(caretAfterRow(row));
@@ -639,6 +643,7 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
   /** 選択中でも本文編集中でも同じCtrl+Enter。保存後に完了し、次の文字入力先へ移る。 */
   const toggleRowCompletion = async (row: EntryTreeNode, fromEditor = false) => {
     if (disabled || busy || savingRef.current || !onToggleCompleted) return;
+    const focusEpoch = ++focusEpochRef.current;
     const idx = visible.findIndex(item => item.id === row.id);
     const next = visible.slice(idx + 1).find(item => !item.is_completed)
       ?? visible.slice(0, Math.max(0, idx)).reverse().find(item => !item.is_completed);
@@ -663,6 +668,10 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
       setMessage(row.is_completed ? "項目を再開しました。" : "完了しました。操作を戻すこともできます。");
       // 完了した行が一覧から消えても、キーボード操作を途切れさせない。
       window.requestAnimationFrame(() => {
+        if (focusEpoch !== focusEpochRef.current) {
+          skipBlurRef.current = false;
+          return;
+        }
         if (next && document.querySelector(`[data-outline-id="${CSS.escape(next.id)}"]`)) {
           startEdit(next, next.content.length);
         } else if (document.querySelector(`[data-outline-id="${CSS.escape(row.id)}"]`)) {
@@ -760,6 +769,7 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
   };
   const startEdit = (row: EntryTreeNode, offset = row.content.length) => {
     if (disabled || creatingRef.current) return;
+    focusEpochRef.current++;
     if (pendingRef.current?.value.trim()) void savePending(false);
     else if (pendingRef.current) changePending(null);
     requestedSelectionRef.current = { id: row.id, offset };
@@ -1116,7 +1126,7 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
         aria-selected={isSelected}
         aria-expanded={row.has_children ? !collapsed.has(row.id) : undefined}
         tabIndex={isSelected || (selectedId === null && visible[0]?.id === row.id) ? 0 : -1}
-        onFocus={() => { setSelectedId(row.id); if (editingId !== row.id) setCaret(siblingAfter(row)); }}
+        onFocus={() => { focusEpochRef.current++; setSelectedId(row.id); if (editingId !== row.id) setCaret(siblingAfter(row)); }}
         onKeyDown={(event) => { if (event.target === event.currentTarget) onRowKeyDown(event, row); }}
         style={{ "--outline-depth": rowDepth(row) } as CSSProperties}
       >
