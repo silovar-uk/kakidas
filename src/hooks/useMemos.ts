@@ -287,7 +287,7 @@ export function useMemoDetail(memoId: string | undefined) {
 
   const pasteOutlineBatch = useCallback(async (
     items: OutlinePasteItem[], parentId: string | null, index: number,
-    options: { targetId?: string; expectedContent?: string; draftId?: string } = {},
+    options: { targetId?: string; expectedContent?: string; draftId?: string; metadata?: { tag?: string | null; note?: string; link_url?: string } } = {},
   ): Promise<OutlinePasteBatchResult> => {
     if (!memoId) throw new Error("メモIDがありません。");
     return runWrite(async () => {
