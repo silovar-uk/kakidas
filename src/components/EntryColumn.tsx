@@ -84,7 +84,7 @@ type EntryColumnProps = {
   deskNode?: ReactNode;
   /** アウトラインの欄。次の一行の手(書き口が使う)を、ページへ渡す。 */
   outlineRef?: RefObject<OutlineHandle | null>;
-  onPasteOutlineBatch?: (items: OutlinePasteItem[], parentId: string | null, index: number, options?: { targetId?: string; expectedContent?: string; draftId?: string }) => Promise<OutlinePasteBatchResult>;
+  onPasteOutlineBatch?: (items: OutlinePasteItem[], parentId: string | null, index: number, options?: { targetId?: string; expectedContent?: string; draftId?: string; metadata?: { tag?: string | null; note?: string; link_url?: string } }) => Promise<OutlinePasteBatchResult>;
   onUndoPasteOutlineBatch?: (batch: OutlinePasteBatchResult) => Promise<void>;
   onRedoPasteOutlineBatch?: (batch: OutlinePasteBatchResult) => Promise<OutlinePasteBatchResult>;
   /** アウトライナー専用の完了表示。段落・URLの設定とは独立。 */
