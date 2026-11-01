@@ -241,6 +241,47 @@ check('P2','複数行ペーストは空白行と記号を除いて兄弟項目�
     expected);
   assert.ok(hasAll(await outline(page).locator('.outline__content').allTextContents()));
 });
+check('P2','Tab付き複数行ペーストを親子孫の階層として保存し再読込できる',async(page)=>{
+  await selectKind(page,'sentence');
+  await page.evaluate(()=>{
+    const el=document.querySelector('.entry-column--sentence .outline__edit--pending');
+    const data=new DataTransfer();
+    data.setData('text/plain','市場分析\n\t国内\n\t\t市場規模\n\t海外\n競合分析');
+    el.dispatchEvent(new ClipboardEvent('paste',{bubbles:true,cancelable:true,clipboardData:data}));
+  });
+  await row(page,'競合分析').waitFor({state:'visible'});
+  const parent=await row(page,'市場分析').getAttribute('data-outline-id');
+  const child=await row(page,'国内').getAttribute('data-outline-id');
+  const checkTree=async()=>{
+    assert.equal(await row(page,'国内').getAttribute('data-outline-parent-id'),parent);
+    assert.equal(await row(page,'市場規模').getAttribute('data-outline-parent-id'),child);
+    assert.equal(await row(page,'海外').getAttribute('data-outline-parent-id'),parent);
+    assert.equal(await row(page,'競合分析').getAttribute('data-outline-parent-id'),'');
+    assert.deepEqual(await outline(page).locator('.outline__content').allTextContents(),['市場分析','国内','市場規模','海外','競合分析']);
+  };
+  await checkTree();
+  await page.reload();await row(page,'競合分析').waitFor({state:'visible'});
+  await checkTree();
+});
+check('P2','既存行の本文へTab付きテキストを貼っても子孫と兄弟を再現する',async(page)=>{
+  await put(page,'元の行');await put(page,'次の行');
+  await row(page,'元の行').locator('.outline__content').click();
+  await page.evaluate(()=>{
+    const el=document.querySelector('.outline__edit:not(.outline__edit--pending)');
+    const data=new DataTransfer();
+    data.setData('text/plain','新しい親\n\t子A\n\t\t孫A\n次の兄弟');
+    el.setSelectionRange(0,el.value.length);
+    el.dispatchEvent(new ClipboardEvent('paste',{bubbles:true,cancelable:true,clipboardData:data}));
+  });
+  await row(page,'次の兄弟').waitFor({state:'visible'});
+  const parent=await row(page,'新しい親').getAttribute('data-outline-id');
+  const child=await row(page,'子A').getAttribute('data-outline-id');
+  assert.equal(await row(page,'子A').getAttribute('data-outline-parent-id'),parent);
+  assert.equal(await row(page,'孫A').getAttribute('data-outline-parent-id'),child);
+  assert.deepEqual(await outline(page).locator('.outline__content').allTextContents(),['新しい親','子A','孫A','次の兄弟','次の行']);
+  await page.reload();await row(page,'次の兄弟').waitFor({state:'visible'});
+  assert.equal(await row(page,'孫A').getAttribute('data-outline-parent-id'),child);
+});
 check('P2','兄弟行は密着し、子グループを抜けるところだけ5px空く',async(page)=>{
   for(const content of ['大項目A','子項目A1','子項目A2','大項目B'])await put(page,content);
   for(const content of ['子項目A1','子項目A2']){
