@@ -177,6 +177,44 @@
   .outline__message { padding:8px; color:var(--color-danger); font-size:12px; }
   .outline__message button { border:0; background:transparent; text-decoration:underline; }
   .outline__empty { margin:12px 0; font-size:13px; color:var(--color-ink-3); }
+  /* 空間を奪わず、必要な時だけ現れる貼り付け階層レビュー。 */
+  .outline__paste-review {
+    box-sizing:border-box; position:fixed; z-index:110; bottom:24px; left:50%;
+    width:min(520px,calc(100vw - 24px)); transform:translateX(-50%);
+    max-height:min(72vh,640px); overflow-y:auto;
+    border:1px solid var(--color-line-strong);
+    border-radius:14px; background:var(--color-sheet);
+    color:var(--color-ink); padding:18px 20px;
+    box-shadow:0 12px 48px rgba(35,35,35,.18);
+    font:400 14px/1.5 var(--font-sans);
+  }
+  .outline__paste-review strong { display:block; font-size:17px; font-weight:700; }
+  .outline__paste-review p { margin:8px 0; color:var(--color-ink-2); font-size:13px; }
+  .outline__paste-review label { display:flex; align-items:center; gap:12px; padding:8px 0; }
+  .outline__paste-review select {
+    min-height:40px; background:var(--color-sheet); color:var(--color-ink);
+    padding:5px 10px; border-radius:7px; border:1px solid var(--color-line-strong);
+    font:inherit;
+  }
+  .outline__paste-review button {
+    min-height:40px; border:1px solid var(--color-line-strong); border-radius:7px;
+    background:var(--color-sheet); color:var(--color-ink); padding:8px 12px;
+    font:600 13px/1.4 var(--font-sans); cursor:pointer;
+  }
+  .outline__paste-review button:first-child { background:var(--color-ink); color:var(--color-sheet); border-color:var(--color-ink); }
+  .outline__paste-review button:focus-visible,.outline__paste-review select:focus-visible {
+    outline:3px solid var(--color-shu); outline-offset:2px;
+  }
+  .outline__paste-review [aria-label="取り込み後の階層プレビュー"] {
+    border:1px solid var(--color-line); border-radius:8px; margin:8px 0 14px;
+    background:var(--color-hover); overflow:auto;
+  }
+  @media(max-width:920px){
+    .outline__paste-review { bottom:env(safe-area-inset-bottom,0px); border-radius:14px 14px 0 0;
+      width:100vw; max-height:72dvh; padding:16px; }
+    .outline__paste-review button,.outline__paste-review select{ min-height:44px; }
+  }
+
   @media (max-width:920px) {
     .entry-column--sentence .entry-list { grid-template-columns:minmax(0,1fr); min-width:0; max-width:100%; }
     .entry-column--sentence .entry-list > .outline { min-width:0; }
