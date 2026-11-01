@@ -402,6 +402,13 @@ export function MemoEditorPage() {
     readEntryNumberVisibility,
   );
   const [outlineNumbered, setOutlineNumbered] = useState(readOutlineNumberVisibility);
+  // コマンドメニューと直接キー操作は、既存の表示ボタンと同じ状態を切り替える。
+  useEffect(() => {
+    const toggleNumbering = () => setOutlineNumbered(previous => !previous);
+    window.addEventListener("kakidas:toggle-outline-numbering", toggleNumbering);
+    return () => window.removeEventListener("kakidas:toggle-outline-numbering", toggleNumbering);
+  }, []);
+
   const [hideCompletedEntries, setHideCompletedEntries] = useState(
     readHideCompletedEntries,
   );
@@ -1541,6 +1548,7 @@ export function MemoEditorPage() {
         <span className="save-status" aria-live="polite" data-state={isSaving?"wet":"dry"}>{isSaving?'保存中…':'保存済み'}</span>
         <button type="button" className="editor-header__seisho" aria-label="清書にする" onClick={()=>toggleSeisho(!isSeisho)}>清書</button>
         <button type="button" className="editor-header__margin" aria-label="余白を開く" onClick={()=>window.dispatchEvent(new Event('kakidas:open-margin'))}>余白</button>
+        <button type="button" className="command-palette-trigger" aria-label="操作を検索する（CtrlまたはCommand + K）" title="操作を検索する（Ctrl / ⌘ + K）" onClick={()=>window.dispatchEvent(new Event("kakidas:open-command-palette"))}>操作 <kbd>⌘K</kbd></button>
         <MemoActionsMenu cloudEnabled={Boolean(user)}
           attention={memo.sync_meta?.cloud_state==='conflict'?'クラウドとの差分があります':null}
           sortMode={entrySortMode} onSort={setEntrySortMode}
