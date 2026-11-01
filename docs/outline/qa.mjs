@@ -436,8 +436,8 @@ check('P2','新規入力中のCtrl+Enterは作成直後に完了し、空欄は�
   await pending.press('Control+Enter');
   assert.equal(await outline(page).locator('[data-outline-id]').count(),0,'空の行は作成しない');
   await pending.fill('新規から完了');await pending.press('Control+Enter');
-  // 新規行の保存→完了フラグ更新は別々の非同期処理。空欄表示だけでは更新完了と判定しない。
-  await page.waitForFunction(()=>document.querySelectorAll('.outline__tree [data-outline-id]').length===0);
+  // 新規行の保存→完了更新を待つ。処理前も0件なので「0件」だけでは同期条件にならない。
+  await page.getByRole('button',{name:'完了済み 1件を表示'}).waitFor({state:'visible'});
   assert.equal(await outline(page).locator('[data-outline-id]').count(),0,'完了済み非表示なので行が消える');
   await page.getByRole('button',{name:'アウトラインの操作'}).click();
   await page.getByRole('menuitemcheckbox',{name:'完了済みを表示'}).click();
