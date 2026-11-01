@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { normalizeOutlineLines, normalizeOutlineItems, rowsFromOutlinePaste, itemsFromOutlinePaste, serializeOutlineItems } from "../src/lib/outlinePaste.js";
+import { analyzeOutlinePaste, normalizeOutlineLines, normalizeOutlineItems, rowsFromOutlinePaste, itemsFromOutlinePaste, serializeOutlineItems } from "../src/lib/outlinePaste.js";
 
 test("空行を無視して行単位で分割する", () => {
   assert.deepEqual(rowsFromOutlinePaste("", 0, 0, "市場調査\r\n\r\n競合分析\r\n事業戦略"), ["市場調査", "競合分析", "事業戦略"]);
@@ -52,4 +52,27 @@ test("Tabアウトラインは読み込みと書き出しを往復できる",()=
   const items=normalizeOutlineItems(original);
   assert.equal(serializeOutlineItems(items),original);
   assert.deepEqual(normalizeOutlineItems(serializeOutlineItems(items)),items);
+});
+
+test("Markdownの2スペース字下げを親子孫へ変換する",()=>{
+  const result=analyzeOutlinePaste("- 親\n  - 子\n    - 孫\n- 次");
+  assert.deepEqual(result.items.map(x=>x.depth),[0,1,2,0]);
+  assert.equal(result.needsReview,false);
+});
+test("Markdownの4スペース字下げも親子として認識する",()=>{
+  const result=analyzeOutlinePaste("- 親\n    - 子\n        - 孫");
+  assert.deepEqual(result.items.map(x=>x.depth),[0,1,2]);
+});
+test("通常の文章の先頭スペースは勝手に階層化しない",()=>{
+  const result=analyzeOutlinePaste("本文\n  引用\n    補足");
+  assert.deepEqual(result.items.map(x=>x.depth),[0,0,0]);
+  assert.equal(result.needsReview,true);
+  assert.deepEqual(analyzeOutlinePaste("本文\n  引用\n    補足",{mode:"two"}).items.map(x=>x.depth),[0,1,2]);
+});
+test("コードと表は確認を要求し、階層を確定しない",()=>{
+  assert.equal(analyzeOutlinePaste("const a = {};\n  return a;").needsReview,true);
+  assert.equal(analyzeOutlinePaste("|A|B|\n|---|---|").needsReview,true);
+});
+test("大量の貼り付けは確認を要求する",()=>{
+  assert.equal(analyzeOutlinePaste(Array.from({length:31},(_,i)=>"項目"+i).join("\n")).needsReview,true);
 });
