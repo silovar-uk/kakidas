@@ -263,6 +263,8 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
   const editorRef = useRef<HTMLTextAreaElement | null>(null);
   const requestedSelectionRef = useRef<{ id: string; offset: number } | null>(null);
   const savingRef = useRef(false);
+  /** 既存行の編集保存を完了してから、続きの新規行を保存する。 */
+  const precedingEditSaveRef = useRef<Promise<unknown> | null>(null);
   const skipBlurRef = useRef(false);
   const lastInsertRef = useRef<Caret | null>(null);
   const lastAdvanceRef = useRef(0);
@@ -410,6 +412,7 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
     setPendingSaving(true);
     let createdId: string | null = null;
     try {
+      if (precedingEditSaveRef.current) await precedingEditSaveRef.current;
       await flushInlineDraft();
       const metadata: EntryCreateMetadata = {
         tag: pendingMeta.tag_value.trim() || undefined,
@@ -457,6 +460,7 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
     flushSync(() => changePending({ ...current, value: parts.join("\n") }));
     setPendingSaving(true);
     try {
+      if (precedingEditSaveRef.current) await precedingEditSaveRef.current;
       await flushInlineDraft();
       for (const line of parts) {
         const metadata: EntryCreateMetadata = done === 0 ? {
@@ -915,14 +919,20 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
       if (nextContent !== row.content) {
         savingRef.current = true;
         const edited = nextContent;
-        void onUpdate(row.id, { content: edited }).then(() => {
+        const save = onUpdate(row.id, { content: edited }).then(() => {
           recordUndo({ type: "edit", id: row.id, previous: row.content });
           setFailedEdit(current => current?.id === row.id ? null : current);
         }).catch(error => {
           // 次の空行に打ち始めた文章を消さず、元行の未保存テキストも再試行できる形で保護。
           setFailedEdit({ id: row.id, value: edited });
           showError(new Error("元の行を保存できませんでした。文章は保持しました。再試行してください。"));
-        }).finally(() => { savingRef.current = false; });
+          throw error;
+        }).finally(() => {
+          savingRef.current = false;
+          if (precedingEditSaveRef.current === save) precedingEditSaveRef.current = null;
+        });
+        precedingEditSaveRef.current = save;
+        void save.catch(() => undefined);
       }
       beginPending(position, "", true);
       return;
