@@ -55,6 +55,12 @@ export function KeyboardShortcuts() {
       setIsCreating(true);
       setError("");
       try {
+        // 画面遷移前に編集中のタイトルなどを確定する。保存失敗なら作成も止める。
+        const pendingSaves: Promise<unknown>[] = [];
+        window.dispatchEvent(new CustomEvent("kakidas:before-create-memo", {
+          detail: { waitUntil: (pending: Promise<unknown>) => pendingSaves.push(pending) },
+        }));
+        await Promise.all(pendingSaves);
         const memo = await memoRepository.createMemo();
         setPanel(null);
         navigate("/memos/" + memo.id, {
@@ -166,7 +172,7 @@ export function KeyboardShortcuts() {
             <span className="command-palette__eyebrow">KAKIDAS / COMMANDS</span>
             <h2 id="command-palette-title">{panel === "commands" ? "何をする？" : "キーボード操作"}</h2>
           </div>
-          <button className="command-palette__close" type="button" onClick={() => setPanel(null)} aria-label="閉じる">Esc ×</button>
+          <button ref={helpRef} className="command-palette__close" type="button" onClick={() => setPanel(null)} aria-label="閉じる">Esc ×</button>
         </header>
         {panel === "commands" ? (
           <>
@@ -180,9 +186,9 @@ export function KeyboardShortcuts() {
                   event.preventDefault(); void runCommand(matching[activeIndex].id);
                 }
               }}/>
-            <div className="command-palette__results" role="listbox" aria-label="実行できる操作">
+            <div className="command-palette__results" role="group" aria-label="実行できる操作">
               {matching.length ? matching.map((command, index) =>
-                <button key={command.id} type="button" role="option" aria-selected={activeIndex === index}
+                <button key={command.id} type="button"
                   disabled={isCreating} className={"command-palette__item" + (activeIndex === index ? " command-palette__item--active" : "")}
                   onMouseEnter={() => setSelectedIndex(index)} onClick={() => void runCommand(command.id)}>
                   <span><strong>{command.label}</strong><small>{command.detail}</small></span>
@@ -203,7 +209,7 @@ export function KeyboardShortcuts() {
             )}
             <p>アウトライン内：Enterで次の行、Tab / Shift+Tabで階層変更、F2で編集、Ctrl/⌘+Enterで完了、Alt+Shift+↑↓で並び替え。</p>
             <p>編集中：Ctrl/⌘+Bで強調、Shift+Enterで行内改行。余白はAlt+Q。</p>
-            <button ref={helpRef} type="button" className="command-palette__help-action"
+            <button type="button" className="command-palette__help-action"
               onClick={openCommands}>操作を検索する <span>Ctrl/⌘ + K</span></button>
           </div>
         )}
