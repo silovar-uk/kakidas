@@ -116,7 +116,7 @@ export interface MemoRepository {
   ): Promise<EntryRow>;
   updateEntry(entryId: string, patch: EntryUpdate): Promise<EntryRow>;
   pasteOutlineBatch(memoId: string, items: OutlinePasteItem[], parentId: string | null, index: number,
-    options?: { targetId?: string; expectedContent?: string; draftId?: string }): Promise<OutlinePasteBatchResult>;
+    options?: { targetId?: string; expectedContent?: string; draftId?: string; metadata?: { tag?: string | null; note?: string; link_url?: string } }): Promise<OutlinePasteBatchResult>;
   undoOutlinePasteBatch(batch: OutlinePasteBatchResult): Promise<void>;
   redoOutlinePasteBatch(batch: OutlinePasteBatchResult): Promise<OutlinePasteBatchResult>;
   /** アウトラインの移動・階層変更を一括保存。子孫は親IDのまま追随する。 */
@@ -882,7 +882,7 @@ class IndexedDbMemoRepository implements MemoRepository {
    */
   async pasteOutlineBatch(
     memoId: string, items: OutlinePasteItem[], parentId: string | null, index: number,
-    options: { targetId?: string; expectedContent?: string; draftId?: string } = {},
+    options: { targetId?: string; expectedContent?: string; draftId?: string; metadata?: { tag?: string | null; note?: string; link_url?: string } } = {},
   ): Promise<OutlinePasteBatchResult> {
     if (!items.length || items.some((item, i) => !item.content.trim() ||
         !Number.isInteger(item.depth) || item.depth < 0 || (i === 0 && item.depth !== 0) ||
@@ -936,8 +936,10 @@ class IndexedDbMemoRepository implements MemoRepository {
         const at = part.depth === 0 ? rootIndex++ : (nextChildIndex.get(pid as string) ?? 0);
         const entry: EntryRow = {
           id: createId(), memo_id: memoId, user_id: memo.user_id, kind: "sentence",
-          parent_id: pid, content: part.content.trim(), heading: "", tag: null, note: "",
-          link_url: "", satisfaction: 0, is_completed: false, sort_order: at,
+          parent_id: pid, content: part.content.trim(), heading: "",
+          tag: i === first ? normalizeEntryTag(options.metadata?.tag) : null,
+          note: i === first ? (options.metadata?.note ?? "").trim() : "",
+          link_url: i === first ? normalizeLinkUrlForSave(options.metadata?.link_url) : "", satisfaction: 0, is_completed: false, sort_order: at,
           created_at: stamp, updated_at: stamp, deleted_at: null,
         };
         list.splice(at, 0, entry);
