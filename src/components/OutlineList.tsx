@@ -89,7 +89,7 @@ type OutlineListProps = {
   onUpdate: (id: string, patch: EntryUpdate) => Promise<unknown>;
   /** 既存行の編集中に複数行を貼り付けた際、先頭を更新し残りを兄弟行として追加する。 */
   onPasteRows?: (row: EntryTreeNode, rows: OutlinePasteItem[]) => Promise<void>;
-  onPasteOutlineBatch?: (items: OutlinePasteItem[], parentId: string | null, index: number, options?: { targetId?: string; expectedContent?: string; draftId?: string }) => Promise<OutlinePasteBatchResult>;
+  onPasteOutlineBatch?: (items: OutlinePasteItem[], parentId: string | null, index: number, options?: { targetId?: string; expectedContent?: string; draftId?: string; metadata?: { tag?: string | null; note?: string; link_url?: string } }) => Promise<OutlinePasteBatchResult>;
   onUndoPasteOutlineBatch?: (batch: OutlinePasteBatchResult) => Promise<void>;
   onRedoPasteOutlineBatch?: (batch: OutlinePasteBatchResult) => Promise<OutlinePasteBatchResult>;
   /** 新規行を戻す前に下書きを復元し、子を巻き込まずソフト削除する。 */
@@ -477,7 +477,8 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
       try {
         if (precedingEditSaveRef.current) await precedingEditSaveRef.current;
         await flushInlineDraft();
-        const result = await onPasteOutlineBatch(parts, current.parentId, current.index, { draftId });
+        const result = await onPasteOutlineBatch(parts, current.parentId, current.index, { draftId,
+          metadata: { tag: pendingMeta.tag_value.trim() || null, note: pendingMeta.note_value.trim(), link_url: pendingMeta.link_value.trim() } });
         recordUndo({ type: "paste", batch: result });
         markInlineCommitted();
         setPendingMeta(emptyMeta);
