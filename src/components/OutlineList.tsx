@@ -205,6 +205,7 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
   const [pending, setPending] = useState<PendingRow | null>(null);
   const pendingRef = useRef<PendingRow | null>(null);
   const pendingEditorRef = useRef<HTMLTextAreaElement | null>(null);
+  const pasteReviewSelectRef = useRef<HTMLSelectElement | null>(null);
   const creatingRef = useRef(false);
   const [pendingSaving, setPendingSaving] = useState(false);
   const [failedEdit, setFailedEdit] = useState<{ id: string; value: string } | null>(null);
@@ -1201,6 +1202,11 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
     }
   };
   const reviewAnalysis = pasteReview ? analyzeOutlinePaste(pasteReview.source, {mode:pasteReview.mode}) : null;
+  useEffect(() => {
+    if (!pasteReview) return;
+    const frame = window.requestAnimationFrame(() => pasteReviewSelectRef.current?.focus({ preventScroll:true }));
+    return () => window.cancelAnimationFrame(frame);
+  }, [Boolean(pasteReview)]);
   const pendingNode = pending ? (
     <div key="pending-outline-row" className="outline__item outline__item--pending"
       data-outline-pending="" role="treeitem"
@@ -1212,7 +1218,7 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
         aria-label="新しいアウトライン項目" placeholder={visible.length ? "次の項目…" : "何から書く？"}
         value={pending.value} onChange={event => changePending({ ...pending, value: event.target.value })}
         onKeyDown={onPendingKeyDown} onPaste={onPendingPaste}
-        onBlur={() => { if (pendingRef.current?.value.trim()) void savePending(false); else if (visible.length) changePending(null); }} />
+        onBlur={() => { if (pasteReview) return; if (pendingRef.current?.value.trim()) void savePending(false); else if (visible.length) changePending(null); }} />
     </div>
   ) : null;
   const caretNode = deskNode || ghostOn || caretPreviewVisible ? (
@@ -1349,7 +1355,7 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
       <strong>この階層で取り込みますか？</strong>
       <p>{reviewAnalysis.items.length}行・{reviewAnalysis.items.length ? Math.max(...reviewAnalysis.items.map(item=>item.depth))+1 : 0}階層
         {reviewAnalysis.reasons.length ? `｜${reviewAnalysis.reasons.join("・")}` : ""}</p>
-      <label>階層の解釈 <select value={pasteReview.mode} onChange={event=>setPasteReview({...pasteReview,mode:event.target.value as typeof pasteReview.mode})}>
+      <label>階層の解釈 <select ref={pasteReviewSelectRef} aria-label="階層の解釈" value={pasteReview.mode} onChange={event=>setPasteReview({...pasteReview,mode:event.target.value as typeof pasteReview.mode})}>
         <option value="auto">自動</option><option value="two">2スペース</option><option value="four">4スペース</option><option value="flat">階層なし</option>
       </select></label>
       <div style={{maxHeight:"200px",overflowY:"auto",padding:"8px 0"}} aria-label="取り込み後の階層プレビュー">
@@ -1359,7 +1365,10 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
       </div>
       <div style={{display:"flex",gap:"8px",flexWrap:"wrap"}}>
         <button type="button" onClick={confirmPasteReview}>この階層で取り込む</button>
-        <button type="button" onClick={()=>{setPasteReview(null);skipBlurRef.current=false;}}>キャンセル</button>
+        <button type="button" onClick={()=>{
+          const old=pasteReview;setPasteReview(null);skipBlurRef.current=false;
+          window.requestAnimationFrame(()=>old?.context==="editor"?editorRef.current?.focus({preventScroll:true}):pendingEditorRef.current?.focus({preventScroll:true}));
+        }}>キャンセル</button>
       </div>
     </section> : null}
     {redoPasteBatch && onRedoPasteOutlineBatch ? <p className="outline__message" role="status">
