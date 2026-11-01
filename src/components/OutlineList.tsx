@@ -917,6 +917,9 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
     if ((event.ctrlKey || event.metaKey) && !event.shiftKey && event.key.toLowerCase() === "z") {
       event.preventDefault(); void undoLast(); return;
     }
+    if ((event.ctrlKey || event.metaKey) && (event.key.toLowerCase() === "y" || (event.shiftKey && event.key.toLowerCase() === "z"))) {
+      event.preventDefault(); void redoLastPaste(); return;
+    }
     if (event.shiftKey && (event.altKey || event.ctrlKey) && !event.metaKey
       && (event.key === "ArrowUp" || event.key === "ArrowDown")) {
       event.preventDefault();
@@ -1083,6 +1086,12 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
 
   const onPendingKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.nativeEvent.isComposing || event.key === "Process" || event.nativeEvent.keyCode === 229) return;
+    if ((event.ctrlKey || event.metaKey) && !event.shiftKey && event.key.toLowerCase() === "z" && !pendingRef.current?.value.trim()) {
+      event.preventDefault(); void undoLast(); return;
+    }
+    if ((event.ctrlKey || event.metaKey) && (event.key.toLowerCase() === "y" || (event.shiftKey && event.key.toLowerCase() === "z"))) {
+      event.preventDefault(); void redoLastPaste(); return;
+    }
     if ((event.ctrlKey || event.metaKey) && !event.shiftKey && !event.altKey && event.key === "Enter") {
       event.preventDefault();
       if (pendingRef.current?.value.trim()) void savePending(false, true);
