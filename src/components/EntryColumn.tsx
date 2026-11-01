@@ -50,6 +50,8 @@ type EntryColumnProps = {
   memoUpdatedAt: string;
   kind: EntryKind;
   entries: EntryTreeNode[];
+  /** 非表示の完了行も含む、保存上のアウトライン全件。 */
+  allOutlineEntries?: EntryTreeNode[];
   isActiveOnMobile: boolean;
   /** PCでこの列を細いレールへ畳んでいるか。モバイル表示には影響させない。 */
   isCollapsed?: boolean;
@@ -186,6 +188,7 @@ export function EntryColumn({
   memoUpdatedAt,
   kind,
   entries,
+  allOutlineEntries,
   isActiveOnMobile,
   isCollapsed = false,
   canCollapse = true,
@@ -1330,7 +1333,7 @@ export function EntryColumn({
             onRestore={onRestore}
           />
         ) : kind === "sentence" && onRelocateOutline ? (
-          <OutlineList key={memoId} ref={outlineRef} entries={primaryEntries}
+          <OutlineList key={memoId} ref={outlineRef} entries={primaryEntries} allEntries={allOutlineEntries ?? primaryEntries}
             memoId={memoId} memoUpdatedAt={memoUpdatedAt}
             onCreateInline={async (content, parentId, index, draftId, metadata) =>
               await onCreate("sentence", content, metadata ?? {}, parentId, "bottom", draftId, undefined, index) as {id:string}}
