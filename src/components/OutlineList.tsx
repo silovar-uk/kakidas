@@ -11,7 +11,8 @@ import {
   useState,
 } from "react";
 import type { EntryRow, EntryTreeNode, EntryUpdate } from "../types/memo";
-import { normalizeOutlineItems, itemsFromOutlinePaste, serializeOutlineItems, type OutlinePasteItem } from "../lib/outlinePaste.js";
+import { normalizeOutlineItems, itemsFromOutlinePaste, analyzeOutlinePaste, serializeOutlineItems, type OutlinePasteItem } from "../lib/outlinePaste.js";
+import type { OutlinePasteBatchResult } from "../repositories/memoRepository";
 import { siblingPositionAfter, visibleInsertionIndex } from "../lib/outlineInsert.js";
 import { outlineEmphasisSegments, toggleOutlineEmphasis, stripOutlineEmphasis } from "../lib/outlineEmphasis.js";
 import { useDraftPersistence } from "../hooks/useDraftPersistence";
@@ -88,6 +89,9 @@ type OutlineListProps = {
   onUpdate: (id: string, patch: EntryUpdate) => Promise<unknown>;
   /** 既存行の編集中に複数行を貼り付けた際、先頭を更新し残りを兄弟行として追加する。 */
   onPasteRows?: (row: EntryTreeNode, rows: OutlinePasteItem[]) => Promise<void>;
+  onPasteOutlineBatch?: (items: OutlinePasteItem[], parentId: string | null, index: number, options?: { targetId?: string; expectedContent?: string; draftId?: string }) => Promise<OutlinePasteBatchResult>;
+  onUndoPasteOutlineBatch?: (batch: OutlinePasteBatchResult) => Promise<void>;
+  onRedoPasteOutlineBatch?: (batch: OutlinePasteBatchResult) => Promise<OutlinePasteBatchResult>;
   /** 新規行を戻す前に下書きを復元し、子を巻き込まずソフト削除する。 */
   onUndoCreate?: (row: EntryTreeNode) => Promise<void>;
   /** 書き口(置き場所)。いる欄では運ばれてきた書き口が、いない欄では入口が入る。 */
@@ -113,7 +117,8 @@ type UndoableAction =
   | { type: "edit"; id: string; previous: string }
   | ({ type: "move" } & MoveHistory)
   | { type: "create"; id: string }
-  | { type: "complete"; id: string; previous: boolean };
+  | { type: "complete"; id: string; previous: boolean }
+  | { type: "paste"; batch: OutlinePasteBatchResult };
 
 const isMobileViewport = () => window.matchMedia("(max-width: 920px)").matches;
 
@@ -178,6 +183,9 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
   onToggleCompleted,
   onUpdate,
   onPasteRows,
+  onPasteOutlineBatch,
+  onUndoPasteOutlineBatch,
+  onRedoPasteOutlineBatch,
   onUndoCreate,
   deskNode,
   paragraphsByRowId,
@@ -259,6 +267,8 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
   const [zoomId, setZoomId] = useState<string | null>(null);
   const undoStackRef = useRef<UndoableAction[]>([]);
   const [undoDepth, setUndoDepth] = useState(0);
+  const [redoPasteBatch, setRedoPasteBatch] = useState<OutlinePasteBatchResult | null>(null);
+  const [pasteReview, setPasteReview] = useState<{ source: string; context: "pending" | "editor"; targetId?: string; expectedContent?: string; parentId: string | null; index: number; mode: "auto" | "two" | "four" | "flat" } | null>(null);
   const undoInFlightRef = useRef(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
@@ -285,6 +295,7 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
   /** 前の操作だけを保持する。データや既存のブラウザUndo履歴は変更しない。 */
   const recordUndo = (action: UndoableAction) => {
     undoStackRef.current = [...undoStackRef.current.slice(-29), action];
+    setRedoPasteBatch(null);
     setUndoDepth(undoStackRef.current.length);
   };
   useEffect(() => {
@@ -293,6 +304,7 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
       : last.type === "edit" ? "本文の変更を戻す"
       : last.type === "move" ? "行の移動を戻す"
       : last.type === "complete" ? "完了・再開を元に戻す"
+      : last.type === "paste" ? `取り込んだ${last.batch.created.length}行をまとめて戻す`
       : "直前に追加した行を戻す";
     onUndoAvailabilityChange?.(undoDepth > 0 && !busy && !disabled && editingId === null, description);
   }, [undoDepth, busy, disabled, editingId, onUndoAvailabilityChange]);
@@ -458,6 +470,33 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
   const savePastedPending = async (parts: OutlinePasteItem[]) => {
     const current = pendingRef.current;
     if (!current || creatingRef.current || disabled || parts.length === 0) return;
+    if (onPasteOutlineBatch) {
+      creatingRef.current = true;
+      flushSync(() => changePending({ ...current, value: serializeOutlineItems(parts) }));
+      setPendingSaving(true);
+      try {
+        if (precedingEditSaveRef.current) await precedingEditSaveRef.current;
+        await flushInlineDraft();
+        const result = await onPasteOutlineBatch(parts, current.parentId, current.index, { draftId });
+        recordUndo({ type: "paste", batch: result });
+        markInlineCommitted();
+        setPendingMeta(emptyMeta);
+        const rootsCreated = parts.filter(part => part.depth === 0).length;
+        const next = { parentId: current.parentId, index: current.index + rootsCreated, value: "" };
+        changePending(next);
+        setCaret(next);
+        const depth = Math.max(...parts.map(part => part.depth)) + 1;
+        setMessage(`${parts.length}行・${depth}階層を取り込みました。Ctrl+Zでまとめて戻せます。`);
+        window.requestAnimationFrame(() => pendingEditorRef.current?.focus({ preventScroll: true }));
+      } catch(error) {
+        changePending({ ...current, value: serializeOutlineItems(parts) });
+        showError(error);
+      } finally {
+        creatingRef.current = false;
+        setPendingSaving(false);
+      }
+      return;
+    }
     creatingRef.current = true;
     let done = 0;
     let rootsCreated = 0;
@@ -526,7 +565,11 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
     const selected = selectedId ? nodeById.get(selectedId) : null;
     const position = current ?? { ...(selected ? siblingAfter(selected) : { parentId: scopeId, index: persistedChildrenOf(scopeId).length }), value: "" };
     if (!current) changePending(position);
-    void savePastedPending(parts);
+    const analysis = analyzeOutlinePaste(current ? current.value + text : text);
+    if (analysis.needsReview && onPasteOutlineBatch) {
+      setPasteReview({ source: current ? current.value + text : text, context: "pending",
+        parentId:position.parentId,index:position.index,mode:"auto" });
+    } else void savePastedPending(parts);
     return true;
   };
   const caretAfterRow = (row: EntryTreeNode): Caret => siblingAfter(row);
@@ -724,6 +767,20 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
     if (disabled || busy || editingId || pendingRef.current?.value.trim() || savingRef.current || undoInFlightRef.current) return;
     const last = undoStackRef.current.at(-1);
     if (!last) return;
+    if (last.type === "paste") {
+      if (!onUndoPasteOutlineBatch) return;
+      undoInFlightRef.current = true;
+      setBusy(true);
+      try {
+        await onUndoPasteOutlineBatch(last.batch);
+        undoStackRef.current.pop();
+        setUndoDepth(undoStackRef.current.length);
+        setRedoPasteBatch(last.batch);
+        setMessage(`${last.batch.created.length}行の取り込みを元に戻しました。`);
+      } catch(error) { showError(error); }
+      finally { undoInFlightRef.current=false; setBusy(false); }
+      return;
+    }
     const target = nodeById.get(last.id);
     if (!target && last.type !== "complete") {
       // 反映待ちの行を誤って履歴から捨てない。次回そのまま再試行できる。
@@ -762,6 +819,16 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
       }
     } catch (error) { showError(error); }
     finally { undoInFlightRef.current = false; setBusy(false); }
+  };
+  const redoLastPaste = async () => {
+    if (!redoPasteBatch || !onRedoPasteOutlineBatch || busy || disabled) return;
+    setBusy(true);
+    try {
+      const result = await onRedoPasteOutlineBatch(redoPasteBatch);
+      recordUndo({ type: "paste", batch: result });
+      setMessage(`${result.created.length}行の取り込みを再実行しました。`);
+    } catch(error) { showError(error); }
+    finally { setBusy(false); }
   };
   const move = (row: EntryTreeNode, action: "indent" | "outdent" | "up" | "down") => {
     const siblings = childrenOf(row.parent_id);
@@ -965,6 +1032,21 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
     }
   };
 
+  const runExistingPaste = async (row: EntryTreeNode, items: OutlinePasteItem[], merged: string) => {
+    if (!onPasteOutlineBatch || creatingRef.current || disabled) return;
+    savingRef.current = true; setBusy(true);
+    try {
+      const batch = await onPasteOutlineBatch(items, row.parent_id, 0, {targetId:row.id, expectedContent:row.content});
+      recordUndo({type:"paste",batch});
+      setEditingId(null);
+      setSelectedId(row.id);
+      setMessage(`${items.length}行をまとめて取り込みました。Ctrl+Zで戻せます。`);
+    } catch(error) {
+      // 失敗した貼り付け文字列を編集欄へ戻し、ユーザーの文章を失わない。
+      setEditingValue(merged);
+      showError(error);
+    } finally { savingRef.current=false; setBusy(false); }
+  };
   const onEditorPaste = (event: import("react").ClipboardEvent<HTMLTextAreaElement>, row: EntryTreeNode) => {
     if (!onPasteRows || disabled || savingRef.current) return;
     const field = event.currentTarget;
@@ -972,8 +1054,18 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
     const lines = itemsFromOutlinePaste(editingValue, field.selectionStart, field.selectionEnd, pasted);
     if (!lines) return;
     event.preventDefault();
-    // 途中で保存できなかった場合、元の入力内容を消さず再編集できるようにする。
     const merged = editingValue.slice(0, field.selectionStart) + pasted + editingValue.slice(field.selectionEnd);
+    if (onPasteOutlineBatch) {
+      const analysis = analyzeOutlinePaste(merged);
+      if (analysis.needsReview) {
+        skipBlurRef.current = true;
+        setPasteReview({ source: merged, context: "editor", targetId: row.id, expectedContent: row.content,
+          parentId: row.parent_id, index: 0, mode: "auto" });
+        return;
+      }
+      void runExistingPaste(row, analysis.items, merged);
+      return;
+    }
     setEditingValue(merged);
     savingRef.current = true;
     setBusy(true);
@@ -1047,10 +1139,18 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
   const onPendingPaste = (event: import("react").ClipboardEvent<HTMLTextAreaElement>) => {
     const field = event.currentTarget, current = pendingRef.current;
     if (!current) return;
-    const lines = itemsFromOutlinePaste(current.value, field.selectionStart, field.selectionEnd, event.clipboardData.getData("text/plain"));
+    const pasted = event.clipboardData.getData("text/plain");
+    const lines = itemsFromOutlinePaste(current.value, field.selectionStart, field.selectionEnd, pasted);
     if (!lines) return;
     event.preventDefault();
-    void savePastedPending(lines);
+    const merged = current.value.slice(0,field.selectionStart)+pasted+current.value.slice(field.selectionEnd);
+    const analysis = analyzeOutlinePaste(merged);
+    if (analysis.needsReview && onPasteOutlineBatch) {
+      setPasteReview({ source: merged, context: "pending", parentId: current.parentId,
+        index: current.index, mode:"auto" });
+      return;
+    }
+    void savePastedPending(analysis.items);
   };
   useEffect(() => {
     if (pending && !pendingSaving) pendingEditorRef.current?.focus({ preventScroll: true });
@@ -1083,6 +1183,23 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
     observer.observe(tree);
     return () => observer.disconnect();
   }, [editingId, editingValue, pending?.value, dense]);
+  const confirmPasteReview = () => {
+    const review = pasteReview;
+    if (!review) return;
+    const items = analyzeOutlinePaste(review.source, {mode:review.mode}).items;
+    setPasteReview(null);
+    if (review.context === "editor" && review.targetId) {
+      const row = nodeById.get(review.targetId);
+      if (!row || row.content !== review.expectedContent) { setMessage("編集元が変更されています。もう一度貼り付けてください。"); return; }
+      void runExistingPaste(row, items, review.source);
+    } else {
+      const pendingCurrent = pendingRef.current;
+      if (!pendingCurrent) beginPending({parentId:review.parentId,index:review.index});
+      // 直接呼ぶのではなく、現在の入力行があることを確認してから実行。
+      window.requestAnimationFrame(() => void savePastedPending(items));
+    }
+  };
+  const reviewAnalysis = pasteReview ? analyzeOutlinePaste(pasteReview.source, {mode:pasteReview.mode}) : null;
   const pendingNode = pending ? (
     <div key="pending-outline-row" className="outline__item outline__item--pending"
       data-outline-pending="" role="treeitem"
@@ -1226,6 +1343,27 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
         </button>
       </div>
     ) : null}
+    {pasteReview && reviewAnalysis ? <section role="dialog" aria-label="階層の取り込みを確認"
+      className="outline__paste-review" style={{padding:"16px",border:"1px solid var(--border-color, #bbb)",borderRadius:"12px",marginTop:"12px"}}>
+      <strong>この階層で取り込みますか？</strong>
+      <p>{reviewAnalysis.items.length}行・{reviewAnalysis.items.length ? Math.max(...reviewAnalysis.items.map(item=>item.depth))+1 : 0}階層
+        {reviewAnalysis.reasons.length ? `｜${reviewAnalysis.reasons.join("・")}` : ""}</p>
+      <label>階層の解釈 <select value={pasteReview.mode} onChange={event=>setPasteReview({...pasteReview,mode:event.target.value as typeof pasteReview.mode})}>
+        <option value="auto">自動</option><option value="two">2スペース</option><option value="four">4スペース</option><option value="flat">階層なし</option>
+      </select></label>
+      <div style={{maxHeight:"200px",overflowY:"auto",padding:"8px 0"}} aria-label="取り込み後の階層プレビュー">
+        {reviewAnalysis.items.slice(0,60).map((item,i)=><div key={i} style={{paddingLeft:`${item.depth*18}px`,lineHeight:"1.65"}}>
+          <span aria-hidden="true">• </span>{item.content}</div>)}
+        {reviewAnalysis.items.length>60 ? <p>ほか{reviewAnalysis.items.length-60}行</p>:null}
+      </div>
+      <div style={{display:"flex",gap:"8px",flexWrap:"wrap"}}>
+        <button type="button" onClick={confirmPasteReview}>この階層で取り込む</button>
+        <button type="button" onClick={()=>{setPasteReview(null);skipBlurRef.current=false;}}>キャンセル</button>
+      </div>
+    </section> : null}
+    {redoPasteBatch && onRedoPasteOutlineBatch ? <p className="outline__message" role="status">
+      取り込みを元に戻しました。 <button type="button" onClick={()=>void redoLastPaste()}>やり直す（Redo）</button>
+    </p> : null}
     {message ? <p className="outline__message" role="status">{message}
       {failedEdit ? <button type="button" onClick={() => {
         const item = failedEdit;
