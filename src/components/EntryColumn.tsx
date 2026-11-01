@@ -1,4 +1,6 @@
 import { OutlineList, type OutlineHandle } from "./OutlineList";
+import type { OutlinePasteItem } from "../lib/outlinePaste.js";
+import type { OutlinePasteBatchResult } from "../repositories/memoRepository";
 import type { OutlineCopyMode } from "../lib/outlineCopy.js";
 import { EntryInspector, type EntryActions, type RowMove, type RowMoveState } from "./EntryInspector";
 import { EntryMetaCard, type EntryMetaKind } from "./EntryMetaCard";
@@ -82,6 +84,9 @@ type EntryColumnProps = {
   deskNode?: ReactNode;
   /** アウトラインの欄。次の一行の手(書き口が使う)を、ページへ渡す。 */
   outlineRef?: RefObject<OutlineHandle | null>;
+  onPasteOutlineBatch?: (items: OutlinePasteItem[], parentId: string | null, index: number, options?: { targetId?: string; expectedContent?: string; draftId?: string; metadata?: { tag?: string | null; note?: string; link_url?: string } }) => Promise<OutlinePasteBatchResult>;
+  onUndoPasteOutlineBatch?: (batch: OutlinePasteBatchResult) => Promise<void>;
+  onRedoPasteOutlineBatch?: (batch: OutlinePasteBatchResult) => Promise<OutlinePasteBatchResult>;
   /** アウトライナー専用の完了表示。段落・URLの設定とは独立。 */
   showCompletedOutline?: boolean;
   completedOutlineCount?: number;
@@ -203,6 +208,9 @@ export function EntryColumn({
   disabled = false,
   deskNode,
   outlineRef,
+  onPasteOutlineBatch,
+  onUndoPasteOutlineBatch,
+  onRedoPasteOutlineBatch,
   showCompletedOutline = false,
   completedOutlineCount = 0,
   onToggleShowCompletedOutline,
@@ -1351,6 +1359,9 @@ export function EntryColumn({
             onOpenDetails={openDetails}
             onToggleCompleted={toggleCompleted}
             onUpdate={onUpdate}
+            onPasteOutlineBatch={onPasteOutlineBatch}
+            onUndoPasteOutlineBatch={onUndoPasteOutlineBatch}
+            onRedoPasteOutlineBatch={onRedoPasteOutlineBatch}
             onPasteRows={async (row, rows) => {
               // 表示中の行だけでなく、完了済みを含めた兄弟順位で挿入する。
               const siblings = (allOutlineEntries ?? primaryEntries).filter((item) => item.parent_id === row.parent_id)

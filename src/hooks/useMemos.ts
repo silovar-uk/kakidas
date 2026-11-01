@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import type { OutlinePasteItem } from "../lib/outlinePaste.js";
 import {
   type BackupPayload,
   type CompletedEntriesDeletionResult,
@@ -19,6 +20,7 @@ import {
   type EntryTagBulkUpdateResult,
   type MemoFromEntryResult,
   type MemoTagBulkUpdateResult,
+  type OutlinePasteBatchResult,
 } from "../repositories/memoRepository";
 
 type AsyncStatus = {
@@ -283,6 +285,29 @@ export function useMemoDetail(memoId: string | undefined) {
     [memoId, refreshAfterWrite, runWrite],
   );
 
+  const pasteOutlineBatch = useCallback(async (
+    items: OutlinePasteItem[], parentId: string | null, index: number,
+    options: { targetId?: string; expectedContent?: string; draftId?: string; metadata?: { tag?: string | null; note?: string; link_url?: string } } = {},
+  ): Promise<OutlinePasteBatchResult> => {
+    if (!memoId) throw new Error("メモIDがありません。");
+    return runWrite(async () => {
+      const result = await memoRepository.pasteOutlineBatch(memoId, items, parentId, index, options);
+      await refreshAfterWrite();
+      return result;
+    });
+  }, [memoId, refreshAfterWrite, runWrite]);
+  const undoOutlinePasteBatch = useCallback(async (batch: OutlinePasteBatchResult) =>
+    runWrite(async () => {
+      await memoRepository.undoOutlinePasteBatch(batch);
+      await refreshAfterWrite();
+    }), [refreshAfterWrite, runWrite]);
+  const redoOutlinePasteBatch = useCallback(async (batch: OutlinePasteBatchResult) =>
+    runWrite(async () => {
+      const result = await memoRepository.redoOutlinePasteBatch(batch);
+      await refreshAfterWrite();
+      return result;
+    }), [refreshAfterWrite, runWrite]);
+
   const createMemoFromEntry = useCallback(
     async (entryId: string): Promise<MemoFromEntryResult> => {
       return runWrite(async () => memoRepository.createMemoFromEntry(entryId));
@@ -417,6 +442,9 @@ export function useMemoDetail(memoId: string | undefined) {
     updateTitle,
     updateMemo: updateTitle,
     createEntry,
+    pasteOutlineBatch,
+    undoOutlinePasteBatch,
+    redoOutlinePasteBatch,
     createMemoFromEntry,
     updateEntry,
     deleteEntry,

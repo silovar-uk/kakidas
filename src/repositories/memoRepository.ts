@@ -38,6 +38,7 @@ import {
   normalizeCompletion,
   nowIso,
 } from "../types/memo";
+import type { OutlinePasteItem } from "../lib/outlinePaste.js";
 import {
   STORE_NAMES,
   getDatabase,
@@ -77,6 +78,12 @@ export type EntryTagBulkUpdateResult = {
   updated_count: number;
 };
 
+export type OutlinePasteBatchResult = {
+  memo_id: string;
+  created: EntryRow[];
+  edited?: { id: string; before: string; after: string };
+};
+
 export interface MemoRepository {
   listMemos(): Promise<MemoListItem[]>;
   getMemo(memoId: string): Promise<MemoWithEntries | null>;
@@ -108,6 +115,10 @@ export interface MemoRepository {
     outlineIndex?: number,
   ): Promise<EntryRow>;
   updateEntry(entryId: string, patch: EntryUpdate): Promise<EntryRow>;
+  pasteOutlineBatch(memoId: string, items: OutlinePasteItem[], parentId: string | null, index: number,
+    options?: { targetId?: string; expectedContent?: string; draftId?: string; metadata?: { tag?: string | null; note?: string; link_url?: string } }): Promise<OutlinePasteBatchResult>;
+  undoOutlinePasteBatch(batch: OutlinePasteBatchResult): Promise<void>;
+  redoOutlinePasteBatch(batch: OutlinePasteBatchResult): Promise<OutlinePasteBatchResult>;
   /** アウトラインの移動・階層変更を一括保存。子孫は親IDのまま追随する。 */
   relocateOutlineEntry(entryId: string, parentId: string | null, index: number): Promise<void>;
   /** 同じメモ・同じ区分の項目タグをまとめて別名へ置き換える。 */
@@ -862,6 +873,170 @@ class IndexedDbMemoRepository implements MemoRepository {
     await transactionToPromise(transaction);
 
     return entry;
+  }
+
+  /**
+   * 1回のペーストはIndexedDBの1トランザクション。
+   * 1行目が既存行の場合は本文更新も同じトランザクションに含め、
+   * 途中失敗時は元本文・下書き・追加予定の行をすべて維持する。
+   */
+  async pasteOutlineBatch(
+    memoId: string, items: OutlinePasteItem[], parentId: string | null, index: number,
+    options: { targetId?: string; expectedContent?: string; draftId?: string; metadata?: { tag?: string | null; note?: string; link_url?: string } } = {},
+  ): Promise<OutlinePasteBatchResult> {
+    if (!items.length || items.some((item, i) => !item.content.trim() ||
+        !Number.isInteger(item.depth) || item.depth < 0 || (i === 0 && item.depth !== 0) ||
+        (i > 0 && item.depth > items[i - 1].depth + 1))) {
+      throw new Error("貼り付ける文章の階層を確認してください。");
+    }
+    const db = await getDatabase();
+    const transaction = db.transaction([STORE_NAMES.memos, STORE_NAMES.entries, STORE_NAMES.memoSyncMeta, STORE_NAMES.drafts],"readwrite");
+    const memoStore = transaction.objectStore(STORE_NAMES.memos);
+    const entryStore = transaction.objectStore(STORE_NAMES.entries);
+    const syncStore = transaction.objectStore(STORE_NAMES.memoSyncMeta);
+    const draftStore = transaction.objectStore(STORE_NAMES.drafts);
+    try {
+      const memo = await requestToPromise(memoStore.get(memoId) as IDBRequest<MemoRow | undefined>);
+      if (!memo || memo.deleted_at !== null) throw new Error("貼り付け先のメモが見つかりません。");
+      const entries = (await this.getEntriesForMemo(entryStore, memoId)).filter(row => row.deleted_at === null && row.kind === "sentence");
+      const byId = new Map(entries.map(row => [row.id, row]));
+      if (parentId !== null && !byId.has(parentId)) throw new Error("貼り付け先の親項目が見つかりません。");
+      const target = options.targetId ? byId.get(options.targetId) : undefined;
+      if (options.targetId && (!target || target.parent_id !== parentId || target.content !== options.expectedContent))
+        throw new Error("貼り付け先が変更されています。内容を確認してください。");
+      const siblings = new Map<string | null, EntryRow[]>();
+      const getSiblings = (pid: string | null) => {
+        let list = siblings.get(pid);
+        if (!list) {
+          list = entries.filter(row => row.parent_id === pid).sort(compareEntries);
+          siblings.set(pid, list);
+        }
+        return list;
+      };
+      const stamp = nowIso();
+      const result: OutlinePasteBatchResult = { memo_id: memoId, created: [] };
+      const createdAtDepth: string[] = [];
+      let rootIndex = Math.max(0, Math.min(Math.floor(index), getSiblings(parentId).length));
+      let first = 0;
+      if (target) {
+        result.edited = { id: target.id, before: target.content, after: items[0].content.trim() };
+        if (result.edited.before !== result.edited.after)
+          entryStore.put({ ...target, content: result.edited.after, updated_at: stamp } satisfies EntryRow);
+        createdAtDepth[0] = target.id;
+        // targetの直後に後続のルート行を入れる。呼び出しのindexは無視する。
+        rootIndex = getSiblings(parentId).findIndex(row => row.id === target.id) + 1;
+        first = 1;
+      }
+      const nextChildIndex = new Map<string, number>();
+      for (let i = first; i < items.length; i++) {
+        const part = items[i];
+        const pid = part.depth === 0 ? parentId : createdAtDepth[part.depth - 1];
+        if (pid === undefined) throw new Error("貼り付けた文章の親項目がありません。");
+        const list = getSiblings(pid);
+        const at = part.depth === 0 ? rootIndex++ : (nextChildIndex.get(pid as string) ?? 0);
+        const entry: EntryRow = {
+          id: createId(), memo_id: memoId, user_id: memo.user_id, kind: "sentence",
+          parent_id: pid, content: part.content.trim(), heading: "",
+          tag: i === first ? normalizeEntryTag(options.metadata?.tag) : null,
+          note: i === first ? (options.metadata?.note ?? "").trim() : "",
+          link_url: i === first ? normalizeLinkUrlForSave(options.metadata?.link_url) : "", satisfaction: 0, is_completed: false, sort_order: at,
+          created_at: stamp, updated_at: stamp, deleted_at: null,
+        };
+        list.splice(at, 0, entry);
+        if (part.depth > 0) nextChildIndex.set(pid as string, at + 1);
+        createdAtDepth[part.depth] = entry.id;
+        createdAtDepth.length = part.depth + 1;
+        result.created.push(entry);
+      }
+      // 各親の兄弟順を1回だけ確定し、インデックス衝突をなくす。
+      for (const list of siblings.values()) {
+        list.forEach((row, order) => {
+          if (row.sort_order !== order || result.created.some(newRow => newRow.id === row.id)) {
+            const next = { ...row, sort_order: order,
+              updated_at: result.created.some(newRow=>newRow.id===row.id) ? stamp : row.updated_at };
+            entryStore.put(next satisfies EntryRow);
+            const createdAt = result.created.findIndex(item => item.id === row.id);
+            if (createdAt >= 0) result.created[createdAt] = next;
+          }
+        });
+      }
+      memoStore.put({ ...memo, updated_at: stamp } satisfies MemoRow);
+      await this.markMemoChangedWithinTransaction(syncStore, memoId, stamp);
+      if (options.draftId) draftStore.delete(options.draftId);
+      await transactionToPromise(transaction);
+      return result;
+    } catch(error) {
+      try { transaction.abort(); } catch { /* transaction is already closed */ }
+      throw error;
+    }
+  }
+
+  /** 作成した行全体だけを戻す。編集・移動・子の追加があれば、削除せず拒否。 */
+  async undoOutlinePasteBatch(batch: OutlinePasteBatchResult): Promise<void> {
+    const db = await getDatabase();
+    const tx = db.transaction([STORE_NAMES.memos, STORE_NAMES.entries, STORE_NAMES.memoSyncMeta],"readwrite");
+    const memos = tx.objectStore(STORE_NAMES.memos), store=tx.objectStore(STORE_NAMES.entries), sync=tx.objectStore(STORE_NAMES.memoSyncMeta);
+    try {
+      const memo = await requestToPromise(memos.get(batch.memo_id) as IDBRequest<MemoRow | undefined>);
+      if (!memo || memo.deleted_at !== null) throw new Error("メモが見つかりません。");
+      const entries = await this.getEntriesForMemo(store, batch.memo_id);
+      const byId = new Map(entries.map(row=>[row.id,row]));
+      const created = new Set(batch.created.map(row=>row.id));
+      for (const original of batch.created) {
+        const current=byId.get(original.id);
+        if (!current || current.deleted_at !== null || current.content !== original.content ||
+            current.parent_id !== original.parent_id || current.updated_at !== original.updated_at)
+          throw new Error("取り込み後に変更された行があります。一括Undoは実行しません。");
+      }
+      if (entries.some(row => row.deleted_at===null && row.parent_id && created.has(row.parent_id) && !created.has(row.id)))
+        throw new Error("取り込み後に追加された子項目があります。一括Undoは実行しません。");
+      const edited = batch.edited ? byId.get(batch.edited.id) : null;
+      if (batch.edited && (!edited || edited.deleted_at !== null || edited.content !== batch.edited.after))
+        throw new Error("貼り付け前の行が変更されているため元に戻せません。");
+      const stamp = nowIso();
+      batch.created.forEach(row => {
+        const current = byId.get(row.id)!;
+        store.put({ ...current, deleted_at: stamp, updated_at: stamp } satisfies EntryRow);
+      });
+      if (edited && batch.edited && batch.edited.before !== batch.edited.after)
+        store.put({ ...edited, content: batch.edited.before, updated_at: stamp } satisfies EntryRow);
+      memos.put({...memo,updated_at:stamp} satisfies MemoRow);
+      await this.markMemoChangedWithinTransaction(sync,batch.memo_id,stamp);
+      await transactionToPromise(tx);
+    } catch(error) { try { tx.abort(); } catch {} throw error; }
+  }
+
+  /** Undo直後に限り、元の行ID・階層をそのまま復元する。 */
+  async redoOutlinePasteBatch(batch: OutlinePasteBatchResult): Promise<OutlinePasteBatchResult> {
+    const db = await getDatabase();
+    const tx = db.transaction([STORE_NAMES.memos,STORE_NAMES.entries,STORE_NAMES.memoSyncMeta],"readwrite");
+    const memos=tx.objectStore(STORE_NAMES.memos),store=tx.objectStore(STORE_NAMES.entries),sync=tx.objectStore(STORE_NAMES.memoSyncMeta);
+    try {
+      const memo=await requestToPromise(memos.get(batch.memo_id) as IDBRequest<MemoRow|undefined>);
+      if (!memo || memo.deleted_at!==null) throw new Error("メモが見つかりません。");
+      const entries=await this.getEntriesForMemo(store,batch.memo_id);
+      const byId=new Map(entries.map(row=>[row.id,row]));
+      for(const row of batch.created) {
+        const current=byId.get(row.id);
+        if (!current || current.deleted_at===null || current.content!==row.content || current.parent_id!==row.parent_id)
+          throw new Error("取り込んだ行が別の操作で変わりました。Redoは行いません。");
+        if(row.parent_id!==null && !batch.created.some(x=>x.id===row.parent_id) &&
+          !entries.some(x=>x.id===row.parent_id && x.deleted_at===null))
+          throw new Error("元の親項目が見つかりません。");
+      }
+      const edited=batch.edited?byId.get(batch.edited.id):null;
+      if(batch.edited && (!edited || edited.deleted_at!==null || edited.content!==batch.edited.before))
+        throw new Error("元の文章が変更されているためRedoできません。");
+      const stamp=nowIso();
+      const updated=batch.created.map(row=>({...byId.get(row.id)!,deleted_at:null,updated_at:stamp}));
+      updated.forEach(row=>store.put(row satisfies EntryRow));
+      if(edited && batch.edited && batch.edited.before!==batch.edited.after)
+        store.put({...edited,content:batch.edited.after,updated_at:stamp} satisfies EntryRow);
+      memos.put({...memo,updated_at:stamp} satisfies MemoRow);
+      await this.markMemoChangedWithinTransaction(sync,batch.memo_id,stamp);
+      await transactionToPromise(tx);
+      return {...batch,created:updated};
+    } catch(error) {try{tx.abort();}catch{}throw error;}
   }
 
   async relocateOutlineEntry(entryId: string, targetParentId: string | null, targetIndex: number): Promise<void> {
