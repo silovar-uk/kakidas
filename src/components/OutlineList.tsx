@@ -13,6 +13,7 @@ import {
 import type { EntryRow, EntryTreeNode, EntryUpdate } from "../types/memo";
 import { normalizeOutlineItems, itemsFromOutlinePaste, analyzeOutlinePaste, serializeOutlineItems, type OutlinePasteItem } from "../lib/outlinePaste.js";
 import type { OutlinePasteBatchResult } from "../repositories/memoRepository";
+import type { OutlineCompletionChange } from "../lib/outlineCompletion.js";
 import { siblingPositionAfter, visibleInsertionIndex } from "../lib/outlineInsert.js";
 import { outlineEmphasisSegments, toggleOutlineEmphasis, stripOutlineEmphasis } from "../lib/outlineEmphasis.js";
 import { useDraftPersistence } from "../hooks/useDraftPersistence";
@@ -58,6 +59,7 @@ export type OutlineHandle = {
   recordExternalEdit(id: string, previous: string): void;
   /** 「置く」で追加した新規行を戻す（安全な場合のみ）。 */
   recordExternalCreate(id: string): void;
+  recordExternalCompletion(id: string, previous: boolean, changes: OutlineCompletionChange[]): void;
 };
 
 type OutlineListProps = {
@@ -85,7 +87,8 @@ type OutlineListProps = {
   onOpenActions?: (id: string) => void;
   /** PCの「項目の詳細」(行のそばの小窓)。 */
   onOpenDetails: (id: string, anchor: HTMLElement) => void;
-  onToggleCompleted?: (id: string) => Promise<void>;
+  onToggleCompleted?: (id: string) => Promise<OutlineCompletionChange[]>;
+  onRestoreCompletion?: (changes: OutlineCompletionChange[]) => Promise<void>;
   onUpdate: (id: string, patch: EntryUpdate) => Promise<unknown>;
   /** 既存行の編集中に複数行を貼り付けた際、先頭を更新し残りを兄弟行として追加する。 */
   onPasteRows?: (row: EntryTreeNode, rows: OutlinePasteItem[]) => Promise<void>;
@@ -117,7 +120,7 @@ type UndoableAction =
   | { type: "edit"; id: string; previous: string }
   | ({ type: "move" } & MoveHistory)
   | { type: "create"; id: string }
-  | { type: "complete"; id: string; previous: boolean }
+  | { type: "complete"; id: string; previous: boolean; changes?: OutlineCompletionChange[] }
   | { type: "paste"; batch: OutlinePasteBatchResult };
 
 const isMobileViewport = () => window.matchMedia("(max-width: 920px)").matches;
@@ -181,6 +184,7 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
   onOpenActions,
   onOpenDetails,
   onToggleCompleted,
+  onRestoreCompletion,
   onUpdate,
   onPasteRows,
   onPasteOutlineBatch,
@@ -663,6 +667,7 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
     undoLast: () => { void undoLast(); },
     recordExternalEdit: (id: string, previous: string) => recordUndo({ type: "edit", id, previous }),
     recordExternalCreate: (id: string) => recordUndo({ type: "create", id }),
+    recordExternalCompletion: (id: string, previous: boolean, changes: OutlineCompletionChange[]) => recordUndo({ type: "complete", id, previous, changes }),
     revealRow: (rowId: string) => {
       const row = nodeById.get(rowId);
       if (!row) return;
@@ -706,7 +711,7 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
     if (disabled || busy || savingRef.current || !onToggleCompleted) return;
     const focusEpoch = ++focusEpochRef.current;
     const idx = visible.findIndex(item => item.id === row.id);
-    const next = visible.slice(idx + 1).find(item => !item.is_completed)
+    let next = visible.slice(idx + 1).find(item => !item.is_completed)
       ?? visible.slice(0, Math.max(0, idx)).reverse().find(item => !item.is_completed);
     savingRef.current = true;
     // 編集欄を外す際のblur処理と二重保存しない。
@@ -723,10 +728,16 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
           recordUndo({ type: "edit", id: row.id, previous: row.content });
         }
       }
-      await onToggleCompleted(row.id);
-      recordUndo({ type: "complete", id: row.id, previous: row.is_completed });
+      const changes = await onToggleCompleted(row.id);
+      if(changes.length)recordUndo({ type: "complete", id: row.id, previous: row.is_completed, changes });
+      // Do not move keyboard focus into descendants that were just completed.
+      const completedIds=new Set(changes.filter(change=>change.next).map(change=>change.id));
+      if(next&&completedIds.has(next.id)){
+        next=visible.slice(idx+1).find(item=>!item.is_completed&&!completedIds.has(item.id))
+          ??visible.slice(0,Math.max(0,idx)).reverse().find(item=>!item.is_completed&&!completedIds.has(item.id));
+      }
       setEditingId(null);
-      setMessage(row.is_completed ? "項目を再開しました。" : "完了しました。操作を戻すこともできます。");
+      setMessage(row.is_completed ? "項目を再開しました。" : `この枝の${changes.length}項目を完了しました。元に戻せます。`);
       // 完了した行が一覧から消えても、キーボード操作を途切れさせない。
       window.requestAnimationFrame(() => {
         if (focusEpoch !== focusEpochRef.current) {
@@ -799,7 +810,10 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
     try {
       if (last.type === "edit") await onUpdate(last.id, { content: last.previous });
       else if (last.type === "move") await onRelocate(last.id, last.parentId, last.index);
-      else if (last.type === "complete") await onUpdate(last.id, { is_completed: last.previous });
+      else if (last.type === "complete") {
+        if(last.changes&&onRestoreCompletion)await onRestoreCompletion(last.changes);
+        else await onUpdate(last.id,{is_completed:last.previous});
+      }
       else await onUndoCreate!(target!);
       undoStackRef.current.pop();
       setUndoDepth(undoStackRef.current.length);

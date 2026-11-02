@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import type { OutlinePasteItem } from "../lib/outlinePaste.js";
+import type { OutlineCompletionChange } from "../lib/outlineCompletion.js";
 import {
   type BackupPayload,
   type CompletedEntriesDeletionResult,
@@ -326,6 +327,18 @@ export function useMemoDetail(memoId: string | undefined) {
     [refreshAfterWrite, runWrite],
   );
 
+  const setOutlineCompletion = useCallback(async (id: string, completed: boolean): Promise<OutlineCompletionChange[]> =>
+    runWrite(async () => {
+      const changes=await memoRepository.setOutlineCompletion(id,completed);
+      await refreshAfterWrite();
+      return changes;
+    }), [runWrite,refreshAfterWrite]);
+  const restoreOutlineCompletion = useCallback(async (changes: OutlineCompletionChange[]): Promise<void> =>
+    runWrite(async () => {
+      await memoRepository.restoreOutlineCompletion(changes);
+      await refreshAfterWrite();
+    }), [runWrite,refreshAfterWrite]);
+
   const deleteEntry = useCallback(
     async (entryId: string, options?: { requireLeaf?: boolean }): Promise<EntryDeletionResult> => {
       return runWrite(async () => {
@@ -447,6 +460,8 @@ export function useMemoDetail(memoId: string | undefined) {
     redoOutlinePasteBatch,
     createMemoFromEntry,
     updateEntry,
+    setOutlineCompletion,
+    restoreOutlineCompletion,
     deleteEntry,
     restoreEntries,
     deleteEntriesByKind,

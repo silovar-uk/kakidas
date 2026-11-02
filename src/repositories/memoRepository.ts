@@ -39,6 +39,7 @@ import {
   nowIso,
 } from "../types/memo";
 import type { OutlinePasteItem } from "../lib/outlinePaste.js";
+import { planOutlineCompletion, type OutlineCompletionChange } from "../lib/outlineCompletion.js";
 import {
   STORE_NAMES,
   getDatabase,
@@ -115,6 +116,8 @@ export interface MemoRepository {
     outlineIndex?: number,
   ): Promise<EntryRow>;
   updateEntry(entryId: string, patch: EntryUpdate): Promise<EntryRow>;
+  setOutlineCompletion(entryId: string, completed: boolean): Promise<OutlineCompletionChange[]>;
+  restoreOutlineCompletion(changes: OutlineCompletionChange[]): Promise<void>;
   pasteOutlineBatch(memoId: string, items: OutlinePasteItem[], parentId: string | null, index: number,
     options?: { targetId?: string; expectedContent?: string; draftId?: string; metadata?: { tag?: string | null; note?: string; link_url?: string } }): Promise<OutlinePasteBatchResult>;
   undoOutlinePasteBatch(batch: OutlinePasteBatchResult): Promise<void>;
@@ -1098,6 +1101,58 @@ class IndexedDbMemoRepository implements MemoRepository {
     await this.touchMemoWithinTransaction(memos, current.memo_id, timestamp);
     await this.markMemoChangedWithinTransaction(sync, current.memo_id, timestamp);
     await transactionToPromise(transaction);
+  }
+
+  /** Atomic completion of a subtree, or reopening of the item and ancestors. */
+  async setOutlineCompletion(id: string, completed: boolean): Promise<OutlineCompletionChange[]> {
+    const db=await getDatabase();
+    const tx=db.transaction([STORE_NAMES.memos,STORE_NAMES.entries,STORE_NAMES.memoSyncMeta],"readwrite");
+    const memos=tx.objectStore(STORE_NAMES.memos);
+    const entries=tx.objectStore(STORE_NAMES.entries);
+    const sync=tx.objectStore(STORE_NAMES.memoSyncMeta);
+    const target=await this.requireActiveEntry(entries,id,tx);
+    if(target.kind!=="sentence"){tx.abort();throw new Error("アウトライン項目のみ変更できます。");}
+    const rows=await this.getEntriesForMemo(entries,target.memo_id);
+    const changes=planOutlineCompletion(rows,id,completed);
+    if(changes.length){
+      const byId=new Map(rows.map(row=>[row.id,row]));
+      const at=nowIso();
+      for(const change of changes){
+        const row=byId.get(change.id)!;
+        entries.put({...row,is_completed:change.next,updated_at:at} satisfies EntryRow);
+      }
+      await this.touchMemoWithinTransaction(memos,target.memo_id,at);
+      await this.markMemoChangedWithinTransaction(sync,target.memo_id,at);
+    }
+    await transactionToPromise(tx);
+    return changes;
+  }
+
+  /** Undo exact changed states; pre-completed children remain completed. */
+  async restoreOutlineCompletion(changes: OutlineCompletionChange[]): Promise<void> {
+    if(!changes.length)return;
+    const db=await getDatabase();
+    const tx=db.transaction([STORE_NAMES.memos,STORE_NAMES.entries,STORE_NAMES.memoSyncMeta],"readwrite");
+    const memos=tx.objectStore(STORE_NAMES.memos);
+    const entries=tx.objectStore(STORE_NAMES.entries);
+    const sync=tx.objectStore(STORE_NAMES.memoSyncMeta);
+    const restored:EntryRow[]=[];
+    const seen=new Set<string>();
+    for(const change of changes){
+      if(seen.has(change.id)){tx.abort();throw new Error("完了履歴が重複しています。");}
+      seen.add(change.id);
+      const row=await this.requireActiveEntry(entries,change.id,tx);
+      if(row.kind!=="sentence"||row.is_completed!==change.next||
+          (restored.length>0&&restored[0].memo_id!==row.memo_id)){
+        tx.abort();throw new Error("状態が変更されたため、元に戻せません。");
+      }
+      restored.push(row);
+    }
+    const at=nowIso();
+    restored.forEach((row,i)=>entries.put({...row,is_completed:changes[i].previous,updated_at:at} satisfies EntryRow));
+    await this.touchMemoWithinTransaction(memos,restored[0].memo_id,at);
+    await this.markMemoChangedWithinTransaction(sync,restored[0].memo_id,at);
+    await transactionToPromise(tx);
   }
 
   async updateEntry(entryId: string, patch: EntryUpdate): Promise<EntryRow> {

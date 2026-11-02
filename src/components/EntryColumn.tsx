@@ -1,6 +1,7 @@
 import { OutlineList, type OutlineHandle } from "./OutlineList";
 import type { OutlinePasteItem } from "../lib/outlinePaste.js";
 import type { OutlinePasteBatchResult } from "../repositories/memoRepository";
+import type { OutlineCompletionChange } from "../lib/outlineCompletion.js";
 import type { OutlineCopyMode } from "../lib/outlineCopy.js";
 import { EntryInspector, type EntryActions, type RowMove, type RowMoveState } from "./EntryInspector";
 import { EntryMetaCard, type EntryMetaKind } from "./EntryMetaCard";
@@ -131,6 +132,8 @@ type EntryColumnProps = {
     outlineIndex?: number,
   ) => Promise<unknown>;
   onUpdate: (entryId: string, patch: EntryUpdate) => Promise<unknown>;
+  onSetOutlineCompletion?: (id: string, completed: boolean) => Promise<OutlineCompletionChange[]>;
+  onRestoreOutlineCompletion?: (changes: OutlineCompletionChange[]) => Promise<void>;
   onRemoveInline?: (entryId: string) => Promise<void>;
   onInlineDraftChange?: (hasDraft: boolean) => void;
   onDelete: (entryId: string) => Promise<EntryDeletionResult>;
@@ -232,6 +235,8 @@ export function EntryColumn({
   routeToWord = false,
   onCreate,
   onUpdate,
+  onSetOutlineCompletion,
+  onRestoreOutlineCompletion,
   onRemoveInline,
   onInlineDraftChange,
   onDelete,
@@ -802,13 +807,21 @@ export function EntryColumn({
     return true;
   };
 
-  const toggleCompleted = async (entryId: string) => {
-    const target = entries.find((entry) => entry.id === entryId);
-    if (!target) return;
-
-    await onUpdate(entryId, { is_completed: !target.is_completed });
+  const toggleCompleted = async (entryId: string): Promise<OutlineCompletionChange[]> => {
+    const target=(kind==="sentence" ? (allOutlineEntries??entries) : entries).find(entry=>entry.id===entryId);
+    if(!target)return [];
+    const changes=kind==="sentence"&&onSetOutlineCompletion
+      ? await onSetOutlineCompletion(entryId,!target.is_completed)
+      : (await onUpdate(entryId,{is_completed:!target.is_completed}),[]);
     setInspector(null);
     setMobileActionEntryId(null);
+    return changes;
+  };
+  const toggleCompletedFromActions = async (entryId: string): Promise<void> => {
+    const target=(allOutlineEntries??entries).find(entry=>entry.id===entryId);
+    const changes=await toggleCompleted(entryId);
+    if(kind==="sentence"&&target&&changes.length)
+      outlineRef?.current?.recordExternalCompletion(entryId,target.is_completed,changes);
   };
 
   /** 段落を上・下へ移す(手動の順のとき)。 */
@@ -877,7 +890,7 @@ export function EntryColumn({
   };
   const actionsFor = (entry: EntryTreeNode): EntryActions => ({
     onUpdate: handleUpdateEntry,
-    onToggleCompleted: toggleCompleted,
+    onToggleCompleted: toggleCompletedFromActions,
     onMoveRow: kind === "sentence" ? (id: string, action: RowMove) => outlineRef?.current?.moveRow(id, action) : undefined,
     moveState: kind === "sentence" ? rowMoveStateOf(entry) : undefined,
     onZoom: kind === "sentence" ? (id: string) => outlineRef?.current?.zoomTo(id) : undefined,
@@ -1358,6 +1371,7 @@ export function EntryColumn({
             onOpenActions={openStructureActions}
             onOpenDetails={openDetails}
             onToggleCompleted={toggleCompleted}
+            onRestoreCompletion={onRestoreOutlineCompletion}
             onUpdate={onUpdate}
             onPasteOutlineBatch={onPasteOutlineBatch}
             onUndoPasteOutlineBatch={onUndoPasteOutlineBatch}
@@ -1473,7 +1487,7 @@ export function EntryColumn({
           tagSuggestions={tagSuggestions}
           actions={mobileActionEntry ? actionsFor(mobileActionEntry) : {
             onUpdate: handleUpdateEntry,
-            onToggleCompleted: toggleCompleted,
+            onToggleCompleted: toggleCompletedFromActions,
             onCopy: requestCopyEntry,
             onCreateMemoFromEntry: requestCreateMemoFromEntry,
             onMoveToKind: requestMoveToKind,

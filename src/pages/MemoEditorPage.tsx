@@ -1,3 +1,4 @@
+import { visibleOutlineWithAncestors } from "../lib/outlineCompletion.js";
 import {SeishoView} from "../components/SeishoView";
 import {BackIcon} from "../components/icons";
 import {waitForCreatedEntry,withViewTransition} from "../lib/viewTransition";
@@ -251,6 +252,8 @@ export function MemoEditorPage() {
     undoOutlinePasteBatch,
     redoOutlinePasteBatch,
     updateEntry,
+    setOutlineCompletion,
+    restoreOutlineCompletion,
     deleteEntry,
     restoreEntries,
     deleteEntriesByKind,
@@ -1101,21 +1104,18 @@ export function MemoEditorPage() {
 
   const entriesByKind = useMemo(() => {
     const allEntries = memo?.entries ?? [];
-    // アウトラインだけは初期状態で完了を隠す。段落・URLの旧設定とは独立。
-    // 木に変換する前に除外し、完了した親の未完了の子も表示できるようにする。
-    const outlineEntries = showCompletedOutline
-      ? allEntries
-      : allEntries.filter((entry) => !entry.is_completed);
+    // Filter the full tree: incomplete descendants keep their original ancestors.
+    const outlineEntries = showCompletedOutline ? allOutlineEntries : visibleOutlineWithAncestors(allOutlineEntries);
     const otherEntries = hideCompletedEntries
       ? allEntries.filter((entry) => !entry.is_completed)
       : allEntries;
 
     return {
       word: getEntryTree(otherEntries, "word", entrySortMode),
-      sentence: getEntryTree(outlineEntries, "sentence", entrySortMode),
+      sentence: outlineEntries,
       paragraph: getEntryTree(otherEntries, "paragraph", entrySortMode),
     };
-  }, [entrySortMode, hideCompletedEntries, showCompletedOutline, memo?.entries]);
+  }, [allOutlineEntries, entrySortMode, hideCompletedEntries, showCompletedOutline, memo?.entries]);
 
   /** 結び目: 段落の見出しが、アウトラインの1行と同じ文なら結ぶ。データは変えず、毎回求める。 */
   const bindings = useMemo(() => getOutlineBindings(memo?.entries ?? []), [memo?.entries]);
@@ -1717,6 +1717,8 @@ export function MemoEditorPage() {
             routeToWord={false}
             onCreate={createEntry}
             onUpdate={(entryId, patch) => updateEntry(entryId, patch)}
+            onSetOutlineCompletion={kind === "sentence" ? setOutlineCompletion : undefined}
+            onRestoreOutlineCompletion={kind === "sentence" ? restoreOutlineCompletion : undefined}
             onRemoveInline={kind === "sentence" ? async id => { await deleteEntry(id, { requireLeaf: true }); } : undefined}
             onInlineDraftChange={kind === "sentence" ? hasDraft => setDraftsByKind(old => old.sentence === hasDraft ? old : {...old, sentence: hasDraft}) : undefined}
             onDelete={deleteEntry}
