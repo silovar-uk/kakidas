@@ -37,3 +37,28 @@ export function visibleInsertionIndex(allEntries, visibleEntries, parentId, sibl
   }
   return visibleEntries.length;
 }
+
+/**
+ * A caret index is measured against ALL persisted siblings. When completed
+ * siblings are hidden, indexing into visible siblings with that number skips
+ * the user's actual previous item. Resolve by ID against the stored prefix.
+ */
+export function previousVisibleSiblingAt(allEntries, visibleEntries, parentId, insertIndex) {
+  const siblings = allEntries.filter(row => (row.parent_id ?? null) === parentId);
+  const visibleIds = new Set(visibleEntries.map(row => row.id));
+  const limit = Math.max(0, Math.min(Number.isFinite(insertIndex) ? Math.floor(insertIndex) : 0, siblings.length));
+  for (let at = limit - 1; at >= 0; at--) {
+    if (visibleIds.has(siblings[at].id)) return siblings[at];
+  }
+  return null;
+}
+
+/** Indent the caret under the actual previous visible sibling, at its stored child tail. */
+export function indentPositionAt(allEntries, visibleEntries, parentId, insertIndex) {
+  const preceding = previousVisibleSiblingAt(allEntries, visibleEntries, parentId, insertIndex);
+  if (!preceding) return null;
+  return {
+    parentId: preceding.id,
+    index: allEntries.filter(row => row.parent_id === preceding.id).length,
+  };
+}

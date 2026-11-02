@@ -14,7 +14,7 @@ import type { EntryRow, EntryTreeNode, EntryUpdate } from "../types/memo";
 import { normalizeOutlineItems, itemsFromOutlinePaste, analyzeOutlinePaste, serializeOutlineItems, type OutlinePasteItem } from "../lib/outlinePaste.js";
 import type { OutlinePasteBatchResult } from "../repositories/memoRepository";
 import type { OutlineCompletionChange } from "../lib/outlineCompletion.js";
-import { siblingPositionAfter, visibleInsertionIndex } from "../lib/outlineInsert.js";
+import { siblingPositionAfter, visibleInsertionIndex, indentPositionAt } from "../lib/outlineInsert.js";
 import { siblingMoveIndex } from "../lib/outlineMove.js";
 import { outlineEmphasisSegments, toggleOutlineEmphasis, stripOutlineEmphasis } from "../lib/outlineEmphasis.js";
 import { useDraftPersistence } from "../hooks/useDraftPersistence";
@@ -318,6 +318,22 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
   const childrenOf = (parentId: string | null) => entries
     .filter((row) => row.parent_id === parentId)
     .sort((a, b) => a.sort_order - b.sort_order || a.created_at.localeCompare(b.created_at));
+  /** A single Tab target resolver for both writing desk and inline input. */
+  const indentTarget = (position: Caret): Caret | null => {
+    // The desk can call Tab before a newly saved row reaches the rendered tree.
+    // Prefer that last committed ID over the still-stale stored sibling indices.
+    const now = Date.now();
+    const recent = [...recentRef.current].reverse().find(([id, place]) =>
+      now - place.at < 2_000 &&
+      place.parentId === position.parentId &&
+      place.index === position.index - 1 &&
+      !allNodeById.has(id));
+    if (recent) {
+      const parentId = recent[0];
+      return { parentId, index: persistedChildrenOf(parentId).length };
+    }
+    return indentPositionAt(allEntries, visible, position.parentId, position.index);
+  };
   const locationOf = (id: string): MoveHistory | null => {
     const row = allNodeById.get(id);
     if (!row) return null;
@@ -614,30 +630,24 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
       setCaret({ parentId: position.parentId, index: position.index + 1 });
     },
     indentCaret: () => {
-      const { parentId, index } = resolvedCaret();
-      let previousId = childrenOf(parentId)[index - 1]?.id;
-      if (!previousId) {
-        const now = Date.now();
-        for (const [id, recent] of recentRef.current) {
-          if (now - recent.at < 2_000 && recent.parentId === parentId && recent.index === index - 1) previousId = id;
-        }
-      }
-      if (!previousId) return;
-      const parentKey = previousId;
-      setCollapsed((before) => { const next = new Set(before); next.delete(parentKey); return next; });
-      setCaret({ parentId: parentKey, index: childrenOf(parentKey).length });
+      // Do not clamp a fresh, not-yet-rendered row's insertion position.
+      const target = indentTarget(caretRef.current ?? resolvedCaret());
+      if (!target) return;
+      setCollapsed(before => { const next = new Set(before); next.delete(target.parentId!); return next; });
+      setCaret(target);
     },
     outdentCaret: () => {
-      const { parentId } = resolvedCaret();
+      const { parentId } = caretRef.current ?? resolvedCaret();
       if (parentId === null || parentId === scopeId) return;
-      const parent = nodeById.get(parentId);
-      if (parent) {
-        setCaret({ parentId: parent.parent_id, index: childrenOf(parent.parent_id).findIndex((item) => item.id === parentId) + 1 });
+      const position = siblingPositionAfter(allEntries, parentId);
+      if (position) {
+        setCaret(position);
         return;
       }
-      // 置いたばかりの行の下にいるときは、その行の次の位置へ。
+      // The parent may have been created but not yet rendered.
       const recent = recentRef.current.get(parentId);
-      if (recent) setCaret({ parentId: recent.parentId, index: recent.index + 1 });
+      if (recent && Date.now() - recent.at < 2_000)
+        setCaret({ parentId: recent.parentId, index: recent.index + 1 });
     },
     focusRowAboveCaret: () => {
       const row = visible[spot.at - 1];
@@ -1126,19 +1136,17 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
       const current = pendingRef.current;
       if (!current) return;
       if (event.shiftKey && current.parentId !== scopeId && current.parentId) {
-        const parent = nodeById.get(current.parentId);
-        if (parent) {
-          const position = siblingAfter(parent);
+        const position = siblingPositionAfter(allEntries, current.parentId);
+        if (position) {
           changePending({ ...position, value: current.value });
           setCaret(position);
         }
       } else if (!event.shiftKey) {
-        const previous = childrenOf(current.parentId)[current.index - 1];
-        if (previous) {
-          const next = { parentId: previous.id, index: childrenOf(previous.id).length };
-          setCollapsed(old => { const newer = new Set(old); newer.delete(previous.id); return newer; });
-          changePending({ ...next, value: current.value });
-          setCaret(next);
+        const target = indentTarget({ parentId: current.parentId, index: current.index });
+        if (target) {
+          setCollapsed(old => { const next = new Set(old); next.delete(target.parentId!); return next; });
+          changePending({ ...target, value: current.value });
+          setCaret(target);
         }
       }
     }
