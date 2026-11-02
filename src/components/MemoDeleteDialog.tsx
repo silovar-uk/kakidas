@@ -3,6 +3,7 @@ import { lockBodyScroll } from "../lib/bodyScrollLock";
 
 type MemoDeleteDialogProps = {
   memo: { id: string; title: string } | null;
+  bulkMemos?: { id: string; title: string }[] | null;
   isDeleting?: boolean;
   onClose: () => void;
   onConfirm: () => Promise<void> | void;
@@ -14,6 +15,7 @@ type MemoDeleteDialogProps = {
  */
 export function MemoDeleteDialog({
   memo,
+  bulkMemos = null,
   isDeleting = false,
   onClose,
   onConfirm,
@@ -21,7 +23,7 @@ export function MemoDeleteDialog({
   const panelRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
-    if (!memo) return;
+    if (!memo && !bulkMemos?.length) return;
 
     const releaseScrollLock = lockBodyScroll();
     const onKeyDown = (event: KeyboardEvent) => {
@@ -35,9 +37,10 @@ export function MemoDeleteDialog({
       releaseScrollLock();
       window.removeEventListener("keydown", onKeyDown);
     };
-  }, [isDeleting, memo, onClose]);
+  }, [isDeleting, memo, bulkMemos, onClose]);
 
-  if (!memo) return null;
+  if (!memo && !bulkMemos?.length) return null;
+  const isBulk = Boolean(bulkMemos?.length);
 
   return (
     <div className="cloud-dialog memo-delete-dialog" role="presentation">
@@ -59,15 +62,24 @@ export function MemoDeleteDialog({
         tabIndex={-1}
       >
         <p className="memo-delete-dialog__eyebrow">DELETE MEMO</p>
-        <h2 id="memo-delete-dialog-title">このメモを削除しますか？</h2>
+        <h2 id="memo-delete-dialog-title">
+          {isBulk ? `${bulkMemos!.length}件のメモを削除しますか？` : "このメモを削除しますか？"}
+        </h2>
         <div className="memo-delete-dialog__target">
-          <strong>{memo.title}</strong>
+          {isBulk ? (
+            <ul className="memo-delete-dialog__targets">
+              {bulkMemos!.slice(0, 6).map((target) => <li key={target.id}>{target.title}</li>)}
+              {bulkMemos!.length > 6 ? <li>ほか {bulkMemos!.length - 6} 件</li> : null}
+            </ul>
+          ) : <strong>{memo!.title}</strong>}
         </div>
         <p id="memo-delete-dialog-description" className="cloud-dialog__body">
           この端末のメモ一覧から削除します。クラウドへ送ったコピーがある場合、クラウド上のメモは残ります。
         </p>
         <p className="memo-delete-dialog__hint">
-          削除後に戻すには、事前に書き出したバックアップが必要です。
+          {isBulk
+            ? "削除後は「元に戻す」で復元できます。次の一括削除を行うと、以前の復元履歴は置き換わります。"
+            : "削除後に戻すには、事前に書き出したバックアップが必要です。"}
         </p>
 
         <div className="cloud-dialog__actions">
@@ -85,7 +97,7 @@ export function MemoDeleteDialog({
             onClick={() => void onConfirm()}
             disabled={isDeleting}
           >
-            {isDeleting ? "削除中…" : "削除する"}
+            {isDeleting ? "削除中…" : isBulk ? `${bulkMemos!.length}件を削除` : "削除する"}
           </button>
         </div>
       </section>

@@ -591,3 +591,62 @@
     margin-top: 16px;
   }
 }
+
+/* Bulk memo selection: the existing list stays quiet until selection starts. */
+.memo-bulk-toolbar {
+  margin-top: 16px;
+  border: 1px solid var(--color-line-strong);
+  border-radius: 12px;
+  padding: 16px;
+  background: var(--color-sheet);
+}
+.memo-bulk-toolbar__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.memo-bulk-toolbar__delete {
+  color: var(--color-danger, #a52727);
+  border-color: color-mix(in srgb, var(--color-danger, #a52727) 30%, var(--color-line));
+}
+.memo-bulk-undo {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 11px 15px;
+  margin: 12px 0;
+  border: 1px solid var(--color-line-strong);
+  border-radius: 11px;
+  background: var(--color-sheet);
+  color: var(--color-ink);
+  font-size: 13px;
+}
+.memo-bulk-undo > span { flex: 1; min-width: 210px; }
+.memo-bulk-undo > button {
+  padding: 7px 10px;
+  border: 1px solid var(--color-line);
+  border-radius: 7px;
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-weight: 750;
+}
+.memo-bulk-undo > .memo-bulk-undo__dismiss {
+  border: 0;
+  background: transparent;
+  color: var(--color-ink-3);
+}
+.memo-delete-dialog__targets {
+  max-height: 200px;
+  margin: 0;
+  padding: 0 0 0 18px;
+  overflow-y: auto;
+  text-align: left;
+  line-height: 1.8;
+  font-size: 13px;
+}
+@media (max-width: 720px) {
+  .memo-bulk-toolbar__actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .memo-bulk-toolbar__actions > button { width: 100%; min-width: 0; font-size: 12px; }
+}

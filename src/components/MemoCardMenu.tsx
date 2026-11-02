@@ -49,7 +49,7 @@ export function MemoCardMenu({
   };
 
   return (
-    <details ref={detailsRef} className="memo-card-menu">
+    <details ref={detailsRef} className="memo-card-menu" name="kakidas-memo-list-menu">
       <summary
         className="memo-card-menu__trigger"
         aria-label={`「${memoTitle}」の操作を開く`}

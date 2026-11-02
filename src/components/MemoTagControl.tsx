@@ -85,6 +85,7 @@ export function MemoTagControl({
   const handleKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
     if (event.key !== "Escape") return;
     event.preventDefault();
+    event.stopPropagation();
     closeWithoutSaving();
   };
 

@@ -79,6 +79,20 @@ export type EntryTagBulkUpdateResult = {
   updated_count: number;
 };
 
+export type MemoDeletionUndoSummary = {
+  id: "latest";
+  count: number;
+  titles: string[];
+  created_at: string;
+};
+
+type MemoDeletionUndoBatch = MemoDeletionUndoSummary & {
+  memos: MemoRow[];
+  entries: EntryRow[];
+  sync_metas: MemoSyncMetaRow[];
+  drafts: EntryDraftRow[];
+};
+
 export type OutlinePasteBatchResult = {
   memo_id: string;
   created: EntryRow[];
@@ -106,6 +120,9 @@ export interface MemoRepository {
   /** 同じタグのメモから、タグだけをまとめて外す。 */
   clearTag(currentTag: string): Promise<MemoTagBulkUpdateResult>;
   deleteMemo(memoId: string): Promise<void>;
+  deleteMemosBatch(memoIds: string[]): Promise<MemoDeletionUndoSummary>;
+  getLastMemoDeletion(): Promise<MemoDeletionUndoSummary | null>;
+  undoLastMemoDeletion(): Promise<void>;
   /** 新規作成直後の既定タイトル・項目なしメモだけを、安全に破棄する。 */
   discardUntitledEmptyMemo(memoId: string): Promise<boolean>;
 
@@ -628,6 +645,122 @@ class IndexedDbMemoRepository implements MemoRepository {
       updated_count: matchingMemos.length,
       memo_ids: matchingMemos.map((memo) => memo.id),
     };
+  }
+
+  /** 最新の一括削除だけを復元可能にする。再読み込みしても失われない。 */
+  async getLastMemoDeletion(): Promise<MemoDeletionUndoSummary | null> {
+    const db = await getDatabase();
+    const tx = db.transaction(STORE_NAMES.memoDeletionUndo, "readonly");
+    const batch = await requestToPromise(
+      tx.objectStore(STORE_NAMES.memoDeletionUndo).get("latest") as IDBRequest<MemoDeletionUndoBatch | undefined>,
+    );
+    return batch
+      ? { id: batch.id, count: batch.count, titles: batch.titles, created_at: batch.created_at }
+      : null;
+  }
+
+  async deleteMemosBatch(memoIds: string[]): Promise<MemoDeletionUndoSummary> {
+    const ids = [...new Set(memoIds)].filter(Boolean);
+    if (ids.length === 0) throw new Error("削除するメモを選んでください。");
+
+    const db = await getDatabase();
+    const tx = db.transaction(
+      [STORE_NAMES.memos, STORE_NAMES.entries, STORE_NAMES.memoSyncMeta, STORE_NAMES.drafts, STORE_NAMES.memoDeletionUndo],
+      "readwrite",
+    );
+    const memoStore = tx.objectStore(STORE_NAMES.memos);
+    const entryStore = tx.objectStore(STORE_NAMES.entries);
+    const syncMetaStore = tx.objectStore(STORE_NAMES.memoSyncMeta);
+    const draftStore = tx.objectStore(STORE_NAMES.drafts);
+    const undoStore = tx.objectStore(STORE_NAMES.memoDeletionUndo);
+
+    try {
+      // 変更前にすべての対象が存在することを確かめる。
+      const rawMemos = await Promise.all(ids.map((id) =>
+        requestToPromise(memoStore.get(id) as IDBRequest<LegacyMemoRow | undefined>),
+      ));
+      if (rawMemos.some((memo) => !memo || normalizeMemoRow(memo).deleted_at !== null)) {
+        throw new Error("選択中のメモが変更されました。再読み込みして選び直してください。");
+      }
+      const [entryGroups, rawSyncMetas, draftGroups] = await Promise.all([
+        Promise.all(ids.map((id) => this.getEntriesForMemo(entryStore, id))),
+        Promise.all(ids.map((id) =>
+          requestToPromise(syncMetaStore.get(id) as IDBRequest<MemoSyncMetaRow | undefined>),
+        )),
+        Promise.all(ids.map((id) =>
+          requestToPromise(draftStore.index("by_memo_id").getAll(id) as IDBRequest<EntryDraftRow[]>),
+        )),
+      ]);
+
+      const memos = rawMemos.map((memo) => normalizeMemoRow(memo!));
+      const entries = entryGroups.flat();
+      const drafts = draftGroups.flat();
+      const deletedAt = nowIso();
+      const batch: MemoDeletionUndoBatch = {
+        id: "latest",
+        count: memos.length,
+        titles: memos.map((memo) => memo.title),
+        created_at: deletedAt,
+        memos,
+        entries,
+        sync_metas: rawSyncMetas.filter((meta): meta is MemoSyncMetaRow => Boolean(meta)),
+        drafts,
+      };
+
+      // 復元用スナップショットと削除操作は同じトランザクションにする。
+      undoStore.put(batch);
+      for (const memo of memos) {
+        memoStore.put({ ...memo, updated_at: deletedAt, deleted_at: deletedAt } satisfies MemoRow);
+        syncMetaStore.delete(memo.id);
+      }
+      for (const entry of entries) {
+        if (entry.deleted_at === null) {
+          entryStore.put({ ...entry, updated_at: deletedAt, deleted_at: deletedAt } satisfies EntryRow);
+        }
+      }
+      for (const draft of drafts) draftStore.delete(draft.id);
+
+      await transactionToPromise(tx);
+      return { id: batch.id, count: batch.count, titles: batch.titles, created_at: batch.created_at };
+    } catch (error) {
+      try { tx.abort(); } catch { /* already settled */ }
+      throw error;
+    }
+  }
+
+  async undoLastMemoDeletion(): Promise<void> {
+    const db = await getDatabase();
+    const tx = db.transaction(
+      [STORE_NAMES.memos, STORE_NAMES.entries, STORE_NAMES.memoSyncMeta, STORE_NAMES.drafts, STORE_NAMES.memoDeletionUndo],
+      "readwrite",
+    );
+    const memoStore = tx.objectStore(STORE_NAMES.memos);
+    const entryStore = tx.objectStore(STORE_NAMES.entries);
+    const syncMetaStore = tx.objectStore(STORE_NAMES.memoSyncMeta);
+    const draftStore = tx.objectStore(STORE_NAMES.drafts);
+    const undoStore = tx.objectStore(STORE_NAMES.memoDeletionUndo);
+
+    try {
+      const batch = await requestToPromise(
+        undoStore.get("latest") as IDBRequest<MemoDeletionUndoBatch | undefined>,
+      );
+      if (!batch) throw new Error("復元できる一括削除がありません。");
+      const currentMemos = await Promise.all(batch.memos.map((memo) =>
+        requestToPromise(memoStore.get(memo.id) as IDBRequest<LegacyMemoRow | undefined>),
+      ));
+      if (currentMemos.some((memo) => !memo || normalizeMemoRow(memo).deleted_at === null)) {
+        throw new Error("削除後にメモの状態が変更されました。安全のため復元を中止しました。");
+      }
+      for (const memo of batch.memos) memoStore.put(memo);
+      for (const entry of batch.entries) entryStore.put(entry);
+      for (const meta of batch.sync_metas) syncMetaStore.put(meta);
+      for (const draft of batch.drafts) draftStore.put(draft);
+      undoStore.delete("latest");
+      await transactionToPromise(tx);
+    } catch (error) {
+      try { tx.abort(); } catch { /* already settled */ }
+      throw error;
+    }
   }
 
   async deleteMemo(memoId: string): Promise<void> {

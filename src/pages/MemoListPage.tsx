@@ -25,7 +25,7 @@ import {
   refreshCloudSyncStates,
   uploadMemosToCloud,
 } from "../repositories/cloudMemoRepository";
-import { memoRepository } from "../repositories/memoRepository";
+import { memoRepository, type MemoDeletionUndoSummary } from "../repositories/memoRepository";
 import {
   type BackupPayload,
   type CloudState,
@@ -194,7 +194,13 @@ export function MemoListPage() {
   }, []);
   const [isCreating, setIsCreating] = useState(false);
   const [isCloudDialogOpen, setIsCloudDialogOpen] = useState(false);
-  const [isUploadMode, setIsUploadMode] = useState(false);
+  const [selectionMode, setSelectionMode] = useState<"none" | "upload" | "manage">("none");
+  const isSelectionMode = selectionMode !== "none";
+  const lastSelectedMemoIdRef = useRef<string | null>(null);
+  const [bulkPendingDeletion, setBulkPendingDeletion] = useState<MemoListItem[] | null>(null);
+  const [lastDeletedBatch, setLastDeletedBatch] = useState<MemoDeletionUndoSummary | null>(null);
+  const [isUndoNoticeDismissed, setIsUndoNoticeDismissed] = useState(false);
+  const [isUndoingBatch, setIsUndoingBatch] = useState(false);
   const [selectedMemoIds, setSelectedMemoIds] = useState<Set<string>>(new Set());
   const [isUploadDialogOpen, setIsUploadDialogOpen] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
@@ -265,6 +271,45 @@ export function MemoListPage() {
   useEffect(() => {
     writeCollapsedMemoTagKeys(collapsedTagKeys);
   }, [collapsedTagKeys]);
+
+  // 一覧全体と各メモのメニューは、常に1つだけ開く。
+  // タグ入力中のEscapeは子コンポーネント側で処理する。
+  useEffect(() => {
+    const closeMenus = () => {
+      document.querySelectorAll<HTMLDetailsElement>('details[name="kakidas-memo-list-menu"][open]')
+        .forEach((menu) => menu.removeAttribute("open"));
+    };
+    const onPointerDown = (event: PointerEvent) => {
+      if (event.target instanceof Element &&
+          event.target.closest('details[name="kakidas-memo-list-menu"]')) return;
+      closeMenus();
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || event.defaultPrevented) return;
+      const openMenu = document.querySelector<HTMLDetailsElement>(
+        'details[name="kakidas-memo-list-menu"][open]',
+      );
+      if (!openMenu) return;
+      event.preventDefault();
+      const trigger = openMenu.querySelector<HTMLElement>("summary");
+      openMenu.removeAttribute("open");
+      trigger?.focus();
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    void memoRepository.getLastMemoDeletion().then((batch) => {
+      if (active) setLastDeletedBatch(batch);
+    }).catch(() => { /* メモ本体は通常どおり使えるようにする */ });
+    return () => { active = false; };
+  }, []);
 
   const toMemoSearchText = (detail: MemoWithEntries): string =>
     [
@@ -437,6 +482,27 @@ export function MemoListPage() {
     return groups;
   }, [tagSummaries, visibleMemos]);
 
+  // 「全選択」は画面に表示されているメモだけ。折りたたみ済みのタグは対象外。
+  const selectableMemos = useMemo(
+    () => viewMode === "tags"
+      ? tagGroups.filter((group) => !collapsedTagKeys.has(group.key)).flatMap((group) => group.memos)
+      : visibleMemos,
+    [collapsedTagKeys, tagGroups, viewMode, visibleMemos],
+  );
+  const allVisibleSelected = selectableMemos.length > 0 &&
+    selectableMemos.every((memo) => selectedMemoIds.has(memo.id));
+
+  const toggleAllVisible = () => {
+    setSelectedMemoIds((current) => {
+      const next = new Set(current);
+      for (const memo of selectableMemos) {
+        if (allVisibleSelected) next.delete(memo.id);
+        else next.add(memo.id);
+      }
+      return next;
+    });
+  };
+
   const toggleTagGroup = (key: string) => {
     setCollapsedTagKeys((current) => {
       const next = new Set(current);
@@ -561,6 +627,48 @@ export function MemoListPage() {
     }
   };
 
+  const requestBulkMemoDeletion = () => {
+    if (isDeletingMemo || selectedTargets.length === 0) return;
+    const targets = memos.filter((memo) => selectedMemoIds.has(memo.id));
+    setBulkPendingDeletion(targets);
+    setNotice(null);
+  };
+
+  const confirmBulkMemoDeletion = async () => {
+    if (!bulkPendingDeletion?.length || isDeletingMemo) return;
+    setIsDeletingMemo(true);
+    try {
+      const batch = await memoRepository.deleteMemosBatch(bulkPendingDeletion.map((memo) => memo.id));
+      setBulkPendingDeletion(null);
+      cancelUploadMode();
+      setLastDeletedBatch(batch);
+      setIsUndoNoticeDismissed(false);
+      await refresh();
+      setNotice(`${batch.count}件のメモを削除しました。`);
+    } catch (caught) {
+      setBulkPendingDeletion(null);
+      setNotice(caught instanceof Error ? caught.message : "一括削除できませんでした。");
+    } finally {
+      setIsDeletingMemo(false);
+    }
+  };
+
+  const handleUndoLastDeletion = async () => {
+    if (isUndoingBatch || !lastDeletedBatch) return;
+    setIsUndoingBatch(true);
+    try {
+      await memoRepository.undoLastMemoDeletion();
+      await refresh();
+      setLastDeletedBatch(null);
+      setIsUndoNoticeDismissed(false);
+      setNotice("削除したメモを復元しました。");
+    } catch (caught) {
+      setNotice(caught instanceof Error ? caught.message : "削除を元に戻せませんでした。");
+    } finally {
+      setIsUndoingBatch(false);
+    }
+  };
+
   const handleSaveMemoTag = async (
     memo: MemoListItem,
     tag: string | null,
@@ -655,7 +763,7 @@ export function MemoListPage() {
 
     setNotice(null);
     setSelectedMemoIds(new Set());
-    setIsUploadMode(true);
+    setSelectionMode("upload");
   };
 
   const openSingleUpload = (memo: MemoListItem) => {
@@ -670,20 +778,31 @@ export function MemoListPage() {
   };
 
   const cancelUploadMode = () => {
-    setIsUploadMode(false);
+    setSelectionMode("none");
     setSelectedMemoIds(new Set());
+    lastSelectedMemoIdRef.current = null;
   };
 
-  const toggleMemoSelection = (memoId: string) => {
+  const openManageMode = () => {
+    setNotice(null);
+    setSelectedMemoIds(new Set());
+    lastSelectedMemoIdRef.current = null;
+    setSelectionMode("manage");
+  };
+
+  const toggleMemoSelection = (memoId: string, range = false) => {
     setSelectedMemoIds((current) => {
       const next = new Set(current);
-      if (next.has(memoId)) {
-        next.delete(memoId);
-      } else {
-        next.add(memoId);
-      }
+      const visibleIds = selectableMemos.map((memo) => memo.id);
+      const from = visibleIds.indexOf(lastSelectedMemoIdRef.current ?? "");
+      const to = visibleIds.indexOf(memoId);
+      if (range && from >= 0 && to >= 0) {
+        for (const id of visibleIds.slice(Math.min(from, to), Math.max(from, to) + 1)) next.add(id);
+      } else if (next.has(memoId)) next.delete(memoId);
+      else next.add(memoId);
       return next;
     });
+    lastSelectedMemoIdRef.current = memoId;
   };
 
   const handleUploadConfirm = async () => {
@@ -806,12 +925,12 @@ export function MemoListPage() {
         key={memo.id}
         className={`memo-card ${selected ? "memo-card--selected" : ""}`}
       >
-        {isUploadMode ? (
+        {isSelectionMode ? (
           <button
             type="button"
             className="memo-card__select"
             aria-pressed={selected}
-            onClick={() => toggleMemoSelection(memo.id)}
+            onClick={(event) => toggleMemoSelection(memo.id, event.shiftKey)}
           >
             <span className="memo-card__checkbox" aria-hidden="true">
               {selected ? "✓" : ""}
@@ -851,7 +970,7 @@ export function MemoListPage() {
           </div>
         )}
 
-        {isUploadMode ? (
+        {isSelectionMode ? (
           <Link
             to={`/memos/${memo.id}`}
             className="memo-card__open-link"
@@ -922,31 +1041,32 @@ export function MemoListPage() {
         </button>
       </section>
 
-      {isUploadMode ? (
-        <section className="cloud-selection-toolbar" aria-label="クラウドへ送るメモを選択">
+      {isSelectionMode ? (
+        <section className="cloud-selection-toolbar memo-bulk-toolbar" aria-label="複数のメモを操作">
           <div>
-            <strong>送るメモを選ぶ</strong>
-            <p>選んだものだけを送ります。ローカルのメモは残ります。</p>
+            <strong>{selectedTargets.length}件を選択中</strong>
+            <p>{selectionMode === "upload" ? "クラウドへ送るメモを選んでください。" : "削除やクラウド送信するメモを選んでください。"}検索やタグ表示も利用できます。</p>
           </div>
-          <div className="cloud-selection-toolbar__actions">
-            <button
-              type="button"
-              className="secondary-button"
-              onClick={cancelUploadMode}
-            >
-              キャンセル
+          <div className="cloud-selection-toolbar__actions memo-bulk-toolbar__actions">
+            <button type="button" className="secondary-button" disabled={selectableMemos.length === 0}
+              onClick={toggleAllVisible}>
+              {allVisibleSelected ? "表示中の選択を解除" : "表示中を全選択"}
             </button>
-            <button
-              type="button"
-              className="primary-button"
-              disabled={selectedTargets.length === 0}
-              onClick={() => setIsUploadDialogOpen(true)}
-            >
-              {selectedTargets.length}件を確認
+            <button type="button" className="secondary-button" onClick={cancelUploadMode}>キャンセル</button>
+            <button type="button" className="secondary-button memo-bulk-toolbar__delete" disabled={selectedTargets.length === 0}
+              onClick={requestBulkMemoDeletion}>
+              {selectedTargets.length}件を削除
+            </button>
+            <button type="button" className="primary-button" disabled={selectedTargets.length === 0}
+              onClick={() => {
+                if (!isConfigured || !user) { setIsCloudDialogOpen(true); return; }
+                setIsUploadDialogOpen(true);
+              }}>
+              {selectedTargets.length}件をクラウドへ送る
             </button>
           </div>
         </section>
-      ) : (
+      ) : null}
         <section className="memo-list-toolbar memo-list-toolbar--quiet" aria-label="メモを探す・表示する">
           <div className="memo-list-toolbar__primary">
             <div className="memo-search">
@@ -987,7 +1107,8 @@ export function MemoListPage() {
               </button>
             </div>
 
-            <details className="memo-tools-menu">
+            {!isSelectionMode ? (
+            <details className="memo-tools-menu" name="kakidas-memo-list-menu">
               <summary className="memo-tools-menu__trigger" aria-label="一覧のツールを開く" title="ツール・設定">
                 <span aria-hidden="true">•••</span>
               </summary>
@@ -1015,6 +1136,14 @@ export function MemoListPage() {
                   <span>タグを整理</span>
                 </Link>
 
+                <button type="button" className="memo-tools-menu__item" onClick={openManageMode}>
+                  <span aria-hidden="true">☑</span><span>複数選択</span>
+                </button>
+                {lastDeletedBatch ? (
+                  <button type="button" className="memo-tools-menu__item" disabled={isUndoingBatch} onClick={() => void handleUndoLastDeletion()}>
+                    <span aria-hidden="true">↶</span><span>直前の削除を元に戻す</span>
+                  </button>
+                ) : null}
                 <div className="memo-tools-menu__divider" />
 
                 <button
@@ -1061,6 +1190,7 @@ export function MemoListPage() {
                 </label>
               </div>
             </details>
+            ) : null}
           </div>
 
           <div className="memo-list-toolbar__status">
@@ -1078,8 +1208,17 @@ export function MemoListPage() {
             )}
           </div>
         </section>
-      )}
 
+      {lastDeletedBatch && !isUndoNoticeDismissed ? (
+        <div className="memo-bulk-undo" role="status">
+          <span>直前に削除した{lastDeletedBatch.count}件のメモを復元できます。</span>
+          <button type="button" onClick={() => void handleUndoLastDeletion()} disabled={isUndoingBatch}>
+            {isUndoingBatch ? "復元中…" : "元に戻す"}
+          </button>
+          <button type="button" className="memo-bulk-undo__dismiss" aria-label="復元の案内を閉じる"
+            onClick={() => setIsUndoNoticeDismissed(true)}>×</button>
+        </div>
+      ) : null}
       <NoticeToast
         key={notice?.id}
         message={notice?.message ?? null}
@@ -1119,10 +1258,6 @@ export function MemoListPage() {
             検索を解除
           </button>
         </section>
-      ) : isUploadMode ? (
-        <ul className="memo-list memo-list--selecting">
-          {sortedMemos.map(renderMemoCard)}
-        </ul>
       ) : viewMode === "tags" ? (
         <div className="memo-tag-groups" aria-label="タグ別のメモ">
           {tagGroups.map((group) => {
@@ -1149,7 +1284,7 @@ export function MemoListPage() {
                 </button>
 
                 {!collapsed ? (
-                  <ul className="memo-list">
+                  <ul className={`memo-list ${isSelectionMode ? "memo-list--selecting" : ""}`}>
                     {group.memos.map(renderMemoCard)}
                   </ul>
                 ) : null}
@@ -1162,7 +1297,7 @@ export function MemoListPage() {
           </Link>
         </div>
       ) : (
-        <ul className="memo-list">
+        <ul className={`memo-list ${isSelectionMode ? "memo-list--selecting" : ""}`}>
           {visibleMemos.map(renderMemoCard)}
         </ul>
       )}
@@ -1173,11 +1308,12 @@ export function MemoListPage() {
 
       <MemoDeleteDialog
         memo={memoPendingDeletion}
+        bulkMemos={bulkPendingDeletion}
         isDeleting={isDeletingMemo}
         onClose={() => {
-          if (!isDeletingMemo) setMemoPendingDeletion(null);
+          if (!isDeletingMemo) { setMemoPendingDeletion(null); setBulkPendingDeletion(null); }
         }}
-        onConfirm={confirmMemoDeletion}
+        onConfirm={bulkPendingDeletion ? confirmBulkMemoDeletion : confirmMemoDeletion}
       />
 
       <CloudAccountDialog
