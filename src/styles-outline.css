@@ -37,6 +37,8 @@
   .outline__marker--bullet { color: var(--color-ink-2); font-size: 14px; }
   .outline__marker--toggle { background: transparent; cursor: pointer; }
   .outline__marker--toggle:hover { color: var(--color-shu-ink); }
+  /* Clickable numbering is discoverable on hover, without permanent extra icons. */
+  .outline__marker--number.outline__marker--toggle:hover { text-decoration:underline dotted; text-underline-offset:3px; }
   .outline__marker--toggle:focus-visible { outline: 2px solid var(--color-ink); outline-offset: 1px; }
   .outline__marker--toggle[aria-expanded="false"] { color: var(--color-shu-ink); font-weight: 700; }
   /* 次の挿入場所は操作直後だけ薄い線で見せる。通常の項目を押し下げない。 */

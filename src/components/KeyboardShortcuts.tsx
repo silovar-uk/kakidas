@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { lockBodyScroll } from "../lib/bodyScrollLock";
 import { memoRepository } from "../repositories/memoRepository";
 
-type CommandId = "new-memo" | "outline" | "paragraph" | "reference" | "numbering" | "help";
+type CommandId = "new-memo" | "outline" | "paragraph" | "reference" | "numbering" | "fold-branch" | "fold-level" | "help";
 type Command = { id: CommandId; label: string; detail: string; keys: string; keywords: string };
 
 const COMMANDS: Command[] = [
@@ -12,6 +12,8 @@ const COMMANDS: Command[] = [
   { id: "paragraph", label: "段落へ移動", detail: "書き口を段落に移して入力を始める", keys: "Ctrl/⌘ + Shift + 2", keywords: "文章 paragraph" },
   { id: "reference", label: "参考URLへ移動", detail: "書き口を参考URLに移して入力を始める", keys: "Ctrl/⌘ + Shift + 3", keywords: "リンク URL 調査 reference" },
   { id: "numbering", label: "階層番号・ビュレットを切り替え", detail: "アウトラインの「1.1」と「•」を切り替える", keys: "Ctrl/⌘ + Shift + 4", keywords: "数字 見出し 番号 ナンバリング bullet numbered" },
+  { id: "fold-branch", label: "選択した枝を開閉", detail: "番号・ビュレットのクリックと同じ。子階層を表示／非表示", keys: "Ctrl/⌘ + .", keywords: "折りたたみ 折り畳み 展開 開閉 collapse expand" },
+  { id: "fold-level", label: "同じ階層の枝を一括開閉", detail: "選択行と同じ深さの親項目をまとめて開閉", keys: "Ctrl/⌘ + Shift + .", keywords: "階層ごと まとめて 一括 折りたたみ collapse all expand all" },
   { id: "help", label: "ショートカット一覧を見る", detail: "行の移動・完了・階層変更なども確認", keys: "Ctrl/⌘ + /", keywords: "ヘルプ help 操作 説明" },
 ];
 
@@ -30,7 +32,7 @@ export function KeyboardShortcuts() {
   const dialogRef = useRef<HTMLElement>(null);
 
   const commands = useMemo(() => COMMANDS.filter(command =>
-    isEditor || !["outline", "paragraph", "reference", "numbering"].includes(command.id)
+    isEditor || !["outline", "paragraph", "reference", "numbering", "fold-branch", "fold-level"].includes(command.id)
   ), [isEditor]);
   const matching = useMemo(() => {
     const term = query.trim().toLocaleLowerCase();
@@ -77,7 +79,9 @@ export function KeyboardShortcuts() {
     }
     if (!isEditor) return;
     setPanel(null);
-    if (id === "numbering") {
+    if (id === "fold-branch" || id === "fold-level") {
+      window.dispatchEvent(new Event(id === "fold-branch" ? "kakidas:outline-fold-branch" : "kakidas:outline-fold-level"));
+    } else if (id === "numbering") {
       window.dispatchEvent(new Event("kakidas:toggle-outline-numbering"));
     } else {
       const kind = ({ outline: "sentence", paragraph: "paragraph", reference: "word" } as const)[id];
@@ -208,6 +212,7 @@ export function KeyboardShortcuts() {
               </div>
             )}
             <p>アウトライン内：Enterで次の行、Tab / Shift+Tabで階層変更、F2で編集、Ctrl/⌘+Enterで完了、Alt+Shift+↑↓で並び替え。</p>
+            <p>親項目の番号・•をクリックして子階層を開閉。Ctrl/⌘ + . で選択中の枝、Ctrl/⌘ + Shift + . で同じ深さの枝をまとめて開閉。開閉状態はメモごとに記憶します。</p>
             <p>編集中：Ctrl/⌘+Bで強調、Shift+Enterで行内改行。余白はAlt+Q。</p>
             <button type="button" className="command-palette__help-action"
               onClick={openCommands}>操作を検索する <span>Ctrl/⌘ + K</span></button>

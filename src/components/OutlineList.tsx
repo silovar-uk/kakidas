@@ -16,6 +16,7 @@ import type { OutlinePasteBatchResult } from "../repositories/memoRepository";
 import type { OutlineCompletionChange } from "../lib/outlineCompletion.js";
 import { siblingPositionAfter, visibleInsertionIndex, indentPositionAt } from "../lib/outlineInsert.js";
 import { siblingMoveIndex } from "../lib/outlineMove.js";
+import { foldableBranchesAtLevel, toggleFoldedLevel, parseFoldedIds } from "../lib/outlineFold.js";
 import { outlineEmphasisSegments, toggleOutlineEmphasis, stripOutlineEmphasis } from "../lib/outlineEmphasis.js";
 import { useDraftPersistence } from "../hooks/useDraftPersistence";
 import { buildEntryDraftId, type EntryDraftSnapshot } from "../repositories/draftRepository";
@@ -269,7 +270,16 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
   useEffect(() => () => {
     if (caretPreviewTimerRef.current !== null) window.clearTimeout(caretPreviewTimerRef.current);
   }, []);
-  const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
+  // View-only preference, per memo. A reload does not unexpectedly expand all branches.
+  const foldedStorageKey = `kakidas.outline-folded.v1.${memoId}`;
+  const [collapsed, setCollapsed] = useState<Set<string>>(() => {
+    try { return new Set(parseFoldedIds(window.localStorage.getItem(foldedStorageKey))); }
+    catch { return new Set(); }
+  });
+  useEffect(() => {
+    try { window.localStorage.setItem(foldedStorageKey, JSON.stringify([...collapsed])); }
+    catch { /* Private mode / full storage must never prevent editing. */ }
+  }, [collapsed, foldedStorageKey]);
   const [zoomId, setZoomId] = useState<string | null>(null);
   const undoStackRef = useRef<UndoableAction[]>([]);
   const [undoDepth, setUndoDepth] = useState(0);
@@ -919,6 +929,51 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
   const toggleCollapsed = (id: string) => setCollapsed((previous) => {
     const next = new Set(previous); if (next.has(id)) next.delete(id); else next.add(id); return next;
   });
+  /** No new toolbar: a selected bullet/number and a hotkey are the controls. */
+  const foldActiveBranch = () => {
+    if (disabled || busy) return;
+    const id = editingId ?? selectedId ?? pendingRef.current?.parentId ?? caretRef.current?.parentId;
+    const row = id ? nodeById.get(id) : null;
+    if (!row?.has_children) {
+      setMessage("子項目のある行を選ぶと、Ctrl / ⌘ + . で開閉できます。");
+      return;
+    }
+    toggleCollapsed(row.id);
+    setMessage("");
+  };
+  const foldActiveLevel = () => {
+    if (disabled || busy) return;
+    const id = editingId ?? selectedId ?? pendingRef.current?.parentId ?? caretRef.current?.parentId;
+    const active = id ? nodeById.get(id) : null;
+    const depth = active?.depth ?? (zoom?.depth ?? -1) + 1;
+    if (!foldableBranchesAtLevel(entries, depth, scopeId).length) {
+      setMessage("この階層には、子項目のある行がありません。");
+      return;
+    }
+    setCollapsed(previous => toggleFoldedLevel(previous, entries, depth, scopeId));
+    setMessage("");
+  };
+  // Command palette uses the same actions as direct keyboard controls.
+  useEffect(() => {
+    const foldOne = () => foldActiveBranch();
+    const foldLevel = () => foldActiveLevel();
+    window.addEventListener("kakidas:outline-fold-branch", foldOne);
+    window.addEventListener("kakidas:outline-fold-level", foldLevel);
+    return () => {
+      window.removeEventListener("kakidas:outline-fold-branch", foldOne);
+      window.removeEventListener("kakidas:outline-fold-level", foldLevel);
+    };
+  });
+  const onFoldKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229 ||
+        event.key === "Process" || event.altKey || event.nativeEvent.getModifierState("AltGraph") ||
+        !(event.ctrlKey || event.metaKey) ||
+        !(event.code === "Period" || event.key === "." || event.key === ">")) return;
+    event.preventDefault();
+    event.stopPropagation();
+    if (event.shiftKey) foldActiveLevel();
+    else foldActiveBranch();
+  };
   const zoomTo = (id: string | null) => { setZoomId(id); setCaret(null); setSelectedId(null); };
 
   const onRowKeyDown = (event: KeyboardEvent<HTMLDivElement>, row: EntryTreeNode) => {
@@ -1286,9 +1341,9 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
         {row.has_children ? (
           <button type="button" tabIndex={-1}
             className={`outline__marker outline__marker--toggle ${numbered ? "outline__marker--number" : "outline__marker--bullet"}`}
-            aria-label={`「${stripOutlineEmphasis(row.content).slice(0, 24)}」の子項目を${collapsed.has(row.id) ? "展開" : "折りたたむ"}`}
+            aria-label={`「${stripOutlineEmphasis(row.content).slice(0, 24) || "空の項目"}」の子項目を${collapsed.has(row.id) ? "展開" : "折りたたむ"}`}
             aria-expanded={!collapsed.has(row.id)}
-            title={collapsed.has(row.id) ? "子項目を展開" : "子項目を折りたたむ"}
+            title={`${numbered ? row.outline_number : "•"}：${collapsed.has(row.id) ? "子階層を展開" : "子階層を折りたたむ"}（Ctrl / ⌘ + .）`}
             onClick={() => toggleCollapsed(row.id)}
           >{numbered ? row.outline_number : "•"}</button>
         ) : (
@@ -1339,6 +1394,7 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
   if (pendingNode && spot.at >= visible.length) rows.push(pendingNode);
   if (caretNode && spot.at >= visible.length && !pendingNode) rows.push(caretNode);
   return <div className={`outline ${dense ? "outline--dense" : "outline--normal"}`}
+    onKeyDownCapture={onFoldKeyDown}
     style={{ "--outline-marker-width": markerWidth } as CSSProperties}
     aria-label="アウトライン編集">
     {zoom ? <nav className="outline__breadcrumbs" aria-label="アウトラインのズーム位置">
