@@ -268,6 +268,9 @@ export function MemoEditorPage() {
   useEffect(() => () => titleCaretTimersRef.current.forEach((timer) => window.clearTimeout(timer)), []);
   // 画面を離れる直前にも、最新の入力値を判断できるようにする。
   const latestTitleRef = useRef(title);
+  // The user clearing an auto-generated title is intentional, not an empty draft.
+  const titleWasManuallyEditedRef = useRef(false);
+  useEffect(() => { titleWasManuallyEditedRef.current = false; }, [memoId]);
   const latestMemoRef = useRef<MemoWithEntries | null>(memo);
   const isLeavingEditorRef = useRef(false);
   const [tagSuggestions, setTagSuggestions] = useState<MemoTagSummary[]>([]);
@@ -585,9 +588,11 @@ export function MemoEditorPage() {
   }, [memo]);
 
   useEffect(() => {
-    if (memo) {
-      setTitle(memo.title);
-    }
+    if (!memo) return;
+    // Refreshes for other fields must not overwrite an actively edited title.
+    if (document.activeElement === titleInputRef.current && latestTitleRef.current !== memo.title) return;
+    latestTitleRef.current = memo.title;
+    setTitle(memo.title);
   }, [memo?.id, memo?.title]);
 
   // タグ候補は「実際に使ったことがある言葉」だけから作る。AI推測や別テーブルは使わない。
@@ -617,7 +622,7 @@ export function MemoEditorPage() {
     }
 
     document.title =
-      title.trim() || formatDefaultMemoTitle(new Date(memo.created_at));
+      title.trim() || "kakidas";
   }, [memo?.created_at, memo?.id, title]);
 
   // 新規の空メモは、日付タイトルのかぎ括弧内から名前を書き始める。
@@ -681,19 +686,23 @@ export function MemoEditorPage() {
     async (rawTitle: string) => {
       if (!memo) return;
 
-      const nextTitle =
-        rawTitle.trim() || formatDefaultMemoTitle(new Date(memo.created_at));
+      // An explicitly empty title must remain empty after blur, debounce and reload.
+      const nextTitle = rawTitle.trim();
 
       if (nextTitle === memo.title) {
-        if (nextTitle !== rawTitle) {
+        if (latestTitleRef.current === rawTitle && nextTitle !== rawTitle) {
+          latestTitleRef.current = nextTitle;
           setTitle(nextTitle);
         }
-
         return;
       }
 
       await updateTitle({ title: nextTitle });
-      setTitle(nextTitle);
+      // A delayed save must not replace what the user typed in the meantime.
+      if (latestTitleRef.current === rawTitle) {
+        latestTitleRef.current = nextTitle;
+        setTitle(nextTitle);
+      }
     },
     [memo, updateTitle],
   );
@@ -718,6 +727,12 @@ export function MemoEditorPage() {
     if (!memoId || !shouldDiscardUntitledEmptyDraft) return false;
 
     const currentMemo = latestMemoRef.current;
+    if (titleWasManuallyEditedRef.current) {
+      if (currentMemo && currentMemo.title !== latestTitleRef.current.trim()) {
+        await updateTitle({ title: latestTitleRef.current.trim() });
+      }
+      return false;
+    }
 
     if (!currentMemo) {
       // 読み込み前に戻った場合でも、リポジトリ側で既定タイトル・項目0件を再確認する。
@@ -762,6 +777,12 @@ export function MemoEditorPage() {
       }
 
       const currentMemo = latestMemoRef.current;
+      if (titleWasManuallyEditedRef.current) {
+        if (currentMemo && currentMemo.title !== latestTitleRef.current.trim()) {
+          void memoRepository.updateMemo(draftMemoId, { title: latestTitleRef.current.trim() });
+        }
+        return;
+      }
       const defaultTitle = currentMemo
         ? formatDefaultMemoTitle(new Date(currentMemo.created_at))
         : null;
@@ -1546,7 +1567,7 @@ export function MemoEditorPage() {
         <Link to="/" className="back-link" aria-label="メモ一覧へ戻る" title="メモ一覧へ" onClick={e=>{e.preventDefault();void handleReturnToMemoList()}}><BackIcon /></Link>
         <div className="editor-header__title">
           <input ref={titleInputRef} className="memo-title-input" aria-label="メモのタイトル" value={title}
-            onChange={e=>{latestTitleRef.current=e.target.value;setTitle(e.target.value)}}
+            onChange={e=>{titleWasManuallyEditedRef.current=true;latestTitleRef.current=e.target.value;setTitle(e.target.value)}}
             onKeyDown={e=>{
               // 変換確定のEnterは題の確定に使わない。フォーカスは同期で移し、iOSのキーボードを閉じさせない。
               if(e.nativeEvent.isComposing||e.nativeEvent.keyCode===229||e.key==='Process'||e.key!=='Enter')return;

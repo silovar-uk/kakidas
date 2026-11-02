@@ -557,7 +557,7 @@ class IndexedDbMemoRepository implements MemoRepository {
       title:
         patchTitle === undefined
           ? current.title
-          : patchTitle.trim() || formatDefaultMemoTitle(new Date(current.created_at)),
+          : patchTitle.trim(),
       tag: patchTag === undefined ? current.tag : normalizeMemoTag(patchTag),
       updated_at: timestamp,
     };
