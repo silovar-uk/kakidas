@@ -698,6 +698,18 @@ export function MemoEditorPage() {
     [memo, updateTitle],
   );
 
+  // 新しいメモへのショートカットで、入力途中のタイトルを置き去りにしない。
+  useEffect(() => {
+    const prepareNewMemo = (event: Event) => {
+      const detail = (event as CustomEvent<{
+        waitUntil: (pending: Promise<unknown>) => void;
+      }>).detail;
+      detail?.waitUntil?.(saveTitle(latestTitleRef.current));
+    };
+    window.addEventListener("kakidas:before-create-memo", prepareNewMemo);
+    return () => window.removeEventListener("kakidas:before-create-memo", prepareNewMemo);
+  }, [saveTitle]);
+
   /**
    * 空の新規メモだけを、一覧へ戻る時に片付ける。
    * 題名が変わっていれば項目がなくてもメモとして残し、未送信の題名を先に保存する。
