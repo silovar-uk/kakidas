@@ -15,6 +15,7 @@ import { normalizeOutlineItems, itemsFromOutlinePaste, analyzeOutlinePaste, seri
 import type { OutlinePasteBatchResult } from "../repositories/memoRepository";
 import type { OutlineCompletionChange } from "../lib/outlineCompletion.js";
 import { siblingPositionAfter, visibleInsertionIndex } from "../lib/outlineInsert.js";
+import { siblingMoveIndex } from "../lib/outlineMove.js";
 import { outlineEmphasisSegments, toggleOutlineEmphasis, stripOutlineEmphasis } from "../lib/outlineEmphasis.js";
 import { useDraftPersistence } from "../hooks/useDraftPersistence";
 import { buildEntryDraftId, type EntryDraftSnapshot } from "../repositories/draftRepository";
@@ -290,7 +291,8 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
   const nodeById = useMemo(() => new Map(entries.map((row) => [row.id, row])), [entries]);
   const allNodeById = useMemo(() => new Map(allEntries.map((row) => [row.id, row])), [allEntries]);
   const persistedChildrenOf = (parentId: string | null) =>
-    allEntries.filter((row) => row.parent_id === parentId);
+    allEntries.filter((row) => row.parent_id === parentId)
+      .sort((a,b)=>a.sort_order-b.sort_order||a.created_at.localeCompare(b.created_at));
   /** 表示切替で本文を動かさないよう、どちらのモードでも同じガターを確保する。 */
   const markerWidth = useMemo(() => {
     if (!numbered) return "12px";
@@ -317,9 +319,9 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
     .filter((row) => row.parent_id === parentId)
     .sort((a, b) => a.sort_order - b.sort_order || a.created_at.localeCompare(b.created_at));
   const locationOf = (id: string): MoveHistory | null => {
-    const row = nodeById.get(id);
+    const row = allNodeById.get(id);
     if (!row) return null;
-    return { id, parentId: row.parent_id, index: childrenOf(row.parent_id).findIndex((item) => item.id === id) };
+    return { id, parentId: row.parent_id, index: persistedChildrenOf(row.parent_id).findIndex((item) => item.id === id) };
   };
 
   // 子を折り畳む／特定の枝にズームする（データそのものは変更しない）。
@@ -424,10 +426,8 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
   const savePending = async (keepWriting: boolean, completeAfterSave = false) => {
     const current = pendingRef.current;
     if (!current || creatingRef.current || disabled) return false;
-    if (!current.value.trim()) {
-      if (!keepWriting) changePending(null);
-      return true;
-    }
+    // Enter / Ctrl+Enter explicitly saves even an empty item.
+    // Unused input fields remain unsaved on blur and Escape.
     creatingRef.current = true;
     setPendingSaving(true);
     let createdId: string | null = null;
@@ -689,7 +689,6 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
   const showError = (error: unknown) => setMessage(error instanceof Error ? error.message : "操作を保存できませんでした。");
   const updateText = async (id: string, content: string) => {
     const next = content.trim();
-    if (!next) { setMessage("空の項目は保存できません。Escで編集を取り消せます。"); return false; }
     const previous = nodeById.get(id)?.content;
     if (next === previous) { setEditingId(idNow => idNow === id ? null : idNow); return true; }
     try {
@@ -719,10 +718,6 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
     try {
       if (fromEditor) {
         const content = editingValue.trim();
-        if (!content) {
-          setMessage("空の項目は完了できません。先に内容を入力してください。");
-          return;
-        }
         if (content !== row.content) {
           await onUpdate(row.id, { content });
           recordUndo({ type: "edit", id: row.id, previous: row.content });
@@ -852,18 +847,19 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
     if (index < 0) return;
     if (action === "indent" && index > 0) {
       const preceding = siblings[index - 1];
-      void moveTo(row.id, preceding.id, childrenOf(preceding.id).length);
+      void moveTo(row.id, preceding.id, persistedChildrenOf(preceding.id).length);
       setCollapsed((before) => { const next = new Set(before); next.delete(preceding.id); return next; });
     } else if (action === "outdent" && row.parent_id && row.parent_id !== scopeId) {
       const parent = nodeById.get(row.parent_id);
       if (parent) {
-        const parentIndex = childrenOf(parent.parent_id).findIndex((entry) => entry.id === parent.id);
+        const parentIndex = persistedChildrenOf(parent.parent_id).findIndex((entry) => entry.id === parent.id);
         void moveTo(row.id, parent.parent_id, parentIndex + 1);
       }
-    } else if (action === "up" && index > 0) {
-      void moveTo(row.id, row.parent_id, index - 1);
-    } else if (action === "down" && index < siblings.length - 1) {
-      void moveTo(row.id, row.parent_id, index + 1);
+    } else if (action === "up" || action === "down") {
+      // Position relative to the visible neighboring ID, not a filtered list index.
+      // A completed (hidden) sibling can sit between two visible branches.
+      const destination = siblingMoveIndex(allEntries, entries, row.id, action);
+      if (destination !== null) void moveTo(row.id, row.parent_id, destination);
     }
   };
   const startEdit = (row: EntryTreeNode, offset = row.content.length) => {
@@ -881,7 +877,6 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
   /** キー移動では編集画面を閉じずに保存。通信完了を待ってカーソルを奪わない。 */
   const saveOnNavigation = (row: EntryTreeNode): boolean => {
     const next = editingValue.trim();
-    if (!next) { setMessage("空の項目は保存できません。Escで編集を取り消せます。"); return false; }
     if (next !== row.content) {
       void onUpdate(row.id, { content: next }).then(() => {
         recordUndo({ type: "edit", id: row.id, previous: row.content });
@@ -904,7 +899,6 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
   const reorderFromEditor = (row: EntryTreeNode, direction: "up" | "down") => {
     if (busy || savingRef.current || disabled) return;
     const next = editingValue.trim();
-    if (!next) { setMessage("空の項目は保存できません。"); return; }
     if (next === row.content) { move(row, direction); return; }
     savingRef.current = true;
     void onUpdate(row.id, { content: next }).then(() => {
@@ -989,15 +983,7 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
       void toggleRowCompletion(row, true);
       return;
     }
-    if (event.key === "Backspace" && !editingValue && !row.has_children && onRemoveInline) {
-      event.preventDefault();
-      void onRemoveInline(row.id).then(() => {
-        setEditingId(null);
-        setSelectedId(null);
-        beginPending({ parentId: row.parent_id, index: siblingAfter(row).index - 1 });
-      }).catch(showError);
-      return;
-    }
+    // The Delete action removes a saved empty row; Backspace must not silently delete it.
     if (event.key === "Escape") {
       event.preventDefault(); skipBlurRef.current = true; setEditingId(null); setEditingValue(row.content); setSelectedId(row.id); focusRow(row.id); return;
     }
@@ -1021,10 +1007,6 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
     if (event.key === "Enter" && !event.shiftKey && !event.altKey && !event.ctrlKey && !event.metaKey) {
       event.preventDefault();
       const nextContent = editingValue.trim();
-      if (!nextContent) {
-        setMessage("空の項目は保存できません。元の文章を残してください。");
-        return;
-      }
       // 文章中のカーソル位置には依存しない。元の行を分割せず、次の兄弟行を作る。
       // 親行を展開している場合も、新しい行は子孫のまとまりの後に表示される。
       const position = siblingAfter(row);
@@ -1108,7 +1090,7 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
     }
     if ((event.ctrlKey || event.metaKey) && !event.shiftKey && !event.altKey && event.key === "Enter") {
       event.preventDefault();
-      if (pendingRef.current?.value.trim()) void savePending(false, true);
+      if (pendingRef.current) void savePending(false, true);
       return;
     }
     if (!event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey
@@ -1322,7 +1304,7 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
               part.emphasized
                 ? <strong key={i} className="outline__red-bold">{part.text}</strong>
                 : <span key={i}>{part.text}</span>
-            )}</span>}
+            )}{!row.content.trim() ? <span className="outline__empty-placeholder">空の項目</span> : null}</span>}
         <span className="outline__marks">
           {isBound ? <button type="button" className="outline__mark outline__mark--para" aria-label="段落を開く" title="この行の段落へ" onClick={() => onGrowRow?.(row.id)}>¶</button> : null}
           {row.has_children && collapsed.has(row.id) ? <span className="outline__child-count">{row.child_count}</span> : null}

@@ -761,8 +761,8 @@ class IndexedDbMemoRepository implements MemoRepository {
   ): Promise<EntryRow> {
     const content = input.content.trim();
 
-    if (!content) {
-      throw new Error("空の内容は保存できません。");
+    if (!content && input.kind !== "sentence") {
+      throw new Error("この区分では空の内容を保存できません。");
     }
 
     const db = await getDatabase();
@@ -887,7 +887,7 @@ class IndexedDbMemoRepository implements MemoRepository {
     memoId: string, items: OutlinePasteItem[], parentId: string | null, index: number,
     options: { targetId?: string; expectedContent?: string; draftId?: string; metadata?: { tag?: string | null; note?: string; link_url?: string } } = {},
   ): Promise<OutlinePasteBatchResult> {
-    if (!items.length || items.some((item, i) => !item.content.trim() ||
+    if (!items.length || items.some((item, i) =>
         !Number.isInteger(item.depth) || item.depth < 0 || (i === 0 && item.depth !== 0) ||
         (i > 0 && item.depth > items[i - 1].depth + 1))) {
       throw new Error("貼り付ける文章の階層を確認してください。");
@@ -1189,7 +1189,7 @@ class IndexedDbMemoRepository implements MemoRepository {
         ? current.is_completed
         : normalizeCompletion(patch.is_completed);
 
-    if (!content && patch.deleted_at === undefined) {
+    if (!content && current.kind !== "sentence" && patch.deleted_at === undefined) {
       transaction.abort();
       throw new Error("空の内容にはできません。");
     }
@@ -1199,7 +1199,7 @@ class IndexedDbMemoRepository implements MemoRepository {
     const next: EntryRow = {
       ...current,
       ...patch,
-      content: content || current.content,
+      content,
       heading,
       tag,
       note,

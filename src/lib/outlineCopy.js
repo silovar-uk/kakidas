@@ -59,9 +59,11 @@ export function buildOutlineCopy(rows, { mode, rootId = null, includeCompleted =
     prepared.push(node);
   }
 
+  // An explicit bullet stands for an intentionally empty saved item.
+  // Plain blank lines remain presentation whitespace on paste, never phantom items.
   const text = prepared.map(node => mode === "outliner"
-    ? "\t".repeat(node.depth) + node.content
-    : "  ".repeat(node.depth) + node.numbers.join(".") + (node.depth === 0 ? "." : "") + " " + node.content
+    ? "\t".repeat(node.depth) + (node.content || "•")
+    : "  ".repeat(node.depth) + node.numbers.join(".") + (node.depth === 0 ? "." : "") + " " + (node.content || "•")
   ).join("\n");
 
   return { text, count: prepared.length };

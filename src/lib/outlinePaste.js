@@ -3,7 +3,16 @@
  * 通常の文章の字下げ・表・コードを勝手に階層化しない。
  */
 const BULLET = /^(?:[-*+]\s+|[•●○・]\s*|(?:\d+[.)．、]|[①-⑳])\s+)/u;
-const cleanText = line => line.trim().replace(BULLET, "").trim();
+const cleanText = line => {
+  let result = line.trim();
+  // Numbered copy may prefix an explicit empty bullet: "1. •".
+  while (BULLET.test(result)) {
+    const next = result.replace(BULLET, "").trim();
+    if (next === result) break;
+    result = next;
+  }
+  return result;
+};
 const prefix = line => (line.match(/^[\t ]*/u) ?? [""])[0];
 const width = str => [...str].reduce((sum, ch) => sum + (ch === "\t" ? 4 : 1), 0);
 
@@ -13,7 +22,7 @@ export function analyzeOutlinePaste(text, { mode = "auto" } = {}) {
     const leading = prefix(line);
     const body = line.slice(leading.length);
     return { leading, width: width(leading), content: cleanText(body), bullet: BULLET.test(body.trimStart()) };
-  }).filter(item => item.content);
+  }).filter(item => item.content || item.bullet);
   if (!trimmed.length) return { items: [], needsReview: false, reasons: [], format: "plain" };
   const hasTab = trimmed.some(x => x.leading.includes("\t"));
   const hasSpace = trimmed.some(x => x.leading.includes(" "));
@@ -71,5 +80,5 @@ export function rowsFromOutlinePaste(existing,selectionStart,selectionEnd,pasted
   return itemsFromOutlinePaste(existing,selectionStart,selectionEnd,pasted)?.map(item=>item.content) ?? null;
 }
 export function serializeOutlineItems(items) {
-  return items.map(item=>"\t".repeat(item.depth)+item.content).join("\n");
+  return items.map(item=>"\t".repeat(item.depth)+(item.content || "•")).join("\n");
 }
