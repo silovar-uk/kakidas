@@ -44,7 +44,7 @@
   }
   .outline__marker--toggle[aria-expanded="false"] {
     text-decoration-line:underline; text-decoration-style:solid;
-    text-decoration-color:var(--color-ink-2); text-decoration-thickness:1px;
+    text-decoration-color:var(--color-shu-ink); text-decoration-thickness:1px;
     text-underline-offset:3px; text-decoration-skip-ink:auto;
   }
   /* 次の挿入場所は操作直後だけ薄い線で見せる。通常の項目を押し下げない。 */
