@@ -1,4 +1,5 @@
 import { visibleOutlineWithAncestors } from "../lib/outlineCompletion.js";
+import { numberVisibleOutline } from "../lib/outlineDisplay.js";
 import {SeishoView} from "../components/SeishoView";
 import {BackIcon} from "../components/icons";
 import {waitForCreatedEntry,withViewTransition} from "../lib/viewTransition";
@@ -1105,7 +1106,9 @@ export function MemoEditorPage() {
   const entriesByKind = useMemo(() => {
     const allEntries = memo?.entries ?? [];
     // Filter the full tree: incomplete descendants keep their original ancestors.
-    const outlineEntries = showCompletedOutline ? allOutlineEntries : visibleOutlineWithAncestors(allOutlineEntries);
+    const outlineEntries = showCompletedOutline
+      ? allOutlineEntries
+      : numberVisibleOutline(visibleOutlineWithAncestors(allOutlineEntries));
     const otherEntries = hideCompletedEntries
       ? allEntries.filter((entry) => !entry.is_completed)
       : allEntries;
@@ -1121,9 +1124,10 @@ export function MemoEditorPage() {
   const bindings = useMemo(() => getOutlineBindings(memo?.entries ?? []), [memo?.entries]);
   const rowNumberById = useMemo(() => {
     const numbers = new Map<string, string>();
-    getEntryTree(memo?.entries ?? [], "sentence", "manual").forEach((row) => numbers.set(row.id, row.outline_number));
+    // A paragraph's linked row number must match the number users see in the outline.
+    entriesByKind.sentence.forEach(row => numbers.set(row.id, row.outline_number));
     return numbers;
-  }, [memo?.entries]);
+  }, [entriesByKind.sentence]);
   /** 参考URLごとの、アウトラインで引用している行(同じURL)。 */
   const citationRowIds = useMemo(() => {
     const rows = (memo?.entries ?? []).filter((entry) => entry.deleted_at === null && entry.kind === "sentence" && entry.link_url.trim());

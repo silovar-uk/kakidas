@@ -1328,7 +1328,7 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
         data-outline-parent-id={row.parent_id ?? ""}
         data-outline-sort-order={row.sort_order}
         data-entry-id={row.id}
-        className={`outline__item ${isSelected ? "outline__item--selected" : ""} ${row.is_completed ? "outline__item--completed" : ""} ${lensIds?.has(row.id) ? "outline__item--lens" : ""}`}
+        className={`outline__item ${isSelected ? "outline__item--selected" : ""} ${row.is_completed ? "outline__item--completed" : ""} ${row.has_children && collapsed.has(row.id) ? "outline__item--folded" : ""} ${lensIds?.has(row.id) ? "outline__item--lens" : ""}`}
         role="treeitem"
         aria-level={zoom ? row.depth - zoom.depth : row.depth + 1}
         aria-selected={isSelected}
@@ -1370,7 +1370,7 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
             )}{!row.content.trim() ? <span className="outline__empty-placeholder">空の項目</span> : null}</span>}
         <span className="outline__marks">
           {isBound ? <button type="button" className="outline__mark outline__mark--para" aria-label="段落を開く" title="この行の段落へ" onClick={() => onGrowRow?.(row.id)}>¶</button> : null}
-          {row.has_children && collapsed.has(row.id) ? <span className="outline__child-count">{row.child_count}</span> : null}
+          {row.has_children && collapsed.has(row.id) ? <span className="outline__child-count" aria-label={`子項目${row.child_count}件を折りたたみ中`} title={`子項目${row.child_count}件を折りたたみ中`}>内{row.child_count}件</span> : null}
           {row.link_url.trim() ? <a className="outline__mark outline__mark--link" href={row.link_url} target="_blank" rel="noreferrer" aria-label="リンクを開く" title={row.link_url}>↗</a> : null}
           {row.note.trim() ? <span className="outline__mark outline__mark--note" title={row.note} aria-label="気持ち・備考あり">✎</span> : null}
           {row.tag ? <span className="outline__chip">#{row.tag}</span> : null}
