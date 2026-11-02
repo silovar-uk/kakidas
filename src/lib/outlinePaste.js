@@ -2,7 +2,7 @@
  * テキスト貼り付けの共通解析。明確な構造は即時処理、曖昧なものは確認。
  * 通常の文章の字下げ・表・コードを勝手に階層化しない。
  */
-const BULLET = /^(?:[-*+]\s+|[•●○・]\s*|(?:\d+[.)．、]|[①-⑳])\s+)/u;
+const BULLET = /^(?:[-*+]\s+|[•●○・]\s*|(?:\d+(?:\.\d+)+|\d+[.)．、]|[①-⑳])\s+)/u;
 const cleanText = line => {
   let result = line.trim();
   // Numbered copy may prefix an explicit empty bullet: "1. •".
