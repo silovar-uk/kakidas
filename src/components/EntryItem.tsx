@@ -466,6 +466,9 @@ export function EntryItem({
     if (!isEditing || isSaving) return;
 
     const nextFocusedElement = event.relatedTarget as Node | null;
+    // Ctrl/⌘+K moves focus to the command palette temporarily. Keep the
+    // editor mounted so its text selection can be restored before insertion.
+    if (nextFocusedElement instanceof HTMLElement && nextFocusedElement.closest(".command-palette")) return;
     if (nextFocusedElement && event.currentTarget.contains(nextFocusedElement)) {
       return;
     }
