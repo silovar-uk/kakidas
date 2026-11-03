@@ -1069,6 +1069,12 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
 
   const onRowKeyDown = (event: KeyboardEvent<HTMLDivElement>, row: EntryTreeNode) => {
     if (disabled || busy || event.nativeEvent.isComposing) return;
+    if (event.key === "Backspace" && !event.repeat && !event.altKey && !event.ctrlKey && !event.metaKey &&
+        !event.shiftKey && row.content.length === 0) {
+      event.preventDefault();
+      removeSavedBlank(row);
+      return;
+    }
     if ((event.ctrlKey || event.metaKey) && !event.shiftKey && !event.altKey && event.key.toLowerCase() === "b") {
       event.preventDefault();
       if (busy || disabled) return;
@@ -1097,7 +1103,7 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
       event.preventDefault(); void toggleRowCompletion(row); return;
     }
     if (event.key === "Enter" && !event.shiftKey && !event.altKey && !event.ctrlKey && !event.metaKey) {
-      event.preventDefault(); beginPending(siblingAfter(row), "", true); return;
+      event.preventDefault(); insertSavedBlank(row, false, row.content); return;
     }
     if (event.key === "F2") { event.preventDefault(); startEdit(row); return; }
     if (event.key === "Tab") { event.preventDefault(); move(row, event.shiftKey ? "outdent" : "indent"); focusRow(row.id); return; }
@@ -1123,6 +1129,22 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
   };
   const onEditorKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>, row: EntryTreeNode) => {
     if (event.nativeEvent.isComposing || event.key === "Process" || event.nativeEvent.keyCode === 229) return;
+    // 保存済み空行のCtrl+Zは文字のUndoではなく、その行の追加を戻す。
+    const lastUndo = undoStackRef.current.at(-1);
+    if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey &&
+        event.key.toLowerCase() === "z" && editingValue.length === 0 && row.content.length === 0 &&
+        lastUndo?.type === "create-blank" && lastUndo.id === row.id) {
+      event.preventDefault();
+      void undoLast(true);
+      return;
+    }
+    if (event.key === "Backspace" && !event.repeat && !event.ctrlKey && !event.metaKey &&
+        !event.altKey && !event.shiftKey &&
+        isTrulyEmptyEditor(editingValue, event.currentTarget.selectionStart, event.currentTarget.selectionEnd)) {
+      event.preventDefault();
+      removeSavedBlank(row, editingValue);
+      return;
+    }
     if ((event.ctrlKey || event.metaKey) && !event.shiftKey && !event.altKey && event.key.toLowerCase() === "b") {
       event.preventDefault();
       if (disabled || busy || savingRef.current) return;
