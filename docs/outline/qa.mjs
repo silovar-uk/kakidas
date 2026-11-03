@@ -24,7 +24,10 @@ async function outlineCompletedMenu(page, { toggle = false } = {}) {
 }
 async function fillSavedBlank(page, content) {
   const field = page.getByRole('textbox',{name:'アウトラインの本文を編集'});
-  await field.waitFor({state:'visible'});
+  await page.waitForFunction(() => {
+    const editor=document.querySelector('.entry-column--sentence .outline__edit:not(.outline__edit--pending)');
+    return editor && editor.value==='' && document.activeElement===editor;
+  },undefined,{timeout:9000});
   assert.equal(await field.inputValue(),'','新しく保存された空行の編集欄');
   await field.fill(content);
   // 保存済み行の編集確定には通常のフォーカスアウト経路を使う。
