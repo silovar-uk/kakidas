@@ -59,8 +59,9 @@ try {
   assert.equal(await item("既存の子").getAttribute("data-outline-id"), originalChildId);
 
   // The numbering itself is derived from sibling order; no IDs or row content are rewritten.
-  await item("親").focus();
-  await page.keyboard.press("Control+Shift+4");
+  await page.getByRole("button", { name: "階層番号で表示" }).click();
+  await page.waitForFunction(() => [...document.querySelectorAll(".entry-column--sentence .outline__marker")]
+    .some(el => el.textContent.trim() === "1.1"));
   assert.equal((await item("新3.1").locator(".outline__marker").first().textContent())?.trim(), "1.1");
   assert.equal((await item("既存の子").locator(".outline__marker").first().textContent())?.trim(), "1.2");
 
