@@ -71,6 +71,10 @@ try {
   await page.keyboard.press("Control+k");
   const command = page.getByRole("button", { name: /現在時刻を挿入/ }).first();
   await command.click();
+  await page.waitForFunction(() => {
+    const field = document.querySelector(".entry-column--sentence .outline__edit:not(.outline__edit--pending)");
+    return Boolean(field && /^議題: \d{2}:\d{2}\d{2}:\d{2}\d{2}:\d{2}$/.test(field.value));
+  }, undefined, { timeout: 5000 });
   assert.match(await savedEditor.inputValue(), /^議題: \d{2}:\d{2}\d{2}:\d{2}\d{2}:\d{2}$/, "command palette restores prior caret");
 
   await page.keyboard.press("Control+Shift+3");
