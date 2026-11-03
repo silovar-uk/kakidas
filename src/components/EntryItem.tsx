@@ -555,6 +555,7 @@ export function EntryItem({
                       contentInputRef.current = element;
                     }}
                     className="entry-item__paragraph-editor"
+                    data-kakidas-time-input=""
                     value={value}
                     disabled={disabled || isSaving}
                     onChange={handleContentChange}
