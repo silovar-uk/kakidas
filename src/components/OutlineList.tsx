@@ -1004,8 +1004,30 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
   });
   const onFoldKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     if (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229 ||
-        event.key === "Process" || event.altKey || event.nativeEvent.getModifierState("AltGraph") ||
-        !(event.ctrlKey || event.metaKey) ||
+        event.key === "Process" || event.nativeEvent.getModifierState("AltGraph")) return;
+    const command = event.ctrlKey || event.metaKey;
+    // Ctrl+Alt+↑ は折りたたみ、Ctrl+Alt+↓ は展開。トグルではないため予測可能。
+    // 実際の入力対象に最も近い行を優先する。編集中でもフォーカスを奪わない。
+    if (command && event.altKey && !event.shiftKey && !event.repeat &&
+        (event.key === "ArrowUp" || event.key === "ArrowDown")) {
+      const target = event.target instanceof Element ? event.target.closest<HTMLElement>("[data-outline-id]") : null;
+      const id = target?.dataset.outlineId ?? editingId ?? selectedId ?? pendingRef.current?.parentId ?? null;
+      const row = id ? nodeById.get(id) : null;
+      if (!row?.has_children || disabled || busy) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const shouldCollapse = event.key === "ArrowUp";
+      setCollapsed(previous => {
+        if (previous.has(row.id) === shouldCollapse) return previous;
+        const next = new Set(previous);
+        if (shouldCollapse) next.add(row.id);
+        else next.delete(row.id);
+        return next;
+      });
+      setMessage("");
+      return;
+    }
+    if (event.altKey || !command ||
         !(event.code === "Period" || event.key === "." || event.key === ">")) return;
     event.preventDefault();
     event.stopPropagation();
@@ -1015,13 +1037,23 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
   const zoomTo = (id: string | null) => { setZoomId(id); setCaret(null); setSelectedId(null); };
 
   /**
-   * Enterは新しい正式な空行を作る。行頭なら上、その他は下。
-   * 文字と元のID・親子関係を保持し、保存された行が描画されてから焦点を渡す。
+   * Enterは文脈に沿った正式な空行を作る。
+   * 行頭なら元の行の上。子がある親なら新しい先頭子。そのほかは次の兄弟。
+   * 元のID・親子関係は維持し、保存が描画されてから編集フォーカスを戻す。
    */
   const insertSavedBlank = (row: EntryTreeNode, atStart: boolean, sourceText = editingValue) => {
     if (disabled || busy || creatingRef.current || savingRef.current || blankInsertSessionRef.current) return;
     const position = positionForBlankEnter(allEntries, row.id, atStart);
     if (!position) return;
+    // 折りたたまれた親の新3.1を作る場合、入力欄が隠れないよう先に展開する。
+    if (position.parentId === row.id) {
+      setCollapsed(previous => {
+        if (!previous.has(row.id)) return previous;
+        const next = new Set(previous);
+        next.delete(row.id);
+        return next;
+      });
+    }
     const sourceContent = sourceText.trim();
     const session: BlankInsertSession = {
       parentId: position.parentId, index: position.index,
@@ -1153,7 +1185,7 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
     if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
       event.preventDefault(); void toggleRowCompletion(row); return;
     }
-    if (event.key === "Enter" && !event.shiftKey && !event.altKey && !event.ctrlKey && !event.metaKey) {
+    if (event.key === "Enter" && !event.repeat && !event.shiftKey && !event.altKey && !event.ctrlKey && !event.metaKey) {
       event.preventDefault(); insertSavedBlank(row, false, row.content); return;
     }
     if (event.key === "F2") { event.preventDefault(); startEdit(row); return; }
@@ -1502,7 +1534,7 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
             className={`outline__marker outline__marker--toggle ${numbered ? "outline__marker--number" : "outline__marker--bullet"}`}
             aria-label={`「${stripOutlineEmphasis(row.content).slice(0, 24) || "空行"}」の子項目を${collapsed.has(row.id) ? "展開" : "折りたたむ"}`}
             aria-expanded={!collapsed.has(row.id)}
-            title={`${numbered ? row.outline_number : "•"}：${collapsed.has(row.id) ? "子階層を展開" : "子階層を折りたたむ"}（Ctrl / ⌘ + .）`}
+            title={`${numbered ? row.outline_number : "•"}：${collapsed.has(row.id) ? "子階層を展開（Ctrl+Alt+↓）" : "子階層を折りたたむ（Ctrl+Alt+↑）"}`}
             onClick={() => toggleCollapsed(row.id)}
           >{numbered ? row.outline_number : "•"}</button>
         ) : (
