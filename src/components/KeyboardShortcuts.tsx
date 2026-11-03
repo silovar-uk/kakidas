@@ -117,7 +117,8 @@ export function KeyboardShortcuts() {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.isComposing || event.key === "Process" || event.keyCode === 229 || event.getModifierState("AltGraph")) return;
       if (isEditor && !panel && matchesInsertTimeShortcut(event) && isTimeInsertField(event.target)) {
-        if (document.querySelector('[aria-modal="true"]')) return;
+        const modal = document.querySelector('[aria-modal="true"]');
+        if (modal && !modal.contains(event.target as Node)) return;
         event.preventDefault();
         insertTimeIntoField(event.target, formatLocalClockTime());
         return;
