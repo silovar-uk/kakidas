@@ -56,6 +56,16 @@ try {
   await savedEditor.waitFor({ state: "visible" });
   await savedEditor.press("End");
   await savedEditor.press("Alt+Semicolon");
+  const editorState = await page.evaluate(() => ({
+    activeTag: document.activeElement?.tagName,
+    activeClass: document.activeElement?.className,
+    fields: [...document.querySelectorAll(".entry-column--sentence textarea")].map(el => ({
+      className: el.className, value: el.value, focused: document.activeElement === el,
+    })),
+    rows: [...document.querySelectorAll(".entry-column--sentence [data-outline-id]")].map(el =>
+      el.querySelector(".outline__content")?.textContent ?? el.querySelector("textarea")?.value ?? ""),
+  }));
+  assert.equal(await savedEditor.count(), 1, "existing editor stays open after time insertion: " + JSON.stringify(editorState));
   assert.match(await savedEditor.inputValue(), /^議題: \d{2}:\d{2}\d{2}:\d{2}$/, "existing row editor accepts timestamp");
 
   await page.keyboard.press("Control+k");
