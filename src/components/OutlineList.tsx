@@ -799,8 +799,8 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
     } catch (error) { showError(error); }
     finally { setBusy(false); }
   };
-  const undoLast = async () => {
-    if (disabled || busy || editingId || pendingRef.current?.value.trim() || savingRef.current || undoInFlightRef.current) return;
+  const undoLast = async (allowBlankEditor = false) => {
+    if (disabled || busy || (editingId && !allowBlankEditor) || pendingRef.current?.value.trim() || savingRef.current || undoInFlightRef.current) return;
     const last = undoStackRef.current.at(-1);
     if (!last) return;
     if (last.type === "paste") {
@@ -818,12 +818,14 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
       return;
     }
     const target = nodeById.get(last.id);
-    if (!target && last.type !== "complete") {
+    if (!target && last.type !== "complete" && last.type !== "delete-blank") {
       // 反映待ちの行を誤って履歴から捨てない。次回そのまま再試行できる。
       setMessage("対象の行がまだ表示されていません。更新後にもう一度お試しください。");
       return;
     }
-    if (last.type === "create" && (!target || target.has_children || !onUndoCreate)) {
+    if ((last.type === "create" && (!target || target.has_children || !onUndoCreate)) ||
+        (last.type === "create-blank" && (!target || target.has_children || !onRemoveInline)) ||
+        (last.type === "delete-blank" && !onRestoreInline)) {
       setMessage("子がある行は安全のためUndoしません。項目の操作から確認してください。");
       return;
     }
@@ -837,17 +839,22 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
         if(last.changes&&onRestoreCompletion)await onRestoreCompletion(last.changes);
         else await onUpdate(last.id,{is_completed:last.previous});
       }
+      else if (last.type === "create-blank") await onRemoveInline!(last.id);
+      else if (last.type === "delete-blank") await onRestoreInline!([last.id]);
       else await onUndoCreate!(target!);
       undoStackRef.current.pop();
       setUndoDepth(undoStackRef.current.length);
       setMessage("");
-      if (last.type === "create") {
+      if (last.type === "create" || last.type === "create-blank") {
         setSelectedId(null);
         if (originalLocation) {
           const restored = pendingRef.current;
           if (restored) changePending({ ...restored, parentId: originalLocation.parentId, index: originalLocation.index });
           setCaret({ parentId: originalLocation.parentId, index: originalLocation.index });
         }
+      } else if (last.type === "delete-blank") {
+        setSelectedId(last.id);
+        focusRow(last.id);
       } else if (last.type === "complete") {
         // 非表示だった行もUndoで復元できる。実際のDOM反映後に編集位置を戻す。
         setSelectedId(last.id);
