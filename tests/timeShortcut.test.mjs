@@ -81,10 +81,10 @@ test("native insertion respects caret and replaces selection with one input even
 });
 
 test("unsupported native command falls back to regular input event", () => {
-  const field = textarea("議事録", 3);
+  const field = textarea("議事録", 2);
   assert.equal(insertTimeIntoField(field, "16:49", { execCommand: () => false }), true);
   assert.equal(field.value, "議事16:49録");
-  assert.equal(field.selectionStart, 8);
+  assert.equal(field.selectionStart, 7);
   assert.equal(field.events, 1);
 });
 
