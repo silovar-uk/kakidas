@@ -199,6 +199,8 @@
     max-width: 100%;
     padding: 0 0 0 calc(var(--outline-depth, 0) * 16px);
   }
+  /* 長文時も番号は最初の文字行に。grid全体の中央揃えはボタン類のため維持。 */
+  .entry-column--sentence .outline__item > .outline__marker { align-self: start; }
   /* 開閉はビュレット/番号で行うため、専用の▼列は不要。 */
   .entry-column--sentence .outline__marker { width: max-content; min-width: 0; max-width: min(120px, 33vw); }
   /* 操作の面積は左側へ拡張し、記号→本文の4pxは維持する。 */
