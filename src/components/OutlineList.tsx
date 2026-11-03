@@ -1291,6 +1291,20 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
 
   const onPendingKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.nativeEvent.isComposing || event.key === "Process" || event.nativeEvent.keyCode === 229) return;
+    const blankSession = blankInsertSessionRef.current;
+    if (blankSession && event.key === "Enter" && !event.repeat && !event.shiftKey &&
+        !event.altKey && !event.ctrlKey && !event.metaKey) {
+      event.preventDefault();
+      blankSession.committed.push(pendingRef.current?.value ?? "");
+      const next = { parentId: blankSession.parentId,
+        index: blankSession.index + blankSession.committed.length, value: "" };
+      flushSync(() => {
+        changePending(next);
+        setCaret(next);
+      });
+      pendingEditorRef.current?.focus({ preventScroll: true });
+      return;
+    }
     if ((event.ctrlKey || event.metaKey) && !event.shiftKey && event.key.toLowerCase() === "z" && !pendingRef.current?.value.trim()) {
       event.preventDefault(); void undoLast(); return;
     }
@@ -1430,7 +1444,7 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
         aria-label="新しいアウトライン項目"
         value={pending.value} onChange={event => changePending({ ...pending, value: event.target.value })}
         onKeyDown={onPendingKeyDown} onPaste={onPendingPaste}
-        onBlur={() => { if (pasteReview) return; if (pendingRef.current?.value.trim()) void savePending(false); else if (visible.length) changePending(null); }} />
+        onBlur={() => { if (pasteReview || skipPendingBlurRef.current) return; if (blankInsertSessionRef.current) { blankInsertSessionRef.current.keepFocus = false; return; } if (pendingRef.current?.value.trim()) void savePending(false); else if (visible.length) changePending(null); }} />
     </div>
   ) : null;
   const caretNode = deskNode || ghostOn || caretPreviewVisible ? (
