@@ -1356,7 +1356,7 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
           aria-label="アウトラインの本文を編集" onChange={(event) => setEditingValue(event.target.value)}
           onKeyDown={(event) => onEditorKeyDown(event, row)}
           onPaste={(event) => onEditorPaste(event, row)}
-          onBlur={() => { if (skipBlurRef.current) { skipBlurRef.current = false; return; } void commitEditing(); }}/>
+          onBlur={(event) => { if (skipBlurRef.current) { skipBlurRef.current = false; return; } if (event.relatedTarget instanceof HTMLElement && event.relatedTarget.closest(".command-palette")) return; void commitEditing(); }}/>
         : <span className="outline__content"
             onClick={(event) => {
               // クリックでもタップでも文章をその場で編集。選択専用モードは作らない。
