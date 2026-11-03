@@ -94,7 +94,7 @@ try {
   // Fast typing immediately after Enter must go to the new row, even before IndexedDB resolves.
   await page.goto(url);
   await page.getByRole("button", { name: /新しいメモ/ }).first().click();
-  await page.waitForURL(/\\/memos\\//);
+  await page.waitForURL(address => address.pathname.startsWith("/memos/"));
   await page.keyboard.press("Control+Shift+1");
   await pending.fill("最初の行");
   await pending.press("Enter");
