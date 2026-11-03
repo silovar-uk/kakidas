@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { lockBodyScroll } from "../lib/bodyScrollLock";
+import { formatLocalClockTime, insertTimeIntoField, isTimeInsertField, matchesInsertTimeShortcut } from "../lib/timeShortcut.js";
 import { memoRepository } from "../repositories/memoRepository";
 
-type CommandId = "new-memo" | "outline" | "paragraph" | "reference" | "numbering" | "fold-branch" | "fold-level" | "help";
+type CommandId = "new-memo" | "outline" | "paragraph" | "reference" | "insert-time" | "numbering" | "fold-branch" | "fold-level" | "help";
 type Command = { id: CommandId; label: string; detail: string; keys: string; keywords: string };
 
 const COMMANDS: Command[] = [
@@ -11,6 +12,7 @@ const COMMANDS: Command[] = [
   { id: "outline", label: "アウトラインへ移動", detail: "書き口をアウトラインに移して入力を始める", keys: "Ctrl/⌘ + Shift + 1", keywords: "箇条書き リスト outline" },
   { id: "paragraph", label: "段落へ移動", detail: "書き口を段落に移して入力を始める", keys: "Ctrl/⌘ + Shift + 2", keywords: "文章 paragraph" },
   { id: "reference", label: "参考URLへ移動", detail: "書き口を参考URLに移して入力を始める", keys: "Ctrl/⌘ + Shift + 3", keywords: "リンク URL 調査 reference" },
+  { id: "insert-time", label: "現在時刻を挿入", detail: "本文のカーソル位置へ現在時刻（例：16:49）を入力", keys: "Alt + ;", keywords: "時刻 時間 タイムスタンプ timestamp clock time" },
   { id: "numbering", label: "階層番号・ビュレットを切り替え", detail: "アウトラインの「1.1」と「•」を切り替える", keys: "Ctrl/⌘ + Shift + 4", keywords: "数字 見出し 番号 ナンバリング bullet numbered" },
   { id: "fold-branch", label: "選択した枝を開閉", detail: "番号・ビュレットのクリックと同じ。子階層を表示／非表示", keys: "Ctrl/⌘ + .", keywords: "折りたたみ 折り畳み 展開 開閉 collapse expand" },
   { id: "fold-level", label: "同じ階層の枝を一括開閉", detail: "選択行と同じ深さの親項目をまとめて開閉", keys: "Ctrl/⌘ + Shift + .", keywords: "階層ごと まとめて 一括 折りたたみ collapse all expand all" },
@@ -30,9 +32,11 @@ export function KeyboardShortcuts() {
   const searchRef = useRef<HTMLInputElement>(null);
   const helpRef = useRef<HTMLButtonElement>(null);
   const dialogRef = useRef<HTMLElement>(null);
+  // コマンド検索を開く前の本文と選択位置を覚え、パレットからも正しい場所に挿入する。
+  const timeTargetRef = useRef<{ field: HTMLTextAreaElement; start: number; end: number } | null>(null);
 
   const commands = useMemo(() => COMMANDS.filter(command =>
-    isEditor || !["outline", "paragraph", "reference", "numbering", "fold-branch", "fold-level"].includes(command.id)
+    isEditor || !["outline", "paragraph", "reference", "insert-time", "numbering", "fold-branch", "fold-level"].includes(command.id)
   ), [isEditor]);
   const matching = useMemo(() => {
     const term = query.trim().toLocaleLowerCase();
@@ -43,6 +47,10 @@ export function KeyboardShortcuts() {
   const activeIndex = Math.min(selectedIndex, Math.max(0, matching.length - 1));
 
   const openCommands = () => {
+    const focused = document.activeElement;
+    timeTargetRef.current = isEditor && isTimeInsertField(focused)
+      ? { field: focused, start: focused.selectionStart, end: focused.selectionEnd }
+      : null;
     setQuery("");
     setSelectedIndex(0);
     setError("");
@@ -51,6 +59,22 @@ export function KeyboardShortcuts() {
 
   const runCommand = async (id: CommandId) => {
     if (id === "help") { setPanel("help"); return; }
+    if (id === "insert-time") {
+      const target = timeTargetRef.current;
+      if (!isEditor || !target?.field.isConnected || !isTimeInsertField(target.field)) {
+        setError("本文にカーソルを置き、Ctrl / ⌘ + K から選んでください。");
+        return;
+      }
+      const time = formatLocalClockTime();
+      setPanel(null);
+      window.requestAnimationFrame(() => {
+        if (!target.field.isConnected || !isTimeInsertField(target.field)) return;
+        target.field.focus({ preventScroll: true });
+        target.field.setSelectionRange(target.start, target.end);
+        insertTimeIntoField(target.field, time);
+      });
+      return;
+    }
     if (id === "new-memo") {
       if (creatingRef.current) return;
       creatingRef.current = true;
@@ -92,6 +116,12 @@ export function KeyboardShortcuts() {
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.isComposing || event.key === "Process" || event.keyCode === 229 || event.getModifierState("AltGraph")) return;
+      if (isEditor && !panel && matchesInsertTimeShortcut(event) && isTimeInsertField(event.target)) {
+        if (document.querySelector('[aria-modal="true"]')) return;
+        event.preventDefault();
+        insertTimeIntoField(event.target, formatLocalClockTime());
+        return;
+      }
       const commandKey = event.ctrlKey || event.metaKey;
       const key = event.key.toLowerCase();
       const isPaletteKey = commandKey && !event.altKey && !event.shiftKey && key === "k";
@@ -213,7 +243,7 @@ export function KeyboardShortcuts() {
             )}
             <p>アウトライン内：Enterで次の行、Tab / Shift+Tabで階層変更、F2で編集、Ctrl/⌘+Enterで完了、Alt+Shift+↑↓で並び替え。</p>
             <p>親項目の番号・•をクリックして子階層を開閉。Ctrl/⌘ + . で選択中の枝、Ctrl/⌘ + Shift + . で同じ深さの枝をまとめて開閉。開閉状態はメモごとに記憶します。</p>
-            <p>編集中：Ctrl/⌘+Bで強調、Shift+Enterで行内改行。余白はAlt+Q。</p>
+            <p>編集中：Alt + ; でカーソル位置に現在時刻（24時間表記）を挿入。Ctrl/⌘+Bで強調、Shift+Enterで行内改行。余白はAlt+Q。</p>
             <button type="button" className="command-palette__help-action"
               onClick={openCommands}>操作を検索する <span>Ctrl/⌘ + K</span></button>
           </div>
