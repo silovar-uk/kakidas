@@ -22,6 +22,15 @@ async function outlineCompletedMenu(page, { toggle = false } = {}) {
   else await page.getByRole('button',{name:'アウトラインの操作'}).click();
   return current;
 }
+async function fillSavedBlank(page, content) {
+  const field = page.getByRole('textbox',{name:'アウトラインの本文を編集'});
+  await field.waitFor({state:'visible'});
+  assert.equal(await field.inputValue(),'','新しく保存された空行の編集欄');
+  await field.fill(content);
+  // 保存済み行の編集確定には通常のフォーカスアウト経路を使う。
+  await page.getByRole('textbox',{name:'メモのタイトル'}).focus();
+  await row(page,content).waitFor({state:'visible'});
+}
 async function put(page, content) {
   await selectKind(page, 'sentence');
   const line = page.locator('.entry-column--sentence .outline__edit--pending');
@@ -170,12 +179,8 @@ check('P2','文章の途中でEnterしても元の文章を分割しない',asyn
   const editing=page.getByRole('textbox',{name:'アウトラインの本文を編集'});
   await editing.evaluate(el=>el.setSelectionRange(1,1));
   await editing.press('Enter');
-  const pending=page.locator('.entry-column--sentence .outline__edit--pending');
-  await pending.waitFor({state:'visible'});
-  assert.equal(await pending.inputValue(),'','新しい行は空');
-  await pending.fill('追加');await pending.press('Enter');
+  await fillSavedBlank(page,'追加');
   await row(page,'左右').waitFor({state:'visible'});
-  await row(page,'追加').waitFor({state:'visible'});
   assert.deepEqual(await outline(page).locator('.outline__content').allTextContents(),['左右','追加']);
 });
 check('P2','展開した親行のEnterで子項目群の後ろへ兄弟を追加する',async(page)=>{
@@ -184,11 +189,8 @@ check('P2','展開した親行のEnterで子項目群の後ろへ兄弟を追加
   await page.waitForFunction(()=>document.querySelector('[data-outline-parent-id]:not([data-outline-parent-id=""])')?.textContent?.includes('挿入子'));
   await row(page,'挿入親').locator('.outline__content').click();
   const editing=page.getByRole('textbox',{name:'アウトラインの本文を編集'});
-  await editing.press('Home');await editing.press('Enter');
-  const pending=page.getByRole('textbox',{name:'新しいアウトライン項目'});
-  await pending.waitFor({state:'visible'});
-  assert.equal(await pending.getAttribute('aria-label'),'新しいアウトライン項目');
-  await pending.fill('次の兄弟');await pending.press('Enter');
+  await editing.press('End');await editing.press('Enter');
+  await fillSavedBlank(page,'次の兄弟');
   await row(page,'次の兄弟').waitFor({state:'visible'});
   assert.deepEqual(await outline(page).locator('.outline__content').allTextContents(),['挿入親','挿入子','次の兄弟']);
   assert.equal(await row(page,'次の兄弟').getAttribute('aria-level'),'1');
@@ -198,10 +200,7 @@ check('P2','展開した親行のEnterで子項目群の後ろへ兄弟を追加
 check('P2','選択行のEnterはF2編集と異なり、新しい兄弟の空行を作る',async(page)=>{
   await put(page,'選択行A');await put(page,'選択行B');
   await row(page,'選択行A').focus();await page.keyboard.press('Enter');
-  const pending=page.getByRole('textbox',{name:'新しいアウトライン項目'});
-  await pending.waitFor({state:'visible'});
-  assert.equal(await pending.evaluate(el=>document.activeElement===el),true);
-  await pending.fill('間に追加');await pending.press('Enter');
+  await fillSavedBlank(page,'間に追加');
   await row(page,'間に追加').waitFor({state:'visible'});
   assert.deepEqual(await outline(page).locator('.outline__content').allTextContents(),['選択行A','間に追加','選択行B']);
   await row(page,'選択行A').focus();await page.keyboard.press('F2');
@@ -213,8 +212,7 @@ check('P2','完了行を隠しても新規行は保存順の正しい位置へ�
   await row(page,'完了行').waitFor({state:'detached'});
   await page.waitForFunction(()=>document.querySelector('.outline__completed-toggle')?.textContent?.includes('1件'));
   await row(page,'手前の行').focus();await page.keyboard.press('Enter');
-  const pending=page.getByRole('textbox',{name:'新しいアウトライン項目'});
-  await pending.fill('非表示でも中間');await pending.press('Enter');
+  await fillSavedBlank(page,'非表示でも中間');
   await row(page,'非表示でも中間').waitFor({state:'visible'});
   assert.deepEqual(await outline(page).locator('.outline__content').allTextContents(),['手前の行','非表示でも中間','後ろの行']);
   await outlineCompletedMenu(page,{toggle:true});
@@ -402,8 +400,7 @@ check('P2','行間・末尾の追加ボタンを撤去し、Enterで階層付き
   await row(page,'追加階層子').locator('.outline__content').click();
   const field=page.getByRole('textbox',{name:'アウトラインの本文を編集'});
   await field.press('End');await field.press('Enter');
-  const pending=page.getByRole('textbox',{name:'新しいアウトライン項目'});
-  await pending.fill('子の追加項目');await pending.press('Enter');
+  await fillSavedBlank(page,'子の追加項目');
   await row(page,'子の追加項目').waitFor({state:'visible'});
   assert.equal(await row(page,'子の追加項目').getAttribute('aria-level'),'2');
   assert.equal(await outline(page).locator('.outline__insert-between, .outline__add-last').count(),0);
