@@ -17,7 +17,7 @@
   .outline__breadcrumbs span { display:inline-flex; align-items:center; max-width:180px; }
   .outline__breadcrumbs button { white-space:nowrap; text-overflow:ellipsis; overflow:hidden; }
   /* 間隔は行で統一する。通常よりも本文の密度を優先し、余白はグループ境界に使う。 */
-  .outline__item { display:flex; min-height:28px; align-items:center; gap:0; padding:0 2px 0 calc(var(--outline-depth,0) * 15px); border-radius:5px; outline:0; }
+  .outline__item { display:flex; min-height:28px; align-items:flex-start; gap:0; padding:0 2px 0 calc(var(--outline-depth,0) * 15px); border-radius:5px; outline:0; }
   .outline--normal .outline__item { min-height:31px; }
   /* 子のまとまりから同階層の次の大項目へ戻るときだけ、意味の区切りを作る。 */
   .outline__item-wrap--group-start { margin-block-start:5px; }
@@ -27,9 +27,9 @@
   .outline__item--selected { background:var(--color-shu-wash); }
   /* 記号そのものが開閉スイッチ。可視ギャップは4pxのみとする。 */
   .outline__marker {
-    box-sizing: border-box; display: inline-flex; align-items: center; justify-content: flex-start;
+    box-sizing: border-box; display: inline-flex; align-items: flex-start; justify-content: flex-start;
     flex: 0 0 auto; width: max-content; min-width: 0; max-width: min(120px, 33vw);
-    height: 26px; padding: 0 4px 0 0; border: 0; border-radius: 4px;
+    height: 26px; padding: 3px 4px 0 0; border: 0; border-radius: 4px;
     overflow: hidden; text-overflow: ellipsis;
     white-space: nowrap; color: var(--color-ink-3); user-select: none;
     font: 500 12px/1.4 var(--font-sans); font-variant-numeric: tabular-nums;
@@ -138,6 +138,8 @@
   }
   /* 内容がなくてもビュレット付き行の高さ・クリック範囲を保つ。文字は出さない。 */
   .outline__content:empty { min-height:1.35em; }
+  /* 編集時も番号は本文の最初の行と揃える。 */
+  .outline__item:has(> .outline__edit) > .outline__marker { padding-top:4px; }
   /* Ctrl+Bで強調した文章。濃い朱色と太字で、選択状態に依存せず判別する。 */
   .outline__red-bold { color: var(--color-shu-ink); font-weight: 750; }
   /* 高密度表示は行間だけを詰める。1行省略表示には戻さない。 */
@@ -237,7 +239,7 @@
     .outline__actions { min-width:0; }
     .outline__content { min-width:0; max-width:100%; }
     .outline__item { min-height:44px; padding-block:0; }
-    .outline__marker { min-height:44px; height:44px; }
+    .outline__marker { min-height:44px; height:44px; padding-top:10px; }
     /* 文字との4px間隔は保ち、操作領域だけを左側へ広げる（本文のタップを奪わない）。 */
     .outline__marker--toggle {
       box-sizing: border-box; min-width: 44px;
@@ -250,7 +252,9 @@
     .outline__zoom-action { display:none !important; }
     .outline__mobile-actions { display:grid !important; }
     .outline__actions button { min-width:44px; min-height:44px; }
-    .outline__content { font-size:15px; padding-block:2px; }
+    /* 1行のときも長文のときも1行目を同じ高さに置く。44pxタップ領域は維持。 */
+    .outline__content { font-size:15px; padding-block:10px; }
+    .outline__item:has(> .outline__edit) > .outline__marker { padding-top:10px; }
     .outline__edit { min-height:44px; padding-block:9px; font-size:16px; }
     .outline__hint { display:none; }
     .outline__new textarea { min-height:44px; font-size:16px; }

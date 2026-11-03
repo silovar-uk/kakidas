@@ -186,19 +186,19 @@ check('P2','文章の途中でEnterしても元の文章を分割しない',asyn
   await row(page,'左右').waitFor({state:'visible'});
   assert.deepEqual(await outline(page).locator('.outline__content').allTextContents(),['左右','追加']);
 });
-check('P2','展開した親行のEnterで子項目群の後ろへ兄弟を追加する',async(page)=>{
+check('P2','展開した親行のEnterは既存子より前に新しい先頭子を作る',async(page)=>{
   await put(page,'挿入親');await put(page,'挿入子');
   await row(page,'挿入子').focus();await page.keyboard.press('Tab');
   await page.waitForFunction(()=>document.querySelector('[data-outline-parent-id]:not([data-outline-parent-id=""])')?.textContent?.includes('挿入子'));
   await row(page,'挿入親').locator('.outline__content').click();
   const editing=page.getByRole('textbox',{name:'アウトラインの本文を編集'});
   await editing.press('End');await editing.press('Enter');
-  await fillSavedBlank(page,'次の兄弟');
-  await row(page,'次の兄弟').waitFor({state:'visible'});
-  assert.deepEqual(await outline(page).locator('.outline__content').allTextContents(),['挿入親','挿入子','次の兄弟']);
-  assert.equal(await row(page,'次の兄弟').getAttribute('aria-level'),'1');
+  await fillSavedBlank(page,'新しい先頭子');
+  await row(page,'新しい先頭子').waitFor({state:'visible'});
+  assert.deepEqual(await outline(page).locator('.outline__content').allTextContents(),['挿入親','新しい先頭子','挿入子']);
+  assert.equal(await row(page,'新しい先頭子').getAttribute('aria-level'),'2');
   await page.reload();
-  assert.deepEqual(await outline(page).locator('.outline__content').allTextContents(),['挿入親','挿入子','次の兄弟']);
+  assert.deepEqual(await outline(page).locator('.outline__content').allTextContents(),['挿入親','新しい先頭子','挿入子']);
 });
 check('P2','選択行のEnterはF2編集と異なり、新しい兄弟の空行を作る',async(page)=>{
   await put(page,'選択行A');await put(page,'選択行B');

@@ -49,3 +49,29 @@ test("A textarea must have no content and no selection before Backspace removes 
   assert.equal(isTrulyEmptyEditor(" ", 0, 0), false);
   assert.equal(isTrulyEmptyEditor("abc", 0, 3), false);
 });
+
+
+test("Enter on a parent inserts a new first child before existing 3.1", () => {
+  const data = [
+    row("parent", null, 2, "3 企画"),
+    row("childA", "parent", 0, "既存3.1"),
+    row("childB", "parent", 1, "既存3.2"),
+    row("nextRoot", null, 3, "4 完了"),
+  ];
+  assert.deepEqual(positionForBlankEnter(data, "parent", false), { parentId: "parent", index: 0 });
+  // 行頭編集だけは既存のルールを優先：新3は親の上。
+  assert.deepEqual(positionForBlankEnter(data, "parent", true), { parentId: null, index: 0 });
+  assert.deepEqual(positionForBlankEnter(data, "childA", false), { parentId: "parent", index: 1 });
+});
+
+test("Collapsed or completed children are still counted, and nested parents work", () => {
+  const data = [
+    row("root", null, 0, "root", { has_children: true }),
+    row("completed", "root", 0, "hidden", { is_completed: true }),
+    row("subParent", "root", 1, "sub", { has_children: true }),
+    row("grandchild", "subParent", 0, "grandchild"),
+  ];
+  assert.deepEqual(positionForBlankEnter(data, "root", false), { parentId: "root", index: 0 });
+  assert.deepEqual(positionForBlankEnter(data, "subParent", false), { parentId: "subParent", index: 0 });
+  assert.deepEqual(positionForBlankEnter(data, "grandchild", false), { parentId: "subParent", index: 1 });
+});

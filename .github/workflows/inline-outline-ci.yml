@@ -46,6 +46,7 @@ jobs:
             sleep 1
           done
           BASE_URL=http://127.0.0.1:4173/ node docs/outline/blank-rows-qa.mjs
+          BASE_URL=http://127.0.0.1:4173/ node docs/outline/parent-enter-fold-qa.mjs
           BASE_URL=http://127.0.0.1:4173/ node docs/time-shortcut/qa.mjs
           BASE_URL=http://127.0.0.1:4173/ node docs/outline/qa.mjs
           BASE_URL=http://127.0.0.1:4173/ node docs/reference/qa.mjs
