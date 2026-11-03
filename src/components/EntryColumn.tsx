@@ -1358,7 +1358,7 @@ export function EntryColumn({
             memoId={memoId} memoUpdatedAt={memoUpdatedAt}
             onCreateInline={async (content, parentId, index, draftId, metadata) =>
               await onCreate("sentence", content, metadata ?? {}, parentId, "bottom", draftId, undefined, index) as {id:string}}
-            onRemoveInline={onRemoveInline} onInlineDraftChange={onInlineDraftChange}
+            onRemoveInline={onRemoveInline} onRestoreInline={onRestore} onInlineDraftChange={onInlineDraftChange}
             disabled={disabled || isDeletingAll} dense={outlineDense} numbered={outlineNumbered}
             onUndoAvailabilityChange={(available, description) => {
               setOutlineCanUndo(available);
