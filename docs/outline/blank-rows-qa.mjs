@@ -91,6 +91,34 @@ try {
   assert.equal(await activeEditor.inputValue(), "Origina");
   assert.equal(await rows.count(), 4);
 
+  // Fast typing immediately after Enter must go to the new row, even before IndexedDB resolves.
+  await page.goto(url);
+  await page.getByRole("button", { name: /新しいメモ/ }).first().click();
+  await page.waitForURL(/\\/memos\\//);
+  await page.keyboard.press("Control+Shift+1");
+  await pending.fill("最初の行");
+  await pending.press("Enter");
+  await page.locator(".outline__content").filter({ hasText: "最初の行" }).first().waitFor();
+  await rows.filter({ has: page.locator(".outline__content", { hasText: "最初の行" }) }).first().locator(".outline__content").click();
+  await activeEditor.fill("変更した行");
+  await activeEditor.press("End");
+  await activeEditor.press("Enter");
+  await page.keyboard.type("すばやく入力");
+  await page.keyboard.press("Enter");
+  await page.keyboard.press("Enter");
+  await page.waitForFunction(() => {
+    const rowElements = [...document.querySelectorAll(".entry-column--sentence .outline__item[data-outline-id]")];
+    return rowElements.length === 4 && rowElements.some(el =>
+      (el.querySelector(".outline__content")?.textContent ?? "") === "すばやく入力");
+  }, undefined, { timeout: 9000 });
+  const rapid = await rowData();
+  assert.deepEqual(rapid.map(row => row.value), ["変更した行", "すばやく入力", "", ""],
+    "rapid typing and consecutive Enter preserve text and each blank");
+  await page.reload();
+  await rows.first().waitFor();
+  assert.deepEqual((await rowData()).map(row => row.value), ["変更した行", "すばやく入力", "", ""],
+    "rapid changes remain after reload");
+
   await context.close();
   console.log("OK blank rows: leading Enter, pending save, repeated Enter, Backspace, Undo, caret, reload, placeholder and text protection");
 } finally {
