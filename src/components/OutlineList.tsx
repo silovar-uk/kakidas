@@ -16,6 +16,7 @@ import type { OutlinePasteBatchResult } from "../repositories/memoRepository";
 import type { OutlineCompletionChange } from "../lib/outlineCompletion.js";
 import { siblingPositionAfter, visibleInsertionIndex, indentPositionAt } from "../lib/outlineInsert.js";
 import { siblingMoveIndex } from "../lib/outlineMove.js";
+import { positionForBlankEnter, canBackspaceDeleteBlank, isTrulyEmptyEditor } from "../lib/outlineBlank.js";
 import { foldableBranchesAtLevel, toggleFoldedLevel, parseFoldedIds } from "../lib/outlineFold.js";
 import { outlineEmphasisSegments, toggleOutlineEmphasis, stripOutlineEmphasis } from "../lib/outlineEmphasis.js";
 import { useDraftPersistence } from "../hooks/useDraftPersistence";
@@ -72,6 +73,8 @@ type OutlineListProps = {
   memoUpdatedAt: string;
   onCreateInline: (content: string, parentId: string | null, index: number, draftId?: string, metadata?: EntryCreateMetadata) => Promise<{ id: string }>;
   onRemoveInline?: (id: string) => Promise<void>;
+  /** Backspaceで削除した空行を元のIDで復元する。 */
+  onRestoreInline?: (ids: string[]) => Promise<void>;
   onInlineDraftChange?: (hasDraft: boolean) => void;
   disabled?: boolean;
   /** 高密度表示か。切り替えは列のメニュー(EntryColumn)に置く。 */
@@ -122,6 +125,8 @@ type UndoableAction =
   | { type: "edit"; id: string; previous: string }
   | ({ type: "move" } & MoveHistory)
   | { type: "create"; id: string }
+  | { type: "create-blank"; id: string }
+  | { type: "delete-blank"; id: string; parentId: string | null; index: number }
   | { type: "complete"; id: string; previous: boolean; changes?: OutlineCompletionChange[] }
   | { type: "paste"; batch: OutlinePasteBatchResult };
 
@@ -174,6 +179,7 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
   memoUpdatedAt,
   onCreateInline,
   onRemoveInline,
+  onRestoreInline,
   onInlineDraftChange,
   disabled = false,
   dense,
@@ -321,6 +327,8 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
       : last.type === "edit" ? "本文の変更を戻す"
       : last.type === "move" ? "行の移動を戻す"
       : last.type === "complete" ? "完了・再開を元に戻す"
+      : last.type === "delete-blank" ? "削除した空行を復元"
+      : last.type === "create-blank" ? "追加した空行を取り消す"
       : last.type === "paste" ? `取り込んだ${last.batch.created.length}行をまとめて戻す`
       : "直前に追加した行を戻す";
     onUndoAvailabilityChange?.(undoDepth > 0 && !busy && !disabled && editingId === null, description);
@@ -416,7 +424,7 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
       field.setSelectionRange(offset, offset);
       requestedSelectionRef.current = null;
     }
-  }, [editingId]);
+  }, [editingId, entries]);
   // 消えた行を選んだままにしない。
   useEffect(() => {
     if (selectedId && !nodeById.has(selectedId)) setSelectedId(null);
