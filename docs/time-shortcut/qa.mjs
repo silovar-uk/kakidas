@@ -47,7 +47,7 @@ try {
   const savedRows = await page.locator(".entry-column--sentence [data-outline-id]").evaluateAll(rows =>
     rows.map(row => row.querySelector("textarea")?.value ?? row.querySelector(".outline__content")?.textContent ?? "")
   );
-  assert.equal(savedRows.some(value => /^議題: \\d{2}:\\d{2}$/.test(value)), true,
+  assert.equal(savedRows.some(value => /^議題: \d{2}:\d{2}$/.test(value)), true,
     "saved row survives reload: " + JSON.stringify(savedRows));
 
   const editorRow = page.locator(".entry-column--sentence .outline__content").filter({ hasText: /^議題:/ }).first();
