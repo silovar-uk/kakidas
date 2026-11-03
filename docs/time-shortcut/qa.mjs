@@ -40,8 +40,15 @@ try {
   assert.match(await pending.inputValue(), /^議題: \d{2}:\d{2}$/);
   await pending.press("Enter");
   await page.locator(".entry-column--sentence .outline__content").filter({ hasText: /^議題:/ }).first().waitFor();
+  // Leave time for IndexedDB transaction completion before navigating.
+  await page.waitForTimeout(700);
   await page.reload();
-  assert.equal(await page.locator(".entry-column--sentence .outline__content").filter({ hasText: /^議題:/ }).count(), 1, "saved row survives reload");
+  await page.locator(".entry-column--sentence [data-outline-id]").first().waitFor();
+  const savedRows = await page.locator(".entry-column--sentence [data-outline-id]").evaluateAll(rows =>
+    rows.map(row => row.querySelector("textarea")?.value ?? row.querySelector(".outline__content")?.textContent ?? "")
+  );
+  assert.equal(savedRows.some(value => /^議題: \\d{2}:\\d{2}$/.test(value)), true,
+    "saved row survives reload: " + JSON.stringify(savedRows));
 
   const editorRow = page.locator(".entry-column--sentence .outline__content").filter({ hasText: /^議題:/ }).first();
   await editorRow.click();
