@@ -1005,6 +1005,68 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
   };
   const zoomTo = (id: string | null) => { setZoomId(id); setCaret(null); setSelectedId(null); };
 
+  /**
+   * Enterは新しい正式な空行を作る。行頭なら上、その他は下。
+   * 文字と元のID・親子関係を保持し、保存された行が描画されてから焦点を渡す。
+   */
+  const insertSavedBlank = (row: EntryTreeNode, atStart: boolean, sourceText = editingValue) => {
+    if (disabled || busy || creatingRef.current || savingRef.current) return;
+    const position = positionForBlankEnter(allEntries, row.id, atStart);
+    if (!position) return;
+    const content = sourceText.trim();
+    creatingRef.current = true;
+    setBusy(true);
+    void (async () => {
+      if (content !== row.content) {
+        await onUpdate(row.id, { content });
+        recordUndo({ type: "edit", id: row.id, previous: row.content });
+      }
+      const created = await onCreateInline("", position.parentId, position.index);
+      recordUndo({ type: "create-blank", id: created.id });
+      setCaret({ parentId: position.parentId, index: position.index + 1 });
+      setFocusSavedBlankId(created.id);
+      setMessage("");
+    })().catch(showError).finally(() => {
+      creatingRef.current = false;
+      setBusy(false);
+    });
+  };
+
+  /**
+   * Backspaceは「何も持たない空の葉」だけ削除。
+   * 子孫・結び付き・補足情報を残すため削除はrequireLeafで二重検証する。
+   */
+  const removeSavedBlank = (row: EntryTreeNode, currentText = row.content) => {
+    if (disabled || busy || creatingRef.current || savingRef.current || !onRemoveInline) return;
+    if (!canBackspaceDeleteBlank({ ...row, content: currentText }, paragraphsByRowId?.get(row.id)?.length ?? 0)) {
+      setMessage("子項目や補足情報がある行はBackspaceでは削除しません。項目の操作から確認してください。");
+      return;
+    }
+    const index = persistedChildrenOf(row.parent_id).findIndex(item => item.id === row.id);
+    if (index < 0) return;
+    const at = visible.findIndex(item => item.id === row.id);
+    const neighbor = visible[at - 1] ?? visible[at + 1] ?? null;
+    setBusy(true);
+    void (async () => {
+      if (row.content !== currentText) {
+        await onUpdate(row.id, { content: currentText });
+        recordUndo({ type: "edit", id: row.id, previous: row.content });
+      }
+      await onRemoveInline(row.id);
+      recordUndo({ type: "delete-blank", id: row.id, parentId: row.parent_id, index });
+      setEditingId(null);
+      if (neighbor) {
+        setSelectedId(neighbor.id);
+        focusRow(neighbor.id);
+      } else {
+        setSelectedId(null);
+        // 全行を消したときも、書く場所だけは残す。
+        beginPending({ parentId: row.parent_id, index });
+      }
+      setMessage("空行を削除しました。Ctrl / ⌘ + Z で元に戻せます。");
+    })().catch(showError).finally(() => setBusy(false));
+  };
+
   const onRowKeyDown = (event: KeyboardEvent<HTMLDivElement>, row: EntryTreeNode) => {
     if (disabled || busy || event.nativeEvent.isComposing) return;
     if ((event.ctrlKey || event.metaKey) && !event.shiftKey && !event.altKey && event.key.toLowerCase() === "b") {
