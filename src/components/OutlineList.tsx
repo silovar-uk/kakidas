@@ -121,6 +121,13 @@ type OutlineListProps = {
 };
 
 type MoveHistory = { id: string; parentId: string | null; index: number };
+/** Enter直後の文字入力を保存待ちで失わないための連続入力セッション。 */
+type BlankInsertSession = {
+  parentId: string | null;
+  index: number;
+  committed: string[];
+  keepFocus: boolean;
+};
 type UndoableAction =
   | { type: "edit"; id: string; previous: string }
   | ({ type: "move" } & MoveHistory)
@@ -217,6 +224,7 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
   type PendingRow = { parentId: string | null; index: number; value: string };
   const [pending, setPending] = useState<PendingRow | null>(null);
   const pendingRef = useRef<PendingRow | null>(null);
+  const blankInsertSessionRef = useRef<BlankInsertSession | null>(null);
   const pendingEditorRef = useRef<HTMLTextAreaElement | null>(null);
   const pasteReviewSelectRef = useRef<HTMLSelectElement | null>(null);
   const creatingRef = useRef(false);
