@@ -212,6 +212,7 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
   /** 完了後の遅延フォーカスが、後から始まった入力を奪わないようにする世代番号。 */
   const focusEpochRef = useRef(0);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [focusSavedBlankId, setFocusSavedBlankId] = useState<string | null>(null);
   const [editingValue, setEditingValue] = useState("");
   type PendingRow = { parentId: string | null; index: number; value: string };
   const [pending, setPending] = useState<PendingRow | null>(null);
@@ -424,12 +425,25 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
       field.setSelectionRange(offset, offset);
       requestedSelectionRef.current = null;
     }
-  }, [editingId, entries]);
+  }, [editingId]);
   // 消えた行を選んだままにしない。
   useEffect(() => {
     if (selectedId && !nodeById.has(selectedId)) setSelectedId(null);
     if (editingId && !nodeById.has(editingId)) setEditingId(null);
   }, [editingId, nodeById, selectedId]);
+
+  // 保存の完了とReactの一覧反映は同じフレームとは限らない。
+  // 新しい行が実際に描かれたときだけ編集フォーカスを移す。
+  useEffect(() => {
+    if (!focusSavedBlankId) return;
+    const row = nodeById.get(focusSavedBlankId);
+    if (!row) return;
+    requestedSelectionRef.current = { id: row.id, offset: 0 };
+    setEditingValue(row.content);
+    setSelectedId(row.id);
+    setEditingId(row.id);
+    setFocusSavedBlankId(null);
+  }, [focusSavedBlankId, nodeById]);
 
   const focusRow = (id: string) => window.requestAnimationFrame(() => {
     document.querySelector<HTMLElement>(`[data-outline-id="${CSS.escape(id)}"]`)?.focus({ preventScroll: false });
