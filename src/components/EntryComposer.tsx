@@ -1022,6 +1022,7 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
       placeholder: isDesk ? DESK_PLACEHOLDER[isMobile ? "mobile" : "pc"][slot] : ENTRY_KIND_PLACEHOLDER[kind],
       onChange: handleChange,
       onKeyDown: handleKeyDown,
+      "data-kakidas-time-input": !isReferenceUrl ? "" : undefined,
       onCompositionStart: handleCompositionStart,
       onCompositionEnd: handleCompositionEnd,
     };

@@ -1281,7 +1281,7 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
       aria-level={spot.depth + 1}
       style={{ "--outline-depth": spot.depth } as CSSProperties}>
       <span className="outline__marker outline__marker--bullet" aria-hidden="true">•</span>
-      <textarea ref={pendingEditorRef} className="outline__edit outline__edit--pending" rows={1}
+      <textarea ref={pendingEditorRef} className="outline__edit outline__edit--pending" rows={1} data-kakidas-time-input=""
         disabled={disabled || pendingSaving}
         aria-label="新しいアウトライン項目" placeholder={visible.length ? "次の項目…" : "何から書く？"}
         value={pending.value} onChange={event => changePending({ ...pending, value: event.target.value })}
@@ -1352,11 +1352,11 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
             {numbered ? row.outline_number : "•"}
           </span>
         )}
-        {editingId === row.id ? <textarea ref={editorRef} className="outline__edit" rows={1} value={editingValue}
+        {editingId === row.id ? <textarea ref={editorRef} className="outline__edit" rows={1} value={editingValue} data-kakidas-time-input=""
           aria-label="アウトラインの本文を編集" onChange={(event) => setEditingValue(event.target.value)}
           onKeyDown={(event) => onEditorKeyDown(event, row)}
           onPaste={(event) => onEditorPaste(event, row)}
-          onBlur={() => { if (skipBlurRef.current) { skipBlurRef.current = false; return; } void commitEditing(); }}/>
+          onBlur={(event) => { if (skipBlurRef.current) { skipBlurRef.current = false; return; } if (event.relatedTarget instanceof HTMLElement && event.relatedTarget.closest(".command-palette")) return; void commitEditing(); }}/>
         : <span className="outline__content"
             onClick={(event) => {
               // クリックでもタップでも文章をその場で編集。選択専用モードは作らない。
