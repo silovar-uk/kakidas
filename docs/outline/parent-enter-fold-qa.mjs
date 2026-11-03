@@ -80,14 +80,15 @@ try {
   assert.deepEqual(await contents(), ["親", "折り畳みから作成", "新3.1", "既存の子"]);
 
   // Arrow folding from inside the actual editor preserves its focus and text.
+  const activeParent = page.locator(`[data-outline-id="${parentId}"]`);
   await item("親").locator(".outline__content").click();
   await editor.waitFor();
   const beforeValue = await editor.inputValue();
   await editor.press("Control+Alt+ArrowUp");
-  assert.equal(await item("親").getAttribute("aria-expanded"), "false");
+  assert.equal(await activeParent.getAttribute("aria-expanded"), "false");
   assert.equal(await editor.evaluate(el => document.activeElement === el), true);
   await editor.press("Control+Alt+ArrowDown");
-  assert.equal(await item("親").getAttribute("aria-expanded"), "true");
+  assert.equal(await activeParent.getAttribute("aria-expanded"), "true");
   assert.equal(await editor.inputValue(), beforeValue);
   await editor.press("Escape");
 
