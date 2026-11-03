@@ -114,9 +114,16 @@ try {
   const rapid = await rowData();
   assert.deepEqual(rapid.map(row => row.value), ["変更した行", "すばやく入力", "", ""],
     "rapid typing and consecutive Enter preserve text and each blank");
+  // Ctrl+Z on a newly created blank restores the previous row count.
+  await activeEditor.waitFor({ state: "visible" });
+  assert.equal(await activeEditor.inputValue(), "");
+  await activeEditor.press("Control+z");
+  await page.waitForFunction(() => document.querySelectorAll(".entry-column--sentence .outline__item[data-outline-id]").length === 3);
+  assert.deepEqual((await rowData()).map(row => row.value), ["変更した行", "すばやく入力", ""],
+    "Ctrl+Z removes only the most recently inserted blank");
   await page.reload();
   await rows.first().waitFor();
-  assert.deepEqual((await rowData()).map(row => row.value), ["変更した行", "すばやく入力", "", ""],
+  assert.deepEqual((await rowData()).map(row => row.value), ["変更した行", "すばやく入力", ""],
     "rapid changes remain after reload");
 
   await context.close();
