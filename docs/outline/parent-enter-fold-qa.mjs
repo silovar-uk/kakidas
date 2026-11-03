@@ -8,7 +8,7 @@ const { chromium } = createRequire(base)("playwright");
 const url = process.env.BASE_URL || "http://127.0.0.1:4173/";
 const browser = await chromium.launch();
 try {
-  const context = await browser.newContext({ viewport: { width: 1366, height: 768 }, locale: "ja-J", timezoneId: "Asia/Tokyo" });
+  const context = await browser.newContext({ viewport: { width: 1366, height: 768 }, locale: "ja-JP", timezoneId: "Asia/Tokyo" });
   context.setDefaultTimeout(9000);
   const page = await context.newPage();
   await page.goto(url);
