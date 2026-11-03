@@ -11,7 +11,7 @@ export function positionForBlankEnter(allRows, rowId, atStart) {
     .sort((a, b) => a.sort_order - b.sort_order || a.created_at.localeCompare(b.created_at));
   const index = siblings.findIndex(item => item.id === rowId);
   if (index < 0) return null;
-  return { parentId, index: index + (atStart && row.content.trim() ? 0 : 1) };
+  return { parentId, index: index + (atStart ? 0 : 1) };
 }
 
 /**
