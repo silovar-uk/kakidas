@@ -225,6 +225,7 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
   const [pending, setPending] = useState<PendingRow | null>(null);
   const pendingRef = useRef<PendingRow | null>(null);
   const blankInsertSessionRef = useRef<BlankInsertSession | null>(null);
+  const skipPendingBlurRef = useRef(false);
   const pendingEditorRef = useRef<HTMLTextAreaElement | null>(null);
   const pasteReviewSelectRef = useRef<HTMLSelectElement | null>(null);
   const creatingRef = useRef(false);
@@ -1018,23 +1019,65 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
    * 文字と元のID・親子関係を保持し、保存された行が描画されてから焦点を渡す。
    */
   const insertSavedBlank = (row: EntryTreeNode, atStart: boolean, sourceText = editingValue) => {
-    if (disabled || busy || creatingRef.current || savingRef.current) return;
+    if (disabled || busy || creatingRef.current || savingRef.current || blankInsertSessionRef.current) return;
     const position = positionForBlankEnter(allEntries, row.id, atStart);
     if (!position) return;
-    const content = sourceText.trim();
+    const sourceContent = sourceText.trim();
+    const session: BlankInsertSession = {
+      parentId: position.parentId, index: position.index,
+      committed: [], keepFocus: true,
+    };
+    // 入力の切り替えは同期。DB保存中に続けて打った文字やIME入力を旧行へ混入させない。
+    skipBlurRef.current = true;
+    beginPending(position, "", true);
+    window.requestAnimationFrame(() => { skipBlurRef.current = false; });
+    blankInsertSessionRef.current = session;
     creatingRef.current = true;
     setBusy(true);
     void (async () => {
-      if (content !== row.content) {
-        await onUpdate(row.id, { content });
+      if (sourceContent !== row.content) {
+        await onUpdate(row.id, { content: sourceContent });
         recordUndo({ type: "edit", id: row.id, previous: row.content });
       }
-      const created = await onCreateInline("", position.parentId, position.index);
-      recordUndo({ type: "create-blank", id: created.id });
-      setCaret({ parentId: position.parentId, index: position.index + 1 });
-      setFocusSavedBlankId(created.id);
-      setMessage("");
-    })().catch(showError).finally(() => {
+      let offset = 0;
+      // 保存要求は直列化。Enterを連打しても順序を変えずに1打鍵1行を保証。
+      while (blankInsertSessionRef.current === session) {
+        const created = await onCreateInline("", session.parentId, session.index + offset);
+        let persisted = "";
+        for (;;) {
+          // すでに次のEnterが来ていれば、その時点の文字列をこの行に保存。
+          // そうでなければ入力中の最新値を使い、通信中に増えた文字も取り込む。
+          const committed = offset < session.committed.length;
+          const desired = (committed ? session.committed[offset] : pendingRef.current?.value ?? "").trim();
+          if (desired !== persisted) {
+            await onUpdate(created.id, { content: desired });
+            persisted = desired;
+            continue;
+          }
+          break;
+        }
+        recordUndo({ type: persisted ? "create" : "create-blank", id: created.id });
+        offset += 1;
+        if (offset <= session.committed.length) continue;
+        // 最後の行へカーソルを戻すのは、まだその入力欄を使っている場合だけ。
+        const focus = session.keepFocus;
+        setCaret({ parentId: session.parentId, index: session.index + offset });
+        skipPendingBlurRef.current = true;
+        flushSync(() => changePending(null));
+        blankInsertSessionRef.current = null;
+        window.requestAnimationFrame(() => { skipPendingBlurRef.current = false; });
+        markInlineCommitted();
+        setPendingMeta(emptyMeta);
+        if (focus) setFocusSavedBlankId(created.id);
+        setMessage("");
+        break;
+      }
+    })().catch(error => {
+      // 作成が失敗しても入力欄とその文字は残し、再入力できる。
+      if (sourceContent !== row.content) setFailedEdit({ id: row.id, value: sourceContent });
+      showError(error);
+    }).finally(() => {
+      if (blankInsertSessionRef.current === session) blankInsertSessionRef.current = null;
       creatingRef.current = false;
       setBusy(false);
     });
