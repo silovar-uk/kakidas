@@ -365,6 +365,7 @@ export function MobileParagraphEditorSheet({
           <textarea
             ref={contentRef}
             className="mobile-paragraph-editor__textarea"
+            data-kakidas-time-input=""
             value={content}
             disabled={disabled || isSaving}
             rows={8}
