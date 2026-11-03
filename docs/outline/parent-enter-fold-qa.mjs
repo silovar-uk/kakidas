@@ -126,6 +126,7 @@ try {
 
   await page.setViewportSize({ width: 390, height: 844 });
   const mobile = await geometry();
+  console.log("NUMBER_GEOMETRY", JSON.stringify({ desktop, mobile }));
   assert.ok(mobile.textHeight > 70, "long text wraps on mobile");
   assert.ok(Math.abs(mobile.markerTop - mobile.textTop) <= 2, "mobile marker anchored to first line");
   assert.ok(mobile.markerHeight >= 44, "mobile marker retains 44px touch target");
