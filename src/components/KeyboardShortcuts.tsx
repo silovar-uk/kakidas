@@ -242,7 +242,7 @@ export function KeyboardShortcuts() {
                 <span>{command.label}</span><kbd>{command.keys}</kbd>
               </div>
             )}
-            <p>アウトライン内：Enterで次の行、Tab / Shift+Tabで階層変更、F2で編集、Ctrl/⌘+Enterで完了、Alt+Shift+↑↓で並び替え。</p>
+            <p>アウトライン内：行頭Enterで上に空行、それ以外のEnterで下に空行を保存。空行のBackspaceで削除、Ctrl/⌘+Zで復元。Tab / Shift+Tabで階層変更、F2で編集、Ctrl/⌘+Enterで完了、Alt+Shift+↑↓で並び替え。</p>
             <p>親項目の番号・•をクリックして子階層を開閉。Ctrl/⌘ + . で選択中の枝、Ctrl/⌘ + Shift + . で同じ深さの枝をまとめて開閉。開閉状態はメモごとに記憶します。</p>
             <p>編集中：Alt + ; でカーソル位置に現在時刻（24時間表記）を挿入。Ctrl/⌘+Bで強調、Shift+Enterで行内改行。余白はAlt+Q。</p>
             <button type="button" className="command-palette__help-action"

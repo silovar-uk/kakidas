@@ -1,0 +1,20 @@
+export type BlankRow = {
+  id: string;
+  parent_id: string | null;
+  sort_order: number;
+  created_at: string;
+  content: string;
+  kind?: string;
+  has_children?: boolean;
+  child_count?: number;
+  heading?: string;
+  tag?: string | null;
+  note?: string;
+  link_url?: string;
+  satisfaction?: number;
+  is_completed?: boolean;
+};
+export type BlankPosition = { parentId: string | null; index: number };
+export function positionForBlankEnter<T extends BlankRow>(allRows: T[], rowId: string, atStart: boolean): BlankPosition | null;
+export function canBackspaceDeleteBlank(row: BlankRow | null | undefined, linkedParagraphCount?: number): boolean;
+export function isTrulyEmptyEditor(value: string, selectionStart: number, selectionEnd: number): boolean;

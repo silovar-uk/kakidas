@@ -136,13 +136,9 @@
     color:inherit; line-height:1.35; white-space:pre-wrap;
     overflow-wrap:anywhere; word-break:break-word; cursor:text;
   }
+  /* 内容がなくてもビュレット付き行の高さ・クリック範囲を保つ。文字は出さない。 */
+  .outline__content:empty { min-height:1.35em; }
   /* Ctrl+Bで強調した文章。濃い朱色と太字で、選択状態に依存せず判別する。 */
-  /* An intentionally blank, persisted row remains visible and clickable. */
-  .outline__empty-placeholder {
-    display:inline-block; min-height:1.35em;
-    color:var(--color-ink-3); opacity:.7; font-style:italic;
-  }
-  .outline__item--completed .outline__empty-placeholder { text-decoration:none; }
   .outline__red-bold { color: var(--color-shu-ink); font-weight: 750; }
   /* 高密度表示は行間だけを詰める。1行省略表示には戻さない。 */
   .outline--dense .outline__content { white-space:pre-wrap; }

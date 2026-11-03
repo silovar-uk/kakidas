@@ -16,6 +16,7 @@ import type { OutlinePasteBatchResult } from "../repositories/memoRepository";
 import type { OutlineCompletionChange } from "../lib/outlineCompletion.js";
 import { siblingPositionAfter, visibleInsertionIndex, indentPositionAt } from "../lib/outlineInsert.js";
 import { siblingMoveIndex } from "../lib/outlineMove.js";
+import { positionForBlankEnter, canBackspaceDeleteBlank, isTrulyEmptyEditor } from "../lib/outlineBlank.js";
 import { foldableBranchesAtLevel, toggleFoldedLevel, parseFoldedIds } from "../lib/outlineFold.js";
 import { outlineEmphasisSegments, toggleOutlineEmphasis, stripOutlineEmphasis } from "../lib/outlineEmphasis.js";
 import { useDraftPersistence } from "../hooks/useDraftPersistence";
@@ -72,6 +73,8 @@ type OutlineListProps = {
   memoUpdatedAt: string;
   onCreateInline: (content: string, parentId: string | null, index: number, draftId?: string, metadata?: EntryCreateMetadata) => Promise<{ id: string }>;
   onRemoveInline?: (id: string) => Promise<void>;
+  /** Backspaceで削除した空行を元のIDで復元する。 */
+  onRestoreInline?: (ids: string[]) => Promise<void>;
   onInlineDraftChange?: (hasDraft: boolean) => void;
   disabled?: boolean;
   /** 高密度表示か。切り替えは列のメニュー(EntryColumn)に置く。 */
@@ -118,10 +121,19 @@ type OutlineListProps = {
 };
 
 type MoveHistory = { id: string; parentId: string | null; index: number };
+/** Enter直後の文字入力を保存待ちで失わないための連続入力セッション。 */
+type BlankInsertSession = {
+  parentId: string | null;
+  index: number;
+  committed: string[];
+  keepFocus: boolean;
+};
 type UndoableAction =
   | { type: "edit"; id: string; previous: string }
   | ({ type: "move" } & MoveHistory)
   | { type: "create"; id: string }
+  | { type: "create-blank"; id: string }
+  | { type: "delete-blank"; id: string; parentId: string | null; index: number }
   | { type: "complete"; id: string; previous: boolean; changes?: OutlineCompletionChange[] }
   | { type: "paste"; batch: OutlinePasteBatchResult };
 
@@ -174,6 +186,7 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
   memoUpdatedAt,
   onCreateInline,
   onRemoveInline,
+  onRestoreInline,
   onInlineDraftChange,
   disabled = false,
   dense,
@@ -206,10 +219,13 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
   /** 完了後の遅延フォーカスが、後から始まった入力を奪わないようにする世代番号。 */
   const focusEpochRef = useRef(0);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [focusSavedBlankId, setFocusSavedBlankId] = useState<string | null>(null);
   const [editingValue, setEditingValue] = useState("");
   type PendingRow = { parentId: string | null; index: number; value: string };
   const [pending, setPending] = useState<PendingRow | null>(null);
   const pendingRef = useRef<PendingRow | null>(null);
+  const blankInsertSessionRef = useRef<BlankInsertSession | null>(null);
+  const skipPendingBlurRef = useRef(false);
   const pendingEditorRef = useRef<HTMLTextAreaElement | null>(null);
   const pasteReviewSelectRef = useRef<HTMLSelectElement | null>(null);
   const creatingRef = useRef(false);
@@ -321,6 +337,8 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
       : last.type === "edit" ? "本文の変更を戻す"
       : last.type === "move" ? "行の移動を戻す"
       : last.type === "complete" ? "完了・再開を元に戻す"
+      : last.type === "delete-blank" ? "削除した空行を復元"
+      : last.type === "create-blank" ? "追加した空行を取り消す"
       : last.type === "paste" ? `取り込んだ${last.batch.created.length}行をまとめて戻す`
       : "直前に追加した行を戻す";
     onUndoAvailabilityChange?.(undoDepth > 0 && !busy && !disabled && editingId === null, description);
@@ -422,6 +440,19 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
     if (selectedId && !nodeById.has(selectedId)) setSelectedId(null);
     if (editingId && !nodeById.has(editingId)) setEditingId(null);
   }, [editingId, nodeById, selectedId]);
+
+  // 保存の完了とReactの一覧反映は同じフレームとは限らない。
+  // 新しい行が実際に描かれたときだけ編集フォーカスを移す。
+  useEffect(() => {
+    if (!focusSavedBlankId) return;
+    const row = nodeById.get(focusSavedBlankId);
+    if (!row) return;
+    requestedSelectionRef.current = { id: row.id, offset: 0 };
+    setEditingValue(row.content);
+    setSelectedId(row.id);
+    setEditingId(row.id);
+    setFocusSavedBlankId(null);
+  }, [focusSavedBlankId, nodeById]);
 
   const focusRow = (id: string) => window.requestAnimationFrame(() => {
     document.querySelector<HTMLElement>(`[data-outline-id="${CSS.escape(id)}"]`)?.focus({ preventScroll: false });
@@ -791,8 +822,8 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
     } catch (error) { showError(error); }
     finally { setBusy(false); }
   };
-  const undoLast = async () => {
-    if (disabled || busy || editingId || pendingRef.current?.value.trim() || savingRef.current || undoInFlightRef.current) return;
+  const undoLast = async (allowBlankEditor = false) => {
+    if (disabled || busy || (editingId && !allowBlankEditor) || pendingRef.current?.value.trim() || savingRef.current || undoInFlightRef.current) return;
     const last = undoStackRef.current.at(-1);
     if (!last) return;
     if (last.type === "paste") {
@@ -810,12 +841,14 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
       return;
     }
     const target = nodeById.get(last.id);
-    if (!target && last.type !== "complete") {
+    if (!target && last.type !== "complete" && last.type !== "delete-blank") {
       // 反映待ちの行を誤って履歴から捨てない。次回そのまま再試行できる。
       setMessage("対象の行がまだ表示されていません。更新後にもう一度お試しください。");
       return;
     }
-    if (last.type === "create" && (!target || target.has_children || !onUndoCreate)) {
+    if ((last.type === "create" && (!target || target.has_children || !onUndoCreate)) ||
+        (last.type === "create-blank" && (!target || target.has_children || !onRemoveInline)) ||
+        (last.type === "delete-blank" && !onRestoreInline)) {
       setMessage("子がある行は安全のためUndoしません。項目の操作から確認してください。");
       return;
     }
@@ -829,17 +862,22 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
         if(last.changes&&onRestoreCompletion)await onRestoreCompletion(last.changes);
         else await onUpdate(last.id,{is_completed:last.previous});
       }
+      else if (last.type === "create-blank") await onRemoveInline!(last.id);
+      else if (last.type === "delete-blank") await onRestoreInline!([last.id]);
       else await onUndoCreate!(target!);
       undoStackRef.current.pop();
       setUndoDepth(undoStackRef.current.length);
       setMessage("");
-      if (last.type === "create") {
+      if (last.type === "create" || last.type === "create-blank") {
         setSelectedId(null);
         if (originalLocation) {
           const restored = pendingRef.current;
           if (restored) changePending({ ...restored, parentId: originalLocation.parentId, index: originalLocation.index });
           setCaret({ parentId: originalLocation.parentId, index: originalLocation.index });
         }
+      } else if (last.type === "delete-blank") {
+        setSelectedId(last.id);
+        focusRow(last.id);
       } else if (last.type === "complete") {
         // 非表示だった行もUndoで復元できる。実際のDOM反映後に編集位置を戻す。
         setSelectedId(last.id);
@@ -976,8 +1014,118 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
   };
   const zoomTo = (id: string | null) => { setZoomId(id); setCaret(null); setSelectedId(null); };
 
+  /**
+   * Enterは新しい正式な空行を作る。行頭なら上、その他は下。
+   * 文字と元のID・親子関係を保持し、保存された行が描画されてから焦点を渡す。
+   */
+  const insertSavedBlank = (row: EntryTreeNode, atStart: boolean, sourceText = editingValue) => {
+    if (disabled || busy || creatingRef.current || savingRef.current || blankInsertSessionRef.current) return;
+    const position = positionForBlankEnter(allEntries, row.id, atStart);
+    if (!position) return;
+    const sourceContent = sourceText.trim();
+    const session: BlankInsertSession = {
+      parentId: position.parentId, index: position.index,
+      committed: [], keepFocus: true,
+    };
+    // 入力の切り替えは同期。DB保存中に続けて打った文字やIME入力を旧行へ混入させない。
+    skipBlurRef.current = true;
+    beginPending(position, "", true);
+    window.requestAnimationFrame(() => { skipBlurRef.current = false; });
+    blankInsertSessionRef.current = session;
+    creatingRef.current = true;
+    setBusy(true);
+    void (async () => {
+      if (sourceContent !== row.content) {
+        await onUpdate(row.id, { content: sourceContent });
+        recordUndo({ type: "edit", id: row.id, previous: row.content });
+      }
+      let offset = 0;
+      // 保存要求は直列化。Enterを連打しても順序を変えずに1打鍵1行を保証。
+      while (blankInsertSessionRef.current === session) {
+        const created = await onCreateInline("", session.parentId, session.index + offset);
+        let persisted = "";
+        for (;;) {
+          // すでに次のEnterが来ていれば、その時点の文字列をこの行に保存。
+          // そうでなければ入力中の最新値を使い、通信中に増えた文字も取り込む。
+          const committed = offset < session.committed.length;
+          const desired = (committed ? session.committed[offset] : pendingRef.current?.value ?? "").trim();
+          if (desired !== persisted) {
+            await onUpdate(created.id, { content: desired });
+            persisted = desired;
+            continue;
+          }
+          break;
+        }
+        recordUndo({ type: persisted ? "create" : "create-blank", id: created.id });
+        offset += 1;
+        if (offset <= session.committed.length) continue;
+        // 最後の行へカーソルを戻すのは、まだその入力欄を使っている場合だけ。
+        const focus = session.keepFocus;
+        setCaret({ parentId: session.parentId, index: session.index + offset });
+        skipPendingBlurRef.current = true;
+        flushSync(() => changePending(null));
+        blankInsertSessionRef.current = null;
+        window.requestAnimationFrame(() => { skipPendingBlurRef.current = false; });
+        markInlineCommitted();
+        setPendingMeta(emptyMeta);
+        if (focus) setFocusSavedBlankId(created.id);
+        setMessage("");
+        break;
+      }
+    })().catch(error => {
+      // 作成が失敗しても入力欄とその文字は残し、再入力できる。
+      if (sourceContent !== row.content) setFailedEdit({ id: row.id, value: sourceContent });
+      showError(error);
+    }).finally(() => {
+      if (blankInsertSessionRef.current === session) blankInsertSessionRef.current = null;
+      creatingRef.current = false;
+      setBusy(false);
+    });
+  };
+
+  /**
+   * Backspaceは「何も持たない空の葉」だけ削除。
+   * 子孫・結び付き・補足情報を残すため削除はrequireLeafで二重検証する。
+   */
+  const removeSavedBlank = (row: EntryTreeNode, currentText = row.content) => {
+    if (disabled || busy || creatingRef.current || savingRef.current || !onRemoveInline) return;
+    if (!canBackspaceDeleteBlank({ ...row, content: currentText }, paragraphsByRowId?.get(row.id)?.length ?? 0)) {
+      setMessage("子項目や補足情報がある行はBackspaceでは削除しません。項目の操作から確認してください。");
+      return;
+    }
+    const index = persistedChildrenOf(row.parent_id).findIndex(item => item.id === row.id);
+    if (index < 0) return;
+    const at = visible.findIndex(item => item.id === row.id);
+    const neighbor = visible[at - 1] ?? visible[at + 1] ?? null;
+    setBusy(true);
+    void (async () => {
+      if (row.content !== currentText) {
+        await onUpdate(row.id, { content: currentText });
+        recordUndo({ type: "edit", id: row.id, previous: row.content });
+      }
+      await onRemoveInline(row.id);
+      recordUndo({ type: "delete-blank", id: row.id, parentId: row.parent_id, index });
+      setEditingId(null);
+      if (neighbor) {
+        setSelectedId(neighbor.id);
+        focusRow(neighbor.id);
+      } else {
+        setSelectedId(null);
+        // 全行を消したときも、書く場所だけは残す。
+        beginPending({ parentId: row.parent_id, index });
+      }
+      setMessage("空行を削除しました。Ctrl / ⌘ + Z で元に戻せます。");
+    })().catch(showError).finally(() => setBusy(false));
+  };
+
   const onRowKeyDown = (event: KeyboardEvent<HTMLDivElement>, row: EntryTreeNode) => {
     if (disabled || busy || event.nativeEvent.isComposing) return;
+    if (event.key === "Backspace" && !event.repeat && !event.altKey && !event.ctrlKey && !event.metaKey &&
+        !event.shiftKey && row.content.length === 0) {
+      event.preventDefault();
+      removeSavedBlank(row);
+      return;
+    }
     if ((event.ctrlKey || event.metaKey) && !event.shiftKey && !event.altKey && event.key.toLowerCase() === "b") {
       event.preventDefault();
       if (busy || disabled) return;
@@ -1006,7 +1154,7 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
       event.preventDefault(); void toggleRowCompletion(row); return;
     }
     if (event.key === "Enter" && !event.shiftKey && !event.altKey && !event.ctrlKey && !event.metaKey) {
-      event.preventDefault(); beginPending(siblingAfter(row), "", true); return;
+      event.preventDefault(); insertSavedBlank(row, false, row.content); return;
     }
     if (event.key === "F2") { event.preventDefault(); startEdit(row); return; }
     if (event.key === "Tab") { event.preventDefault(); move(row, event.shiftKey ? "outdent" : "indent"); focusRow(row.id); return; }
@@ -1032,6 +1180,22 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
   };
   const onEditorKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>, row: EntryTreeNode) => {
     if (event.nativeEvent.isComposing || event.key === "Process" || event.nativeEvent.keyCode === 229) return;
+    // 保存済み空行のCtrl+Zは文字のUndoではなく、その行の追加を戻す。
+    const lastUndo = undoStackRef.current.at(-1);
+    if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey &&
+        event.key.toLowerCase() === "z" && editingValue.length === 0 && row.content.length === 0 &&
+        lastUndo?.type === "create-blank" && lastUndo.id === row.id) {
+      event.preventDefault();
+      void undoLast(true);
+      return;
+    }
+    if (event.key === "Backspace" && !event.repeat && !event.ctrlKey && !event.metaKey &&
+        !event.altKey && !event.shiftKey &&
+        isTrulyEmptyEditor(editingValue, event.currentTarget.selectionStart, event.currentTarget.selectionEnd)) {
+      event.preventDefault();
+      removeSavedBlank(row, editingValue);
+      return;
+    }
     if ((event.ctrlKey || event.metaKey) && !event.shiftKey && !event.altKey && event.key.toLowerCase() === "b") {
       event.preventDefault();
       if (disabled || busy || savingRef.current) return;
@@ -1048,7 +1212,7 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
       void toggleRowCompletion(row, true);
       return;
     }
-    // The Delete action removes a saved empty row; Backspace must not silently delete it.
+    // Backspace removes saved blank leaves; rows with children or metadata remain protected.
     if (event.key === "Escape") {
       event.preventDefault(); skipBlurRef.current = true; setEditingId(null); setEditingValue(row.content); setSelectedId(row.id); focusRow(row.id); return;
     }
@@ -1069,31 +1233,11 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
     if (event.key === "Tab") {
       event.preventDefault(); void commitEditing().then((ok) => { if (ok) { move(row, event.shiftKey ? "outdent" : "indent"); focusRow(row.id); } }); return;
     }
-    if (event.key === "Enter" && !event.shiftKey && !event.altKey && !event.ctrlKey && !event.metaKey) {
+    if (event.key === "Enter" && !event.repeat && !event.shiftKey && !event.altKey && !event.ctrlKey && !event.metaKey) {
       event.preventDefault();
-      const nextContent = editingValue.trim();
-      // 文章中のカーソル位置には依存しない。元の行を分割せず、次の兄弟行を作る。
-      // 親行を展開している場合も、新しい行は子孫のまとまりの後に表示される。
-      const position = siblingAfter(row);
-      if (nextContent !== row.content) {
-        savingRef.current = true;
-        const edited = nextContent;
-        const save = onUpdate(row.id, { content: edited }).then(() => {
-          recordUndo({ type: "edit", id: row.id, previous: row.content });
-          setFailedEdit(current => current?.id === row.id ? null : current);
-        }).catch(error => {
-          // 次の空行に打ち始めた文章を消さず、元行の未保存テキストも再試行できる形で保護。
-          setFailedEdit({ id: row.id, value: edited });
-          showError(new Error("元の行を保存できませんでした。文章は保持しました。再試行してください。"));
-          throw error;
-        }).finally(() => {
-          savingRef.current = false;
-          if (precedingEditSaveRef.current === save) precedingEditSaveRef.current = null;
-        });
-        precedingEditSaveRef.current = save;
-        void save.catch(() => undefined);
-      }
-      beginPending(position, "", true);
+      const atStart = editingValue.length > 0 &&
+        event.currentTarget.selectionStart === 0 && event.currentTarget.selectionEnd === 0;
+      insertSavedBlank(row, atStart);
       return;
     }
   };
@@ -1147,6 +1291,20 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
 
   const onPendingKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.nativeEvent.isComposing || event.key === "Process" || event.nativeEvent.keyCode === 229) return;
+    const blankSession = blankInsertSessionRef.current;
+    if (blankSession && event.key === "Enter" && !event.repeat && !event.shiftKey &&
+        !event.altKey && !event.ctrlKey && !event.metaKey) {
+      event.preventDefault();
+      blankSession.committed.push(pendingRef.current?.value ?? "");
+      const next = { parentId: blankSession.parentId,
+        index: blankSession.index + blankSession.committed.length, value: "" };
+      flushSync(() => {
+        changePending(next);
+        setCaret(next);
+      });
+      pendingEditorRef.current?.focus({ preventScroll: true });
+      return;
+    }
     if ((event.ctrlKey || event.metaKey) && !event.shiftKey && event.key.toLowerCase() === "z" && !pendingRef.current?.value.trim()) {
       event.preventDefault(); void undoLast(); return;
     }
@@ -1173,14 +1331,14 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
       }
       return;
     }
-    if (event.key === "Enter" && !event.shiftKey) {
+    if (event.key === "Enter" && !event.shiftKey && !event.ctrlKey && !event.metaKey && !event.altKey && !event.repeat) {
       event.preventDefault();
       void savePending(true);
     } else if (event.key === "Escape") {
       event.preventDefault();
       if (!pendingRef.current?.value.trim()) changePending(null);
       else void savePending(false);
-    } else if (event.key === "Backspace" && !pendingRef.current?.value) {
+    } else if (event.key === "Backspace" && !event.repeat && !pendingRef.current?.value) {
       event.preventDefault();
       if (visible.length > 0) {
         changePending(null);
@@ -1283,10 +1441,10 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
       <span className="outline__marker outline__marker--bullet" aria-hidden="true">•</span>
       <textarea ref={pendingEditorRef} className="outline__edit outline__edit--pending" rows={1} data-kakidas-time-input=""
         disabled={disabled || pendingSaving}
-        aria-label="新しいアウトライン項目" placeholder={visible.length ? "次の項目…" : "何から書く？"}
+        aria-label="新しいアウトライン項目"
         value={pending.value} onChange={event => changePending({ ...pending, value: event.target.value })}
         onKeyDown={onPendingKeyDown} onPaste={onPendingPaste}
-        onBlur={() => { if (pasteReview) return; if (pendingRef.current?.value.trim()) void savePending(false); else if (visible.length) changePending(null); }} />
+        onBlur={() => { if (pasteReview || skipPendingBlurRef.current) return; if (blankInsertSessionRef.current) { blankInsertSessionRef.current.keepFocus = false; return; } if (pendingRef.current?.value.trim()) void savePending(false); else if (visible.length) changePending(null); }} />
     </div>
   ) : null;
   const caretNode = deskNode || ghostOn || caretPreviewVisible ? (
@@ -1332,6 +1490,7 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
         role="treeitem"
         aria-level={zoom ? row.depth - zoom.depth : row.depth + 1}
         aria-selected={isSelected}
+        aria-label={row.content.length === 0 ? "空行" : undefined}
         aria-expanded={row.has_children ? !collapsed.has(row.id) : undefined}
         tabIndex={isSelected || (selectedId === null && visible[0]?.id === row.id) ? 0 : -1}
         onFocus={() => { focusEpochRef.current++; setSelectedId(row.id); if (editingId !== row.id) setCaret(siblingAfter(row)); }}
@@ -1341,7 +1500,7 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
         {row.has_children ? (
           <button type="button" tabIndex={-1}
             className={`outline__marker outline__marker--toggle ${numbered ? "outline__marker--number" : "outline__marker--bullet"}`}
-            aria-label={`「${stripOutlineEmphasis(row.content).slice(0, 24) || "空の項目"}」の子項目を${collapsed.has(row.id) ? "展開" : "折りたたむ"}`}
+            aria-label={`「${stripOutlineEmphasis(row.content).slice(0, 24) || "空行"}」の子項目を${collapsed.has(row.id) ? "展開" : "折りたたむ"}`}
             aria-expanded={!collapsed.has(row.id)}
             title={`${numbered ? row.outline_number : "•"}：${collapsed.has(row.id) ? "子階層を展開" : "子階層を折りたたむ"}（Ctrl / ⌘ + .）`}
             onClick={() => toggleCollapsed(row.id)}
@@ -1367,7 +1526,7 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
               part.emphasized
                 ? <strong key={i} className="outline__red-bold">{part.text}</strong>
                 : <span key={i}>{part.text}</span>
-            )}{!row.content.trim() ? <span className="outline__empty-placeholder">空の項目</span> : null}</span>}
+            )}</span>}
         <span className="outline__marks">
           {isBound ? <button type="button" className="outline__mark outline__mark--para" aria-label="段落を開く" title="この行の段落へ" onClick={() => onGrowRow?.(row.id)}>¶</button> : null}
           {row.has_children && collapsed.has(row.id) ? <span className="outline__child-count" aria-label={`子項目${row.child_count}件を折りたたみ中`} title={`子項目${row.child_count}件を折りたたみ中`}>内{row.child_count}件</span> : null}
