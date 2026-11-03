@@ -5,6 +5,11 @@
 export function positionForBlankEnter(allRows, rowId, atStart) {
   const row = allRows.find(item => item.id === rowId);
   if (!row) return null;
+  // 行頭Enterは従来どおり「現在の行の直前」に挿入する。
+  // それ以外で既存の子があれば「最初の子」を作る。折りたたみ中も保存済み全件を基準にする。
+  if (!atStart && allRows.some(item => item.parent_id === row.id)) {
+    return { parentId: row.id, index: 0 };
+  }
   const parentId = row.parent_id ?? null;
   const siblings = allRows
     .filter(item => (item.parent_id ?? null) === parentId)
