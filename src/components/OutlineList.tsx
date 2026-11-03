@@ -1161,7 +1161,7 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
       void toggleRowCompletion(row, true);
       return;
     }
-    // The Delete action removes a saved empty row; Backspace must not silently delete it.
+    // Backspace removes saved blank leaves; rows with children or metadata remain protected.
     if (event.key === "Escape") {
       event.preventDefault(); skipBlurRef.current = true; setEditingId(null); setEditingValue(row.content); setSelectedId(row.id); focusRow(row.id); return;
     }
@@ -1182,31 +1182,11 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
     if (event.key === "Tab") {
       event.preventDefault(); void commitEditing().then((ok) => { if (ok) { move(row, event.shiftKey ? "outdent" : "indent"); focusRow(row.id); } }); return;
     }
-    if (event.key === "Enter" && !event.shiftKey && !event.altKey && !event.ctrlKey && !event.metaKey) {
+    if (event.key === "Enter" && !event.repeat && !event.shiftKey && !event.altKey && !event.ctrlKey && !event.metaKey) {
       event.preventDefault();
-      const nextContent = editingValue.trim();
-      // 文章中のカーソル位置には依存しない。元の行を分割せず、次の兄弟行を作る。
-      // 親行を展開している場合も、新しい行は子孫のまとまりの後に表示される。
-      const position = siblingAfter(row);
-      if (nextContent !== row.content) {
-        savingRef.current = true;
-        const edited = nextContent;
-        const save = onUpdate(row.id, { content: edited }).then(() => {
-          recordUndo({ type: "edit", id: row.id, previous: row.content });
-          setFailedEdit(current => current?.id === row.id ? null : current);
-        }).catch(error => {
-          // 次の空行に打ち始めた文章を消さず、元行の未保存テキストも再試行できる形で保護。
-          setFailedEdit({ id: row.id, value: edited });
-          showError(new Error("元の行を保存できませんでした。文章は保持しました。再試行してください。"));
-          throw error;
-        }).finally(() => {
-          savingRef.current = false;
-          if (precedingEditSaveRef.current === save) precedingEditSaveRef.current = null;
-        });
-        precedingEditSaveRef.current = save;
-        void save.catch(() => undefined);
-      }
-      beginPending(position, "", true);
+      const atStart = editingValue.length > 0 &&
+        event.currentTarget.selectionStart === 0 && event.currentTarget.selectionEnd === 0;
+      insertSavedBlank(row, atStart);
       return;
     }
   };
@@ -1286,14 +1266,14 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
       }
       return;
     }
-    if (event.key === "Enter" && !event.shiftKey) {
+    if (event.key === "Enter" && !event.shiftKey && !event.ctrlKey && !event.metaKey && !event.altKey && !event.repeat) {
       event.preventDefault();
       void savePending(true);
     } else if (event.key === "Escape") {
       event.preventDefault();
       if (!pendingRef.current?.value.trim()) changePending(null);
       else void savePending(false);
-    } else if (event.key === "Backspace" && !pendingRef.current?.value) {
+    } else if (event.key === "Backspace" && !event.repeat && !pendingRef.current?.value) {
       event.preventDefault();
       if (visible.length > 0) {
         changePending(null);
@@ -1396,7 +1376,7 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
       <span className="outline__marker outline__marker--bullet" aria-hidden="true">•</span>
       <textarea ref={pendingEditorRef} className="outline__edit outline__edit--pending" rows={1} data-kakidas-time-input=""
         disabled={disabled || pendingSaving}
-        aria-label="新しいアウトライン項目" placeholder={visible.length ? "次の項目…" : "何から書く？"}
+        aria-label="新しいアウトライン項目"
         value={pending.value} onChange={event => changePending({ ...pending, value: event.target.value })}
         onKeyDown={onPendingKeyDown} onPaste={onPendingPaste}
         onBlur={() => { if (pasteReview) return; if (pendingRef.current?.value.trim()) void savePending(false); else if (visible.length) changePending(null); }} />
@@ -1445,6 +1425,7 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
         role="treeitem"
         aria-level={zoom ? row.depth - zoom.depth : row.depth + 1}
         aria-selected={isSelected}
+        aria-label={row.content.length === 0 ? "空行" : undefined}
         aria-expanded={row.has_children ? !collapsed.has(row.id) : undefined}
         tabIndex={isSelected || (selectedId === null && visible[0]?.id === row.id) ? 0 : -1}
         onFocus={() => { focusEpochRef.current++; setSelectedId(row.id); if (editingId !== row.id) setCaret(siblingAfter(row)); }}
@@ -1454,7 +1435,7 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
         {row.has_children ? (
           <button type="button" tabIndex={-1}
             className={`outline__marker outline__marker--toggle ${numbered ? "outline__marker--number" : "outline__marker--bullet"}`}
-            aria-label={`「${stripOutlineEmphasis(row.content).slice(0, 24) || "空の項目"}」の子項目を${collapsed.has(row.id) ? "展開" : "折りたたむ"}`}
+            aria-label={`「${stripOutlineEmphasis(row.content).slice(0, 24) || "空行"}」の子項目を${collapsed.has(row.id) ? "展開" : "折りたたむ"}`}
             aria-expanded={!collapsed.has(row.id)}
             title={`${numbered ? row.outline_number : "•"}：${collapsed.has(row.id) ? "子階層を展開" : "子階層を折りたたむ"}（Ctrl / ⌘ + .）`}
             onClick={() => toggleCollapsed(row.id)}
@@ -1480,7 +1461,7 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
               part.emphasized
                 ? <strong key={i} className="outline__red-bold">{part.text}</strong>
                 : <span key={i}>{part.text}</span>
-            )}{!row.content.trim() ? <span className="outline__empty-placeholder">空の項目</span> : null}</span>}
+            )}</span>}
         <span className="outline__marks">
           {isBound ? <button type="button" className="outline__mark outline__mark--para" aria-label="段落を開く" title="この行の段落へ" onClick={() => onGrowRow?.(row.id)}>¶</button> : null}
           {row.has_children && collapsed.has(row.id) ? <span className="outline__child-count" aria-label={`子項目${row.child_count}件を折りたたみ中`} title={`子項目${row.child_count}件を折りたたみ中`}>内{row.child_count}件</span> : null}
