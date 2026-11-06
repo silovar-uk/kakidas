@@ -12,7 +12,8 @@ import {
 } from "react";
 import type { EntryRow, EntryTreeNode, EntryUpdate } from "../types/memo";
 import { normalizeOutlineItems, itemsFromOutlinePaste, analyzeOutlinePaste, serializeOutlineItems, type OutlinePasteItem } from "../lib/outlinePaste.js";
-import type { OutlinePasteBatchResult } from "../repositories/memoRepository";
+import type { OutlineJoinResult, OutlinePasteBatchResult } from "../repositories/memoRepository";
+import { planOutlineEndDelete } from "../lib/outlineJoin.js";
 import type { OutlineCompletionChange } from "../lib/outlineCompletion.js";
 import { siblingPositionAfter, visibleInsertionIndex, indentPositionAt } from "../lib/outlineInsert.js";
 import { siblingMoveIndex } from "../lib/outlineMove.js";
@@ -100,6 +101,9 @@ type OutlineListProps = {
   onPasteOutlineBatch?: (items: OutlinePasteItem[], parentId: string | null, index: number, options?: { targetId?: string; expectedContent?: string; draftId?: string; metadata?: { tag?: string | null; note?: string; link_url?: string } }) => Promise<OutlinePasteBatchResult>;
   onUndoPasteOutlineBatch?: (batch: OutlinePasteBatchResult) => Promise<void>;
   onRedoPasteOutlineBatch?: (batch: OutlinePasteBatchResult) => Promise<OutlinePasteBatchResult>;
+  /** 行末Deleteによる行の結合と復元は原子的に保存する。 */
+  onJoinOutlineWithNext?: (currentId: string, nextId: string, expectedCurrent: string, expectedNext: string, currentDraft: string) => Promise<OutlineJoinResult>;
+  onUndoOutlineJoin?: (result: OutlineJoinResult) => Promise<void>;
   /** 新規行を戻す前に下書きを復元し、子を巻き込まずソフト削除する。 */
   onUndoCreate?: (row: EntryTreeNode) => Promise<void>;
   /** 書き口(置き場所)。いる欄では運ばれてきた書き口が、いない欄では入口が入る。 */
@@ -134,6 +138,7 @@ type UndoableAction =
   | { type: "create"; id: string }
   | { type: "create-blank"; id: string }
   | { type: "delete-blank"; id: string; parentId: string | null; index: number }
+  | { type: "join"; result: OutlineJoinResult }
   | { type: "complete"; id: string; previous: boolean; changes?: OutlineCompletionChange[] }
   | { type: "paste"; batch: OutlinePasteBatchResult };
 
@@ -205,6 +210,8 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
   onPasteOutlineBatch,
   onUndoPasteOutlineBatch,
   onRedoPasteOutlineBatch,
+  onJoinOutlineWithNext,
+  onUndoOutlineJoin,
   onUndoCreate,
   deskNode,
   paragraphsByRowId,
@@ -340,6 +347,7 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
       : last.type === "move" ? "行の移動を戻す"
       : last.type === "complete" ? "完了・再開を元に戻す"
       : last.type === "delete-blank" ? "削除した空行を復元"
+      : last.type === "join" ? "結合した行を元に戻す"
       : last.type === "create-blank" ? "追加した空行を取り消す"
       : last.type === "paste" ? `取り込んだ${last.batch.created.length}行をまとめて戻す`
       : "直前に追加した行を戻す";
@@ -867,6 +875,26 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
       finally { undoInFlightRef.current=false; setBusy(false); }
       return;
     }
+    if (last.type === "join") {
+      if (!onUndoOutlineJoin) return;
+      undoInFlightRef.current = true;
+      setBusy(true);
+      try {
+        await onUndoOutlineJoin(last.result);
+        undoStackRef.current.pop();
+        setUndoDepth(undoStackRef.current.length);
+        if (allowBlankEditor && editingId === last.result.current_id) {
+          setEditingValue(last.result.before);
+          setSelectedId(last.result.current_id);
+        } else {
+          setSelectedId(last.result.current_id);
+          focusRow(last.result.current_id);
+        }
+        setMessage("行の結合を元に戻しました。");
+      } catch (error) { showError(error); }
+      finally { undoInFlightRef.current = false; setBusy(false); }
+      return;
+    }
     const target = nodeById.get(last.id);
     if (!target && last.type !== "complete" && last.type !== "delete-blank") {
       // 反映待ちの行を誤って履歴から捨てない。次回そのまま再試行できる。
@@ -1256,12 +1284,52 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
     // 文字のブラウザUndoは残し、直前の保存済み構造変更・本文保存だけアプリ履歴を優先。
     if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey &&
         event.key.toLowerCase() === "z" &&
-        (lastUndo?.type === "move" || lastUndo?.type === "edit") &&
-        lastUndo.id === row.id && editingValue.trim() === row.content) {
+        ((lastUndo?.type === "move" || lastUndo?.type === "edit") && lastUndo.id === row.id ||
+          lastUndo?.type === "join" && lastUndo.result.current_id === row.id) &&
+        editingValue.trim() === row.content) {
       event.preventDefault();
       const releaseFocus = keepEditorFocus(row.id, event.currentTarget);
       void undoLast(true).finally(releaseFocus);
       return;
+    }
+    // 通常の文字Deleteはブラウザに任せる。末尾だけ、次のビュレットとの境界を消す。
+    if ((event.key === "Delete" || event.key === "Del") && !event.repeat &&
+        !event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey &&
+        event.currentTarget.selectionStart === event.currentTarget.selectionEnd &&
+        event.currentTarget.selectionEnd === editingValue.length) {
+      const nextRow = visible[visible.findIndex(item => item.id === row.id) + 1];
+      const plan = planOutlineEndDelete(allEntries, visible, row.id,
+        nextRow ? paragraphsByRowId?.get(nextRow.id)?.length ?? 0 : 0);
+      if (plan.kind === "blocked") {
+        event.preventDefault();
+        setMessage(plan.reason);
+        return;
+      }
+      if (plan.kind === "join" && onJoinOutlineWithNext) {
+        event.preventDefault();
+        if (disabled || busy || savingRef.current || undoInFlightRef.current) return;
+        const releaseFocus = keepEditorFocus(row.id, event.currentTarget);
+        const originalEditorValue = editingValue;
+        savingRef.current = true;
+        setBusy(true);
+        void onJoinOutlineWithNext(row.id, plan.nextId, row.content, plan.nextContent, editingValue)
+          .then(result => {
+            recordUndo({ type: "join", result });
+            setEditingValue(previous => previous === originalEditorValue
+              ? result.after
+              : previous.startsWith(originalEditorValue)
+                ? (originalEditorValue + previous.slice(originalEditorValue.length) + plan.nextContent).trim()
+                : previous);
+            setMessage(plan.isBlank
+              ? "次の空行を削除しました。Ctrl / ⌘ + Z で戻せます。"
+              : "次の行と結合しました。Ctrl / ⌘ + Z で戻せます。");
+          }).catch(showError).finally(() => {
+            savingRef.current = false;
+            setBusy(false);
+            releaseFocus();
+          });
+        return;
+      }
     }
     if (event.key === "Backspace" && !event.repeat && !event.ctrlKey && !event.metaKey &&
         !event.altKey && !event.shiftKey &&
