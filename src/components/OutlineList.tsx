@@ -1284,9 +1284,10 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
     // 文字のブラウザUndoは残し、直前の保存済み構造変更・本文保存だけアプリ履歴を優先。
     if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey &&
         event.key.toLowerCase() === "z" &&
-        ((lastUndo?.type === "move" || lastUndo?.type === "edit") && lastUndo.id === row.id ||
-          lastUndo?.type === "join" && lastUndo.result.current_id === row.id) &&
-        editingValue.trim() === row.content) {
+        (((lastUndo?.type === "move" || lastUndo?.type === "edit") &&
+          lastUndo.id === row.id && editingValue.trim() === row.content) ||
+         (lastUndo?.type === "join" && lastUndo.result.current_id === row.id &&
+          editingValue.trim() === lastUndo.result.after))) {
       event.preventDefault();
       const releaseFocus = keepEditorFocus(row.id, event.currentTarget);
       void undoLast(true).finally(releaseFocus);
