@@ -159,13 +159,17 @@
   margin-top: 8px;
   padding: 8px 10px 10px;
   border: 1px solid var(--color-line);
-  border-left: 3px solid var(--color-shu);
+  border-left: 3px solid color-mix(in srgb, var(--color-shu) 32%, var(--color-line));
   border-radius: 11px;
-  background: var(--color-paper);
+  background: color-mix(in srgb, var(--color-paper) 92%, var(--color-sheet));
   transition:
     border-color 140ms ease,
     background-color 140ms ease,
     box-shadow 140ms ease;
+}
+
+.entry-composer__reference-note[data-filled="true"] {
+  border-left-color: var(--color-shu);
 }
 
 .entry-composer__reference-note:focus-within {
@@ -178,7 +182,9 @@
 .entry-composer__reference-note-label {
   display: flex;
   align-items: baseline;
-  gap: 6px;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 5px 12px;
   color: var(--color-shu-ink);
   font-size: 12px;
   font-weight: 700;
@@ -198,12 +204,26 @@
   font-weight: 500;
 }
 
+.entry-composer__reference-note-shortcut {
+  color: var(--color-ink-3);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0;
+}
+
+.entry-composer__reference-note-shortcut kbd {
+  font: inherit;
+  font-weight: 650;
+  color: var(--color-ink-2);
+  white-space: nowrap;
+}
+
 .entry-composer__reference-note textarea {
   width: 100%;
-  min-height: 58px;
+  min-height: 56px;
   resize: vertical;
   box-sizing: border-box;
-  border: 1px solid var(--color-shu);
+  border: 1px solid var(--color-line);
   border-radius: 9px;
   padding: 9px 11px;
   background: color-mix(in srgb,var(--color-sheet) 78%,transparent);
