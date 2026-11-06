@@ -216,6 +216,8 @@ export function EntryColumn({
   onPasteOutlineBatch,
   onUndoPasteOutlineBatch,
   onRedoPasteOutlineBatch,
+  onJoinOutlineWithNext,
+  onUndoOutlineJoin,
   showCompletedOutline = false,
   completedOutlineCount = 0,
   onToggleShowCompletedOutline,
