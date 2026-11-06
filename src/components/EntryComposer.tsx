@@ -1045,6 +1045,7 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
       placeholder: isDesk ? DESK_PLACEHOLDER[isMobile ? "mobile" : "pc"][slot] : ENTRY_KIND_PLACEHOLDER[kind],
       onChange: handleChange,
       onKeyDown: handleKeyDown,
+      "aria-keyshortcuts": isReferenceUrl ? "Control+Enter Meta+Enter" : undefined,
       "data-kakidas-time-input": !isReferenceUrl ? "" : undefined,
       onCompositionStart: handleCompositionStart,
       onCompositionEnd: handleCompositionEnd,
@@ -1161,6 +1162,7 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
             className="entry-composer__submit"
             disabled={!canSubmit || isSubmitting}
             aria-label={isDesk ? "置く" : isReferenceUrl ? "参考URLを保存" : `${ENTRY_KIND_LABEL[kind]}を置く`}
+            title={isReferenceUrl ? "Ctrl / ⌘ + Enter でも置けます" : undefined}
           >
             {isDesk ? "置く" : isReferenceUrl ? "保存" : "置く"}
           </button>
