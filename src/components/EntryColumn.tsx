@@ -1,6 +1,6 @@
 import { OutlineList, type OutlineHandle } from "./OutlineList";
 import type { OutlinePasteItem } from "../lib/outlinePaste.js";
-import type { OutlinePasteBatchResult } from "../repositories/memoRepository";
+import type { OutlineJoinResult, OutlinePasteBatchResult } from "../repositories/memoRepository";
 import type { OutlineCompletionChange } from "../lib/outlineCompletion.js";
 import type { OutlineCopyMode } from "../lib/outlineCopy.js";
 import { EntryInspector, type EntryActions, type RowMove, type RowMoveState } from "./EntryInspector";
@@ -88,6 +88,8 @@ type EntryColumnProps = {
   onPasteOutlineBatch?: (items: OutlinePasteItem[], parentId: string | null, index: number, options?: { targetId?: string; expectedContent?: string; draftId?: string; metadata?: { tag?: string | null; note?: string; link_url?: string } }) => Promise<OutlinePasteBatchResult>;
   onUndoPasteOutlineBatch?: (batch: OutlinePasteBatchResult) => Promise<void>;
   onRedoPasteOutlineBatch?: (batch: OutlinePasteBatchResult) => Promise<OutlinePasteBatchResult>;
+  onJoinOutlineWithNext?: (currentId: string, nextId: string, expectedCurrent: string, expectedNext: string, currentDraft: string) => Promise<OutlineJoinResult>;
+  onUndoOutlineJoin?: (result: OutlineJoinResult) => Promise<void>;
   /** アウトライナー専用の完了表示。段落・URLの設定とは独立。 */
   showCompletedOutline?: boolean;
   completedOutlineCount?: number;
@@ -1376,6 +1378,8 @@ export function EntryColumn({
             onPasteOutlineBatch={onPasteOutlineBatch}
             onUndoPasteOutlineBatch={onUndoPasteOutlineBatch}
             onRedoPasteOutlineBatch={onRedoPasteOutlineBatch}
+            onJoinOutlineWithNext={onJoinOutlineWithNext}
+            onUndoOutlineJoin={onUndoOutlineJoin}
             onPasteRows={async (row, rows) => {
               // 表示中の行だけでなく、完了済みを含めた兄弟順位で挿入する。
               const siblings = (allOutlineEntries ?? primaryEntries).filter((item) => item.parent_id === row.parent_id)
