@@ -99,6 +99,18 @@ export type OutlinePasteBatchResult = {
   edited?: { id: string; before: string; after: string };
 };
 
+/** Delete at line end joins two sibling bullets in a single IndexedDB transaction. */
+export type OutlineJoinResult = {
+  memo_id: string;
+  current_id: string;
+  next_id: string;
+  before: string;
+  after: string;
+  next_content: string;
+  merged_at: string;
+  updated_paragraph_ids: string[];
+};
+
 export interface MemoRepository {
   listMemos(): Promise<MemoListItem[]>;
   getMemo(memoId: string): Promise<MemoWithEntries | null>;
@@ -133,6 +145,8 @@ export interface MemoRepository {
     outlineIndex?: number,
   ): Promise<EntryRow>;
   updateEntry(entryId: string, patch: EntryUpdate): Promise<EntryRow>;
+  joinOutlineWithNext(currentId: string, nextId: string, expectedCurrent: string, expectedNext: string, currentDraft: string): Promise<OutlineJoinResult>;
+  undoOutlineJoin(join: OutlineJoinResult): Promise<void>;
   setOutlineCompletion(entryId: string, completed: boolean): Promise<OutlineCompletionChange[]>;
   restoreOutlineCompletion(changes: OutlineCompletionChange[]): Promise<void>;
   pasteOutlineBatch(memoId: string, items: OutlinePasteItem[], parentId: string | null, index: number,
@@ -1522,6 +1536,94 @@ class IndexedDbMemoRepository implements MemoRepository {
       tag: normalizedNextTag,
       updated_count: entriesToUpdate.length,
     };
+  }
+
+  /**
+   * 行末Delete: 表示上だけでなく保存済み兄弟順位で直後かを検証。
+   * 本文の連結と次の行のソフト削除は不可分。クラウド同期も一度だけ更新する。
+   */
+  async joinOutlineWithNext(
+    currentId: string, nextId: string, expectedCurrent: string, expectedNext: string, currentDraft: string,
+  ): Promise<OutlineJoinResult> {
+    const db = await getDatabase();
+    const tx = db.transaction([STORE_NAMES.memos, STORE_NAMES.entries, STORE_NAMES.memoSyncMeta], "readwrite");
+    const memos = tx.objectStore(STORE_NAMES.memos);
+    const store = tx.objectStore(STORE_NAMES.entries);
+    const sync = tx.objectStore(STORE_NAMES.memoSyncMeta);
+    const fail = (reason: string): never => { tx.abort(); throw new Error(reason); };
+    const current = await this.requireActiveEntry(store, currentId, tx);
+    const next = await this.requireActiveEntry(store, nextId, tx);
+    if (currentId === nextId || current.memo_id !== next.memo_id ||
+        current.kind !== "sentence" || next.kind !== "sentence" ||
+        current.parent_id !== next.parent_id)
+      return fail("異なる階層の行は自動結合できません。");
+    if (current.content !== expectedCurrent || next.content !== expectedNext)
+      return fail("編集中に行が更新されました。内容を確認してから再度お試しください。");
+    const active = (await this.getEntriesForMemo(store, current.memo_id))
+      .filter(row => row.deleted_at === null);
+    const siblings = active.filter(row => row.kind === "sentence" && row.parent_id === current.parent_id)
+      .sort(compareEntries);
+    const index = siblings.findIndex(row => row.id === currentId);
+    if (index < 0 || siblings[index + 1]?.id !== nextId)
+      return fail("間に別の行があります。行を飛ばす結合はしません。");
+    if (active.some(row => row.parent_id === nextId) ||
+        next.heading.trim() || next.tag?.trim() || next.note.trim() ||
+        next.link_url.trim() || next.satisfaction > 0 || next.is_completed ||
+        (next.content.trim().length > 0 && active.some(row =>
+          row.kind === "paragraph" && row.heading.trim() === next.content.trim())))
+      return fail("次の行には子項目や付属情報があります。安全のため結合しません。");
+
+    const before = currentDraft.trim();
+    const after = (currentDraft + next.content).trim();
+    const at = nowIso();
+    const originalText = current.content.trim();
+    const hasDuplicate = active.some(row => row.id !== current.id &&
+      row.kind === "sentence" && row.content.trim() === originalText);
+    const paragraphs = originalText && !hasDuplicate && originalText !== after
+      ? active.filter(row => row.kind === "paragraph" && row.heading.trim() === originalText)
+      : [];
+    store.put({ ...current, content: after, updated_at: at } satisfies EntryRow);
+    store.put({ ...next, deleted_at: at, updated_at: at } satisfies EntryRow);
+    paragraphs.forEach(row => store.put({ ...row, heading: after, updated_at: at } satisfies EntryRow));
+    await this.touchMemoWithinTransaction(memos, current.memo_id, at);
+    await this.markMemoChangedWithinTransaction(sync, current.memo_id, at);
+    await transactionToPromise(tx);
+    return {
+      memo_id: current.memo_id, current_id: currentId, next_id: nextId,
+      before, after, next_content: next.content, merged_at: at,
+      updated_paragraph_ids: paragraphs.map(row => row.id),
+    };
+  }
+
+  /** Ctrl+Z: 行と本文・リンク段落見出しを同じトランザクションで復元する。 */
+  async undoOutlineJoin(join: OutlineJoinResult): Promise<void> {
+    const db = await getDatabase();
+    const tx = db.transaction([STORE_NAMES.memos, STORE_NAMES.entries, STORE_NAMES.memoSyncMeta], "readwrite");
+    const memos = tx.objectStore(STORE_NAMES.memos);
+    const store = tx.objectStore(STORE_NAMES.entries);
+    const sync = tx.objectStore(STORE_NAMES.memoSyncMeta);
+    const fail = (reason: string): never => { tx.abort(); throw new Error(reason); };
+    const current = await this.requireActiveEntry(store, join.current_id, tx);
+    const nextRaw = await requestToPromise(store.get(join.next_id) as IDBRequest<LegacyEntryRow | undefined>);
+    const next = nextRaw ? normalizeEntryRow(nextRaw) : null;
+    if (current.memo_id !== join.memo_id || current.content !== join.after ||
+        !next || next.memo_id !== join.memo_id || next.deleted_at !== join.merged_at ||
+        next.content !== join.next_content)
+      return fail("行が変更されているため、安全に元に戻せません。");
+    const paragraphs: EntryRow[] = [];
+    for (const id of join.updated_paragraph_ids) {
+      const paragraph = await this.requireActiveEntry(store, id, tx);
+      if (paragraph.memo_id !== join.memo_id || paragraph.kind !== "paragraph" || paragraph.heading !== join.after)
+        return fail("関連する段落が変更されているため、Undoできません。");
+      paragraphs.push(paragraph);
+    }
+    const at = nowIso();
+    store.put({ ...current, content: join.before, updated_at: at } satisfies EntryRow);
+    store.put({ ...next, deleted_at: null, updated_at: at } satisfies EntryRow);
+    paragraphs.forEach(row => store.put({ ...row, heading: join.before, updated_at: at } satisfies EntryRow));
+    await this.touchMemoWithinTransaction(memos, join.memo_id, at);
+    await this.markMemoChangedWithinTransaction(sync, join.memo_id, at);
+    await transactionToPromise(tx);
   }
 
   async deleteEntry(entryId: string, options: { requireLeaf?: boolean } = {}): Promise<EntryDeletionResult> {

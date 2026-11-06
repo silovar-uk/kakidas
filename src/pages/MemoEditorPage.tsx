@@ -252,6 +252,8 @@ export function MemoEditorPage() {
     pasteOutlineBatch,
     undoOutlinePasteBatch,
     redoOutlinePasteBatch,
+    joinOutlineWithNext,
+    undoOutlineJoin,
     updateEntry,
     setOutlineCompletion,
     restoreOutlineCompletion,
@@ -1700,6 +1702,8 @@ export function MemoEditorPage() {
             onPasteOutlineBatch={kind==='sentence'?pasteOutlineBatch:undefined}
             onUndoPasteOutlineBatch={kind==='sentence'?undoOutlinePasteBatch:undefined}
             onRedoPasteOutlineBatch={kind==='sentence'?redoOutlinePasteBatch:undefined}
+            onJoinOutlineWithNext={kind==='sentence'?joinOutlineWithNext:undefined}
+            onUndoOutlineJoin={kind==='sentence'?undoOutlineJoin:undefined}
              showCompletedOutline={showCompletedOutline}
              completedOutlineCount={completedOutlineCount}
              onToggleShowCompletedOutline={() => setShowCompletedOutline((current) => !current)}

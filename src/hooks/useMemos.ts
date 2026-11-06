@@ -22,6 +22,7 @@ import {
   type MemoFromEntryResult,
   type MemoTagBulkUpdateResult,
   type OutlinePasteBatchResult,
+  type OutlineJoinResult,
 } from "../repositories/memoRepository";
 
 type AsyncStatus = {
@@ -339,6 +340,20 @@ export function useMemoDetail(memoId: string | undefined) {
       await refreshAfterWrite();
     }), [runWrite,refreshAfterWrite]);
 
+  const joinOutlineWithNext = useCallback(
+    async (currentId: string, nextId: string, expectedCurrent: string, expectedNext: string, currentDraft: string): Promise<OutlineJoinResult> =>
+      runWrite(async () => {
+        const result = await memoRepository.joinOutlineWithNext(currentId, nextId, expectedCurrent, expectedNext, currentDraft);
+        await refreshAfterWrite();
+        return result;
+      }), [runWrite, refreshAfterWrite]);
+
+  const undoOutlineJoin = useCallback(async (result: OutlineJoinResult): Promise<void> =>
+    runWrite(async () => {
+      await memoRepository.undoOutlineJoin(result);
+      await refreshAfterWrite();
+    }), [runWrite, refreshAfterWrite]);
+
   const deleteEntry = useCallback(
     async (entryId: string, options?: { requireLeaf?: boolean }): Promise<EntryDeletionResult> => {
       return runWrite(async () => {
@@ -458,6 +473,8 @@ export function useMemoDetail(memoId: string | undefined) {
     pasteOutlineBatch,
     undoOutlinePasteBatch,
     redoOutlinePasteBatch,
+    joinOutlineWithNext,
+    undoOutlineJoin,
     createMemoFromEntry,
     updateEntry,
     setOutlineCompletion,
