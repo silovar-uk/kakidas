@@ -305,6 +305,8 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const editorRef = useRef<HTMLTextAreaElement | null>(null);
+  /** 階層変更で再マウントしても、同じ行・同じ文字位置に戻す。 */
+  const retainedEditorFocusRef = useRef<{ id: string; start: number; end: number; epoch: number } | null>(null);
   const requestedSelectionRef = useRef<{ id: string; offset: number } | null>(null);
   const savingRef = useRef(false);
   /** 既存行の編集保存を完了してから、続きの新規行を保存する。 */
@@ -435,6 +437,31 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
       requestedSelectionRef.current = null;
     }
   }, [editingId]);
+  // 行が別の親の下へ再マウントされても、編集カーソルを失わない。
+  useLayoutEffect(() => {
+    const snapshot = retainedEditorFocusRef.current;
+    const field = editorRef.current;
+    if (!snapshot || snapshot.id !== editingId || snapshot.epoch !== focusEpochRef.current || !field) return;
+    field.focus({ preventScroll: true });
+    field.setSelectionRange(Math.min(snapshot.start, field.value.length), Math.min(snapshot.end, field.value.length));
+  }, [entries, editingId]);
+  const keepEditorFocus = (id: string, field: HTMLTextAreaElement) => {
+    const snapshot = { id, start: field.selectionStart, end: field.selectionEnd, epoch: focusEpochRef.current };
+    retainedEditorFocusRef.current = snapshot;
+    skipBlurRef.current = true;
+    return () => window.requestAnimationFrame(() => window.requestAnimationFrame(() => {
+      if (retainedEditorFocusRef.current !== snapshot) return;
+      if (snapshot.epoch === focusEpochRef.current) {
+        const editor = editorRef.current;
+        if (editor) {
+          editor.focus({ preventScroll: true });
+          editor.setSelectionRange(Math.min(snapshot.start, editor.value.length), Math.min(snapshot.end, editor.value.length));
+        }
+      }
+      retainedEditorFocusRef.current = null;
+      skipBlurRef.current = false;
+    }));
+  };
   // 消えた行を選んだままにしない。
   useEffect(() => {
     if (selectedId && !nodeById.has(selectedId)) setSelectedId(null);
@@ -868,6 +895,7 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
       undoStackRef.current.pop();
       setUndoDepth(undoStackRef.current.length);
       setMessage("");
+      if (last.type === "edit" && editingId === last.id && allowBlankEditor) setEditingValue(last.previous);
       if (last.type === "create" || last.type === "create-blank") {
         setSelectedId(null);
         if (originalLocation) {
@@ -882,6 +910,9 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
         // 非表示だった行もUndoで復元できる。実際のDOM反映後に編集位置を戻す。
         setSelectedId(last.id);
         window.requestAnimationFrame(() => focusRow(last.id));
+      } else if (allowBlankEditor && editingId === last.id &&
+                 (last.type === "edit" || last.type === "move")) {
+        setSelectedId(last.id);
       } else {
         setSelectedId(last.id);
         focusRow(last.id);
@@ -899,26 +930,27 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
     } catch(error) { showError(error); }
     finally { setBusy(false); }
   };
-  const move = (row: EntryTreeNode, action: "indent" | "outdent" | "up" | "down") => {
+  const move = (row: EntryTreeNode, action: "indent" | "outdent" | "up" | "down"): Promise<void> => {
     const siblings = childrenOf(row.parent_id);
     const index = siblings.findIndex((entry) => entry.id === row.id);
-    if (index < 0) return;
+    if (index < 0) return Promise.resolve();
     if (action === "indent" && index > 0) {
       const preceding = siblings[index - 1];
-      void moveTo(row.id, preceding.id, persistedChildrenOf(preceding.id).length);
       setCollapsed((before) => { const next = new Set(before); next.delete(preceding.id); return next; });
+      return moveTo(row.id, preceding.id, persistedChildrenOf(preceding.id).length);
     } else if (action === "outdent" && row.parent_id && row.parent_id !== scopeId) {
       const parent = nodeById.get(row.parent_id);
       if (parent) {
         const parentIndex = persistedChildrenOf(parent.parent_id).findIndex((entry) => entry.id === parent.id);
-        void moveTo(row.id, parent.parent_id, parentIndex + 1);
+        return moveTo(row.id, parent.parent_id, parentIndex + 1);
       }
     } else if (action === "up" || action === "down") {
       // Position relative to the visible neighboring ID, not a filtered list index.
       // A completed (hidden) sibling can sit between two visible branches.
       const destination = siblingMoveIndex(allEntries, entries, row.id, action);
-      if (destination !== null) void moveTo(row.id, row.parent_id, destination);
+      if (destination !== null) return moveTo(row.id, row.parent_id, destination);
     }
+    return Promise.resolve();
   };
   const startEdit = (row: EntryTreeNode, offset = row.content.length) => {
     if (disabled || creatingRef.current) return;
@@ -1221,6 +1253,16 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
       void undoLast(true);
       return;
     }
+    // 文字のブラウザUndoは残し、直前の保存済み構造変更・本文保存だけアプリ履歴を優先。
+    if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey &&
+        event.key.toLowerCase() === "z" &&
+        (lastUndo?.type === "move" || lastUndo?.type === "edit") &&
+        lastUndo.id === row.id && editingValue.trim() === row.content) {
+      event.preventDefault();
+      const releaseFocus = keepEditorFocus(row.id, event.currentTarget);
+      void undoLast(true).finally(releaseFocus);
+      return;
+    }
     if (event.key === "Backspace" && !event.repeat && !event.ctrlKey && !event.metaKey &&
         !event.altKey && !event.shiftKey &&
         isTrulyEmptyEditor(editingValue, event.currentTarget.selectionStart, event.currentTarget.selectionEnd)) {
@@ -1262,8 +1304,28 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
       }
       return;
     }
-    if (event.key === "Tab") {
-      event.preventDefault(); void commitEditing().then((ok) => { if (ok) { move(row, event.shiftKey ? "outdent" : "indent"); focusRow(row.id); } }); return;
+    if (event.key === "Tab" && !event.altKey && !event.ctrlKey && !event.metaKey) {
+      event.preventDefault();
+      if (disabled || busy || savingRef.current) return;
+      const releaseFocus = keepEditorFocus(row.id, event.currentTarget);
+      const action = event.shiftKey ? "outdent" : "indent";
+      savingRef.current = true;
+      // 保存順は本文→階層。Tab後も同じ行のtextareaを編集し続ける。
+      void (async () => {
+        try {
+          const next = editingValue.trim();
+          if (next !== row.content) {
+            await onUpdate(row.id, { content: next });
+            recordUndo({ type: "edit", id: row.id, previous: row.content });
+          }
+          await move(row, action);
+        } catch (error) { showError(error); }
+        finally {
+          savingRef.current = false;
+          releaseFocus();
+        }
+      })();
+      return;
     }
     if (event.key === "Enter" && !event.repeat && !event.shiftKey && !event.altKey && !event.ctrlKey && !event.metaKey) {
       event.preventDefault();
@@ -1547,7 +1609,7 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
           aria-label="アウトラインの本文を編集" onChange={(event) => setEditingValue(event.target.value)}
           onKeyDown={(event) => onEditorKeyDown(event, row)}
           onPaste={(event) => onEditorPaste(event, row)}
-          onBlur={(event) => { if (skipBlurRef.current) { skipBlurRef.current = false; return; } if (event.relatedTarget instanceof HTMLElement && event.relatedTarget.closest(".command-palette")) return; void commitEditing(); }}/>
+          onBlur={(event) => { if (retainedEditorFocusRef.current?.id === row.id) return; if (skipBlurRef.current) { skipBlurRef.current = false; return; } if (event.relatedTarget instanceof HTMLElement && event.relatedTarget.closest(".command-palette")) return; void commitEditing(); }}/>
         : <span className="outline__content"
             onClick={(event) => {
               // クリックでもタップでも文章をその場で編集。選択専用モードは作らない。
