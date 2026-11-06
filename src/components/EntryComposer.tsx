@@ -30,6 +30,7 @@ import {
 import { getEntryTagToneClassName } from "../lib/entryTagGroups";
 import { releaseDeskFocus } from "../lib/deskFocus";
 import { rowsFromOutlinePaste } from "../lib/outlinePaste.js";
+import { isReferenceSubmitShortcut } from "../lib/referenceSubmitShortcut.js";
 import { useDraftPersistence } from "../hooks/useDraftPersistence";
 import {
   buildEntryDraftId,
@@ -190,7 +191,6 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
     const [duplicateCandidate, setDuplicateCandidate] = useState<string | null>(null);
     const [isComposing, setIsComposing] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [referenceNoteOpen, setReferenceNoteOpen] = useState(false);
     const [flyingCopy, setFlyingCopy] = useState<{id:string; text:string}|null>(null);
     const latestValueRef = useRef("");
     /** 連続投稿の途中なら、表示上は空欄でもUndoで上書きしない。 */
@@ -879,6 +879,13 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
       // 日本語IMEの変換中は、Enter・Tab・矢印・Escのどれも操作として扱わない。
       if (isComposing || event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229 || event.key === "Process") return;
 
+      // URL欄・備考欄のどちらからでも同じCtrl/⌘+Enterで置ける。
+      if (isReferenceUrl && isReferenceSubmitShortcut(event, isComposingRef.current)) {
+        event.preventDefault();
+        void submit();
+        return;
+      }
+
       if (isDesk) {
         const empty = latestValueRef.current.length === 0;
         if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
@@ -981,6 +988,22 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
         event.preventDefault();
         applyNote();
       }
+    };
+
+    /** URLの備考はEnterで改行、Ctrl/⌘+EnterだけでURLと一緒に保存する。 */
+    const handleReferenceNoteKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+      if (!isReferenceSubmitShortcut(event, isComposing || isComposingRef.current)) return;
+      event.preventDefault();
+      const noteField = event.currentTarget;
+      void submit().then(() => {
+        // 保存成功時だけURL欄に戻る。エラー・重複時は備考を残して書き続けられる。
+        if (latestValueRef.current.trim() || document.activeElement !== noteField) return;
+        window.requestAnimationFrame(() => {
+          if (document.activeElement === noteField) {
+            inputRef.current?.focus({ preventScroll: true });
+          }
+        });
+      });
     };
 
     const handleChange = (
@@ -1151,44 +1174,28 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
           </div>
         ) : null}
 
-        {isDesk && slot === "word" ? (
-          referenceNoteOpen || hasNote ? (
-            <label className="entry-composer__reference-note">
-              <span className="entry-composer__reference-note-label">
-                備考 <small>任意</small>
-              </span>
-              <textarea
-                value={noteValue}
-                disabled={disabled}
-                onChange={(event) => {
-                  markDraftEdited();
-                  setNoteValue(event.target.value);
-                }}
-                rows={2}
-                placeholder="このURLについての短いメモ"
-                aria-label="参考URLの備考"
-              />
-            </label>
-          ) : (
-            <button type="button" className="entry-composer__note-toggle" onClick={() => setReferenceNoteOpen(true)}>
-              ＋ 備考
-            </button>
-          )
-        ) : !isDesk && isReferenceUrl ? (
-          <label className="entry-composer__reference-note">
+        {isReferenceUrl ? (
+          <label className="entry-composer__reference-note" data-filled={String(hasNote)}>
             <span className="entry-composer__reference-note-label">
-              備考 <small>任意</small>
+              <span>備考 <small>任意・空欄でもOK</small></span>
+              <span className="entry-composer__reference-note-shortcut" aria-hidden="true">
+                <kbd>Ctrl / ⌘ + Enter</kbd> で置く
+              </span>
             </span>
             <textarea
               value={noteValue}
-              disabled={disabled}
+              disabled={disabled || isSubmitting}
               onChange={(event) => {
                 markDraftEdited();
                 setNoteValue(event.target.value);
               }}
+              onKeyDown={handleReferenceNoteKeyDown}
+              onCompositionStart={handleCompositionStart}
+              onCompositionEnd={handleCompositionEnd}
               rows={2}
-              placeholder="このURLについての短いメモ"
-              aria-label="参考URLの備考"
+              placeholder="残す理由や、あとで使いたいポイントをひとこと"
+              aria-label="参考URLの備考（任意）"
+              aria-keyshortcuts="Control+Enter Meta+Enter"
             />
           </label>
         ) : null}
