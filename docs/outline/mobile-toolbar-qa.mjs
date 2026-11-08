@@ -54,7 +54,39 @@ try {
   await page.locator(".mobile-action-sheet__close").click();
   await toolbar.getByRole("button", { name: "構造操作を終了" }).click();
   await page.locator(".editor-tabs").waitFor({ state: "visible" });
-  console.log("PASS mobile outline contextual toolbar: edit, indent, outdent, focus, details, dismissal");
+
+  // 構造だけを選択中の「完了」は次の行へ進むが、キーボードは出さない。
+  await page.setViewportSize({ width: 320, height: 667 });
+  const parent = rows.filter({ has: page.locator(".outline__content", { hasText: "親" }) }).first();
+  await parent.locator(".outline__mobile-actions").click();
+  await toolbar.waitFor({ state: "visible" });
+  const controls = toolbar.locator("button");
+  assert.equal(await controls.count(), 7, "7 actions in one toolbar row");
+  const sizes = await controls.evaluateAll(elements => elements.map(el => el.getBoundingClientRect().width));
+  assert.ok(sizes.every(width => width >= 43.9), "320px viewport keeps 44px touch targets: " + JSON.stringify(sizes));
+  assert.equal(await toolbar.locator("button svg").count(), 7, "all symbols use SVG, not text arrows");
+  await toolbar.getByRole("button", { name: "この項目を完了にする" }).click();
+  await parent.waitFor({ state: "detached" });
+  assert.equal(await editor.count(), 0, "selection-only completion does not open software keyboard");
+  await toolbar.waitFor({ state: "visible" });
+  assert.match(await toolbar.getAttribute("aria-label") || "", /子を更新/, "next unfinished row selected");
+
+  // 編集中の完了は変更内容を保存し、次の一文の入力へ進む。
+  const remaining = rows.filter({ has: page.locator(".outline__content", { hasText: "子を更新" }) }).first();
+  await remaining.locator(".outline__content").click();
+  await editor.fill("子を書き直して完了");
+  await toolbar.getByRole("button", { name: "この項目を完了にする" }).click();
+  await page.waitForFunction(() => ![...document.querySelectorAll(".outline__content")].some(el => el.textContent?.includes("子を書き直して完了")));
+  await pending.waitFor({ state: "visible" });
+  assert.equal(await pending.evaluate(el => document.activeElement === el), true, "completion advances writing to pending item");
+
+  // 新規行も一度のタップで保存と完了をまとめて行う。
+  await pending.fill("新規で完了");
+  await toolbar.getByRole("button", { name: "この項目を完了にする" }).click();
+  await pending.waitFor({ state: "visible" });
+  await page.waitForFunction(() => document.querySelector(".outline__edit--pending")?.value === "");
+  assert.equal(await page.locator(".outline__content").filter({ hasText: "新規で完了" }).count(), 0, "newly completed row is hidden");
+  console.log("PASS mobile outline contextual toolbar: SVG icons, 320px sizing, completion and focus flows");
   await context.close();
 } finally {
   await browser.close();
