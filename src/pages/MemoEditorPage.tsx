@@ -357,6 +357,20 @@ export function MemoEditorPage() {
   }, []);
   const outlineRef = useRef<OutlineHandle>(null);
   const [mobileOutlineToolbar, setMobileOutlineToolbar] = useState<MobileOutlineToolbarState | null>(null);
+  // OutlineListの配列が再生成されても、同じ状態通知による親子の再描画ループを起こさない。
+  const handleMobileOutlineToolbarChange = useCallback((next: MobileOutlineToolbarState | null) => {
+    setMobileOutlineToolbar(previous => {
+      if (previous === next) return previous;
+      if (!previous || !next) return next;
+      if (previous.rowId === next.rowId && previous.target === next.target &&
+          previous.editing === next.editing && previous.label === next.label &&
+          previous.enabled.indent === next.enabled.indent &&
+          previous.enabled.outdent === next.enabled.outdent &&
+          previous.enabled.up === next.enabled.up &&
+          previous.enabled.down === next.enabled.down) return previous;
+      return next;
+    });
+  }, []);
   useEffect(() => { setMobileOutlineToolbar(null); }, [memoId]);
   const [isMobile, setIsMobile] = useState(() => window.matchMedia("(max-width: 920px)").matches);
   useEffect(() => {
@@ -1743,7 +1757,7 @@ export function MemoEditorPage() {
                 onActivate={()=>moveDeskTo(kind)} />
             )}
             outlineRef={kind==='sentence'?outlineRef:undefined}
-            onMobileToolbarChange={kind==='sentence'?setMobileOutlineToolbar:undefined}
+            onMobileToolbarChange={kind==='sentence'?handleMobileOutlineToolbarChange:undefined}
             onPasteOutlineBatch={kind==='sentence'?pasteOutlineBatch:undefined}
             onUndoPasteOutlineBatch={kind==='sentence'?undoOutlinePasteBatch:undefined}
             onRedoPasteOutlineBatch={kind==='sentence'?redoOutlinePasteBatch:undefined}
