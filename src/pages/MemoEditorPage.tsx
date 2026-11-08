@@ -364,6 +364,8 @@ export function MemoEditorPage() {
       if (!previous || !next) return next;
       if (previous.rowId === next.rowId && previous.target === next.target &&
           previous.editing === next.editing && previous.label === next.label &&
+          previous.isCompleted === next.isCompleted && previous.hasChildren === next.hasChildren &&
+          previous.completionEnabled === next.completionEnabled &&
           previous.enabled.indent === next.enabled.indent &&
           previous.enabled.outdent === next.enabled.outdent &&
           previous.enabled.up === next.enabled.up &&
