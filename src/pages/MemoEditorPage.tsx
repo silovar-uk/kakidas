@@ -1,7 +1,7 @@
 import { visibleOutlineWithAncestors } from "../lib/outlineCompletion.js";
 import { numberVisibleOutline } from "../lib/outlineDisplay.js";
 import {SeishoView} from "../components/SeishoView";
-import {BackIcon} from "../components/icons";
+import { BackIcon, CloseIcon, OutdentIcon, IndentIcon, UpIcon, DownIcon, MoreIcon, CompleteIcon } from "../components/icons";
 import {waitForCreatedEntry,withViewTransition} from "../lib/viewTransition";
 import {EntryComposer,type EntryComposerHandle} from "../components/EntryComposer";
 import {DeskSlot} from "../components/DeskSlot";
@@ -1637,40 +1637,49 @@ export function MemoEditorPage() {
         <div className="mobile-outline-toolbar" role="toolbar"
           aria-label={`「${mobileOutlineToolbar.label}」の構造を編集`}
           onPointerDown={(event) => {
-            // iOS Safariでボタンにフォーカスを奪われてキーボードが閉じるのを防止。
+            // ボタンのタップで文字入力欄のフォーカスを奪わない（iOS対策）。
             if (event.target instanceof Element && event.target.closest("button")) event.preventDefault();
           }}
           onMouseDown={(event) => {
             if (event.target instanceof Element && event.target.closest("button")) event.preventDefault();
           }}>
-          <button type="button" className="mobile-outline-toolbar__done"
+          <button type="button" className="mobile-outline-toolbar__close"
             tabIndex={mobileOutlineToolbar.editing ? -1 : 0}
-            aria-label="構造操作を終了" onClick={() => outlineRef.current?.dismissMobileToolbar()}>✓</button>
+            aria-label="構造操作を終了" title="操作バーを閉じる（本文は保存）"
+            onClick={() => outlineRef.current?.dismissMobileToolbar()}><CloseIcon/></button>
           <span className="mobile-outline-toolbar__group" role="group" aria-label="階層変更">
-            {([
-              { action: "outdent", icon: "←", label: "階層を1段上げる" },
-              { action: "indent", icon: "→", label: "階層を1段下げる" },
-            ] as const).map(command => (
-              <button key={command.action} type="button" tabIndex={mobileOutlineToolbar.editing ? -1 : 0}
-                disabled={!mobileOutlineToolbar.enabled[command.action]} aria-label={command.label}
-                onClick={() => outlineRef.current?.moveFromMobileToolbar(command.action)}>{command.icon}</button>
-            ))}
+            <button type="button" tabIndex={mobileOutlineToolbar.editing ? -1 : 0}
+              disabled={!mobileOutlineToolbar.enabled.outdent} aria-label="階層を1段上げる" title="字上げ"
+              onClick={() => outlineRef.current?.moveFromMobileToolbar("outdent")}><OutdentIcon/></button>
+            <button type="button" tabIndex={mobileOutlineToolbar.editing ? -1 : 0}
+              disabled={!mobileOutlineToolbar.enabled.indent} aria-label="階層を1段下げる" title="字下げ"
+              onClick={() => outlineRef.current?.moveFromMobileToolbar("indent")}><IndentIcon/></button>
           </span>
-          <span className="mobile-outline-toolbar__separator" aria-hidden="true" />
           <span className="mobile-outline-toolbar__group" role="group" aria-label="同階層での移動">
-            {([
-              { action: "up", icon: "↑", label: "同じ階層で上へ移動" },
-              { action: "down", icon: "↓", label: "同じ階層で下へ移動" },
-            ] as const).map(command => (
-              <button key={command.action} type="button" tabIndex={mobileOutlineToolbar.editing ? -1 : 0}
-                disabled={!mobileOutlineToolbar.enabled[command.action]} aria-label={command.label}
-                onClick={() => outlineRef.current?.moveFromMobileToolbar(command.action)}>{command.icon}</button>
-            ))}
+            <button type="button" tabIndex={mobileOutlineToolbar.editing ? -1 : 0}
+              disabled={!mobileOutlineToolbar.enabled.up} aria-label="同じ階層で上へ移動" title="上へ移動"
+              onClick={() => outlineRef.current?.moveFromMobileToolbar("up")}><UpIcon/></button>
+            <button type="button" tabIndex={mobileOutlineToolbar.editing ? -1 : 0}
+              disabled={!mobileOutlineToolbar.enabled.down} aria-label="同じ階層で下へ移動" title="下へ移動"
+              onClick={() => outlineRef.current?.moveFromMobileToolbar("down")}><DownIcon/></button>
           </span>
+          <button type="button" className="mobile-outline-toolbar__complete"
+            tabIndex={mobileOutlineToolbar.editing ? -1 : 0}
+            disabled={!mobileOutlineToolbar.completionEnabled}
+            aria-label={mobileOutlineToolbar.isCompleted ? "この項目を未完了に戻す" :
+              mobileOutlineToolbar.hasChildren ? "この項目と子項目を完了にする" : "この項目を完了にする"}
+            title={mobileOutlineToolbar.isCompleted ? "未完了に戻す" : "この項目を完了にして次へ"}
+            onClick={() => outlineRef.current?.completeFromMobileToolbar()}>
+            <CompleteIcon/>
+            <span className="mobile-outline-toolbar__complete-label">
+              {mobileOutlineToolbar.isCompleted ? "再開" : "完了"}
+            </span>
+          </button>
           <button type="button" className="mobile-outline-toolbar__more"
             tabIndex={mobileOutlineToolbar.editing ? -1 : 0}
-            disabled={mobileOutlineToolbar.target !== "row"} aria-label="この項目のその他の操作"
-            onClick={() => outlineRef.current?.openMobileToolbarDetails()}>⋯</button>
+            disabled={mobileOutlineToolbar.target !== "row"}
+            aria-label="この項目のその他の操作" title="その他の操作"
+            onClick={() => outlineRef.current?.openMobileToolbarDetails()}><MoreIcon/></button>
         </div>
       ) : (
       <div className="editor-tabs" role="tablist" aria-label="入力する粒度">
