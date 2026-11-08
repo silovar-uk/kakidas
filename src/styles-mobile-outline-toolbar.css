@@ -1,16 +1,18 @@
 /*
- * スマホの操作バーは「単語・一文・段落」タブと置換する。
- * 新しい下部固定UIも追加の高さも作らない。
+ * スマホの「単語・一文・段落」タブの場所を一時利用する文脈操作バー。
+ * 320px幅でも7操作の44px以上のタップ領域を確保する。
+ * 紙・墨・朱の既存トークンを使用し、新しい色は追加しない。
  */
 @media (max-width: 920px) {
   .editor-page:not(.editor-page--seisho) .mobile-outline-toolbar {
     position: sticky;
     top: 0;
     z-index: var(--z-sticky, 30);
-    display: flex;
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
     align-items: center;
-    justify-content: space-between;
-    gap: 2px;
+    gap: 0;
+    width: 100%;
     height: 44px;
     min-height: 44px;
     box-sizing: border-box;
@@ -19,55 +21,66 @@
     border-bottom: 1px solid var(--color-line);
   }
   .mobile-outline-toolbar__group {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 2px;
+    display: contents;
   }
   .mobile-outline-toolbar button {
     display: grid;
     place-items: center;
-    flex: 0 0 44px;
-    width: 44px;
+    width: 100%;
+    min-width: 0;
     height: 44px;
-    min-width: 44px;
+    min-height: 44px;
+    box-sizing: border-box;
     margin: 0;
     padding: 0;
-    border: 0;
+    border: 1px solid var(--color-line);
     border-radius: var(--radius-s);
-    background: transparent;
-    color: var(--color-ink);
-    font: 500 21px/1 var(--font-sans);
+    background: var(--color-paper);
+    color: var(--color-ink-2);
+    font: 600 18px/1 var(--font-sans);
     cursor: pointer;
     touch-action: manipulation;
     -webkit-tap-highlight-color: transparent;
   }
+  .mobile-outline-toolbar button svg {
+    display: block;
+    width: 21px;
+    height: 21px;
+    stroke-width: 2.2;
+    flex: 0 0 auto;
+  }
   .mobile-outline-toolbar button:active:not(:disabled) {
-    background: var(--color-hover);
+    background: var(--color-line);
+    color: var(--color-ink);
   }
   .mobile-outline-toolbar button:focus-visible {
     outline: 2px solid var(--color-shu);
-    outline-offset: -2px;
+    outline-offset: -3px;
   }
   .mobile-outline-toolbar button:disabled {
-    color: var(--color-ink-3);
-    opacity: 0.35;
+    opacity: 0.36;
     cursor: default;
   }
-  .mobile-outline-toolbar__done {
-    color: var(--color-shu-ink) !important;
-    font-size: 18px !important;
+  .mobile-outline-toolbar .mobile-outline-toolbar__close,
+  .mobile-outline-toolbar .mobile-outline-toolbar__more {
+    background: transparent;
+    border-color: transparent;
+    color: var(--color-ink-2);
   }
-  .mobile-outline-toolbar__more {
-    font-size: 24px !important;
+  .mobile-outline-toolbar .mobile-outline-toolbar__complete {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 1px;
+    background: var(--color-shu-wash);
+    border-color: var(--color-line-strong);
+    color: var(--color-shu-ink);
   }
-  .mobile-outline-toolbar__separator {
-    flex: 0 0 1px;
-    align-self: stretch;
-    height: 24px;
-    max-height: 24px;
-    margin-block: auto;
-    background: var(--color-line);
+  .mobile-outline-toolbar__complete-label {
+    font: 650 10px/1 var(--font-sans);
+    white-space: nowrap;
+    letter-spacing: 0;
   }
 }
 @media (min-width: 921px) {
