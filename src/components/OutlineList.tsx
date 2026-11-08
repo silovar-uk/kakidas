@@ -34,6 +34,9 @@ export type MobileOutlineToolbarState = {
   rowId: string | null;
   editing: boolean;
   label: string;
+  isCompleted: boolean;
+  hasChildren: boolean;
+  completionEnabled: boolean;
   enabled: Record<"indent" | "outdent" | "up" | "down", boolean>;
 };
 
@@ -67,6 +70,7 @@ export type OutlineHandle = {
   selectForMobileToolbar(rowId: string): void;
   moveFromMobileToolbar(action: "indent" | "outdent" | "up" | "down"): void;
   dismissMobileToolbar(): void;
+  completeFromMobileToolbar(): void;
   openMobileToolbarDetails(): void;
   zoomTo(rowId: string | null): void;
   /** 保存済みの直前の本文編集・構造移動を戻す。 */
@@ -423,6 +427,8 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
       if (!pending) return null;
       return {
         target: "pending", rowId: null, editing: true, label: "新しい一文",
+        isCompleted: false, hasChildren: false,
+        completionEnabled: !blocked && !creatingRef.current && Boolean(pending.value.trim()),
         enabled: {
           indent: !blocked && Boolean(indentTarget({ parentId: pending.parentId, index: pending.index })),
           outdent: !blocked && pending.parentId !== null && pending.parentId !== scopeId,
@@ -439,6 +445,8 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
     return {
       target: "row", rowId: row.id, editing: editingId === row.id,
       label: row.content.trim().slice(0, 48) || "空行",
+      isCompleted: row.is_completed, hasChildren: row.has_children,
+      completionEnabled: !locked && Boolean(onToggleCompleted),
       enabled: {
         indent: !locked && at > 0,
         outdent: !locked && row.parent_id !== null && row.parent_id !== scopeId,
@@ -446,7 +454,7 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
         down: !locked && at >= 0 && at < siblings.length - 1,
       },
     };
-  }, [mobileToolbarTarget, editingId, entries, visible, nodeById, pending, pendingSaving, disabled, busy, scopeId]);
+  }, [mobileToolbarTarget, editingId, entries, visible, nodeById, pending, pendingSaving, disabled, busy, scopeId, onToggleCompleted]);
   useEffect(() => { onMobileToolbarChange?.(mobileToolbarState); }, [mobileToolbarState, onMobileToolbarChange]);
   const breadcrumbs: EntryTreeNode[] = [];
   if (zoom) {
@@ -815,6 +823,18 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
       if (editingId) void commitEditing();
       else if (pendingRef.current?.value.trim()) void savePending(false);
     },
+    completeFromMobileToolbar: () => {
+      if (!mobileToolbarTarget || !mobileToolbarState?.completionEnabled) return;
+      if (mobileToolbarTarget.target === "pending") {
+        // Ctrl+Enterと同じ、保存して完了したあと次の一文へ。
+        void savePending(true, true);
+        return;
+      }
+      const row = nodeById.get(mobileToolbarTarget.id);
+      if (!row) return;
+      // 閲覧状態からの完了ではキーボードを起動せず、次の行を選択する。
+      void toggleRowCompletion(row, editingId === row.id, editingId !== row.id);
+    },
     openMobileToolbarDetails: () => {
       if (mobileToolbarTarget?.target === "row") onOpenMobileDetails?.(mobileToolbarTarget.id);
     },
@@ -861,7 +881,7 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
     finally { savingRef.current = false; }
   };
   /** 選択中でも本文編集中でも同じCtrl+Enter。保存後に完了し、次の文字入力先へ移る。 */
-  const toggleRowCompletion = async (row: EntryTreeNode, fromEditor = false) => {
+  const toggleRowCompletion = async (row: EntryTreeNode, fromEditor = false, selectOnly = false) => {
     if (disabled || busy || savingRef.current || !onToggleCompleted) return;
     const focusEpoch = ++focusEpochRef.current;
     const idx = visible.findIndex(item => item.id === row.id);
@@ -894,7 +914,16 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
           skipBlurRef.current = false;
           return;
         }
-        if (next && document.querySelector(`[data-outline-id="${CSS.escape(next.id)}"]`)) {
+        if (selectOnly) {
+          if (next && document.querySelector(`[data-outline-id="${CSS.escape(next.id)}"]`)) {
+            setSelectedId(next.id);
+            setCaret(siblingAfter(next));
+            setMobileToolbarTarget({ target: "row", id: next.id });
+          } else {
+            setSelectedId(null);
+            setMobileToolbarTarget(null);
+          }
+        } else if (next && document.querySelector(`[data-outline-id="${CSS.escape(next.id)}"]`)) {
           startEdit(next, next.content.length);
         } else if (document.querySelector(`[data-outline-id="${CSS.escape(row.id)}"]`)) {
           startEdit({ ...row, content: fromEditor ? editingValue.trim() : row.content });
