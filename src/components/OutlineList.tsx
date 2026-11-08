@@ -1702,8 +1702,9 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
         disabled={disabled || pendingSaving}
         aria-label="新しいアウトライン項目"
         value={pending.value} onChange={event => changePending({ ...pending, value: event.target.value })}
+        onFocus={() => { if (isMobileViewport()) setMobileToolbarTarget({ target: "pending" }); }}
         onKeyDown={onPendingKeyDown} onPaste={onPendingPaste}
-        onBlur={() => { if (pasteReview || skipPendingBlurRef.current) return; if (blankInsertSessionRef.current) { blankInsertSessionRef.current.keepFocus = false; return; } if (pendingRef.current?.value.trim()) void savePending(false); else if (visible.length) changePending(null); }} />
+        onBlur={(event) => { if (!(event.relatedTarget instanceof HTMLElement && event.relatedTarget.closest(".mobile-outline-toolbar"))) setMobileToolbarTarget(null); if (pasteReview || skipPendingBlurRef.current) return; if (blankInsertSessionRef.current) { blankInsertSessionRef.current.keepFocus = false; return; } if (pendingRef.current?.value.trim()) void savePending(false); else if (visible.length) changePending(null); }} />
     </div>
   ) : null;
   const caretNode = deskNode || ghostOn || caretPreviewVisible ? (
@@ -1774,7 +1775,7 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
           aria-label="アウトラインの本文を編集" onChange={(event) => setEditingValue(event.target.value)}
           onKeyDown={(event) => onEditorKeyDown(event, row)}
           onPaste={(event) => onEditorPaste(event, row)}
-          onBlur={(event) => { if (retainedEditorFocusRef.current?.id === row.id) return; if (skipBlurRef.current) { skipBlurRef.current = false; return; } if (event.relatedTarget instanceof HTMLElement && event.relatedTarget.closest(".command-palette")) return; void commitEditing(); }}/>
+          onBlur={(event) => { if (retainedEditorFocusRef.current?.id === row.id) return; if (skipBlurRef.current) { skipBlurRef.current = false; return; } if (event.relatedTarget instanceof HTMLElement && event.relatedTarget.closest(".command-palette")) return; if (event.relatedTarget instanceof HTMLElement && event.relatedTarget.closest(".mobile-outline-toolbar")) return; setMobileToolbarTarget(null); void commitEditing(); }}/>
         : <span className="outline__content"
             onClick={(event) => {
               // クリックでもタップでも文章をその場で編集。選択専用モードは作らない。
@@ -1797,7 +1798,7 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
           {onGrowRow ? <button type="button" className="outline__grow-action" title={isBound ? "この行の段落へ" : "段落にする(この行を見出しに)"} aria-label={isBound ? "段落を開く" : "段落にする"} onClick={() => onGrowRow(row.id)}>¶</button> : null}
           <button type="button" className="outline__zoom-action" title="この枝に集中" aria-label="この枝に集中" onClick={() => zoomTo(row.id)}>⌕</button>
           <button type="button" className="outline__details-action" title="詳細と操作" aria-label="項目の詳細" onClick={(event) => onOpenDetails(row.id, event.currentTarget)}>⋯</button>
-          {onOpenActions ? <button type="button" className="outline__mobile-actions" aria-label="この項目の操作" onClick={() => onOpenActions(row.id)}>⋯</button> : null}
+          {onOpenActions ? <button type="button" className="outline__mobile-actions" aria-label="この項目の階層を操作" onClick={() => onOpenActions(row.id)}>⋯</button> : null}
         </div>
       </div>
     </div>;
