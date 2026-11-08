@@ -1,4 +1,4 @@
-import { OutlineList, type OutlineHandle } from "./OutlineList";
+import { OutlineList, type OutlineHandle, type MobileOutlineToolbarState } from "./OutlineList";
 import type { OutlinePasteItem } from "../lib/outlinePaste.js";
 import type { OutlineJoinResult, OutlinePasteBatchResult } from "../repositories/memoRepository";
 import type { OutlineCompletionChange } from "../lib/outlineCompletion.js";
@@ -85,6 +85,7 @@ type EntryColumnProps = {
   deskNode?: ReactNode;
   /** アウトラインの欄。次の一行の手(書き口が使う)を、ページへ渡す。 */
   outlineRef?: RefObject<OutlineHandle | null>;
+  onMobileToolbarChange?: (state: MobileOutlineToolbarState | null) => void;
   onPasteOutlineBatch?: (items: OutlinePasteItem[], parentId: string | null, index: number, options?: { targetId?: string; expectedContent?: string; draftId?: string; metadata?: { tag?: string | null; note?: string; link_url?: string } }) => Promise<OutlinePasteBatchResult>;
   onUndoPasteOutlineBatch?: (batch: OutlinePasteBatchResult) => Promise<void>;
   onRedoPasteOutlineBatch?: (batch: OutlinePasteBatchResult) => Promise<OutlinePasteBatchResult>;
@@ -213,6 +214,7 @@ export function EntryColumn({
   disabled = false,
   deskNode,
   outlineRef,
+  onMobileToolbarChange,
   onPasteOutlineBatch,
   onUndoPasteOutlineBatch,
   onRedoPasteOutlineBatch,
@@ -583,6 +585,11 @@ export function EntryColumn({
 
   /** スマホの「この項目の操作」(下からのシート)。 */
   const openStructureActions = (entryId: string) => {
+    if (kind === "sentence" && isMobileViewport()) {
+      outlineRef?.current?.selectForMobileToolbar(entryId);
+      setInspector(null);
+      return;
+    }
     setMobileActionEntryId(entryId);
     setInspector(null);
   };
@@ -1373,6 +1380,8 @@ export function EntryColumn({
             onToggleShowCompletedOutline={onToggleShowCompletedOutline}
             onRelocate={onRelocateOutline}
             onOpenActions={openStructureActions}
+            onOpenMobileDetails={(rowId) => { setMobileActionEntryId(rowId); setInspector(null); }}
+            onMobileToolbarChange={onMobileToolbarChange}
             onOpenDetails={openDetails}
             onToggleCompleted={toggleCompleted}
             onRestoreCompletion={onRestoreOutlineCompletion}
