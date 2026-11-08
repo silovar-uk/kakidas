@@ -28,3 +28,4 @@
 
 /* 可動する書き口に追従した明度の階層。既存の配置・機能には触れない。 */
 @import "./styles-write-focus.css";
+@import "./styles-mobile-outline-toolbar.css";
