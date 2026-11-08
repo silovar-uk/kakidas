@@ -1508,7 +1508,14 @@ export function EntryColumn({
             onMoveToKind: requestMoveToKind,
             onDelete: requestDelete,
           }}
-          onClose={() => setMobileActionEntryId(null)}
+          onClose={() => {
+            const rowId = mobileActionEntryId;
+            setMobileActionEntryId(null);
+            // 詳細シートで入力フォーカスを離れても、閉じれば同じ行の構造操作へ戻れる。
+            if (kind === "sentence" && rowId && isMobileViewport()) {
+              outlineRef?.current?.selectForMobileToolbar(rowId);
+            }
+          }}
           onRequestMeta={(entryId, meta) => setMetaCard({ entryId, kind: meta })}
         />
       ) : null}
