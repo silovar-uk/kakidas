@@ -12,3 +12,9 @@ export function BackIcon(){return <Icon><path d="m14 5-7 7 7 7"/></Icon>}
 export function UpIcon(){return <Icon><path d="M12 19V5"/><path d="m6 11 6-6 6 6"/></Icon>}
 export function DownIcon(){return <Icon><path d="M12 5v14"/><path d="m6 13 6 6 6-6"/></Icon>}
 export function PullIcon(){return <Icon><path d="M19 5 8 16"/><path d="M8 8v8h8"/></Icon>}
+
+/** アウトライン専用：字下げと並べ替えを文字の矢印ではなく図形で区別する。 */
+export function OutdentIcon(){return <Icon><path d="M10 5h11M10 12h11M3 19h18"/><path d="m7 9-4 3 4 3"/></Icon>}
+export function IndentIcon(){return <Icon><path d="M3 5h18M12 12h9M3 19h18"/><path d="m4 9 4 3-4 3"/></Icon>}
+export function CloseIcon(){return <Icon><path d="M5 5l14 14M19 5 5 19"/></Icon>}
+export function CompleteIcon(){return <Icon><circle cx="12" cy="12" r="9"/><path d="m8 12 2.6 2.6L16 9"/></Icon>}
