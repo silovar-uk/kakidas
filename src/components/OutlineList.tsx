@@ -29,6 +29,14 @@ import type { EntryCreateMetadata } from "../types/memo";
 /** 「次の一行」(書き口が入る場所)。parentId=null は範囲(全体か集中中の枝)の一番上の階層。 */
 type Caret = { parentId: string | null; index: number };
 
+export type MobileOutlineToolbarState = {
+  target: "row" | "pending";
+  rowId: string | null;
+  editing: boolean;
+  label: string;
+  enabled: Record<"indent" | "outdent" | "up" | "down", boolean>;
+};
+
 export type OutlineHandle = {
   /** 作るときの位置。親と、兄弟の中での位置。 */
   insertPosition(): Caret;
@@ -56,6 +64,10 @@ export type OutlineHandle = {
   revealRow(rowId: string): void;
   /** 項目の詳細・スマホのシートから、行を動かす・枝に集中する。 */
   moveRow(rowId: string, action: "indent" | "outdent" | "up" | "down"): void;
+  selectForMobileToolbar(rowId: string): void;
+  moveFromMobileToolbar(action: "indent" | "outdent" | "up" | "down"): void;
+  dismissMobileToolbar(): void;
+  openMobileToolbarDetails(): void;
   zoomTo(rowId: string | null): void;
   /** 保存済みの直前の本文編集・構造移動を戻す。 */
   undoLast(): void;
@@ -91,6 +103,8 @@ type OutlineListProps = {
   onRelocate: (id: string, parentId: string | null, index: number) => Promise<void>;
   /** スマホの「この項目の操作」(下からのシート)。 */
   onOpenActions?: (id: string) => void;
+  onOpenMobileDetails?: (id: string) => void;
+  onMobileToolbarChange?: (state: MobileOutlineToolbarState | null) => void;
   /** PCの「項目の詳細」(行のそばの小窓)。 */
   onOpenDetails: (id: string, anchor: HTMLElement) => void;
   onToggleCompleted?: (id: string) => Promise<OutlineCompletionChange[]>;
@@ -202,6 +216,8 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
   onToggleShowCompletedOutline,
   onRelocate,
   onOpenActions,
+  onOpenMobileDetails,
+  onMobileToolbarChange,
   onOpenDetails,
   onToggleCompleted,
   onRestoreCompletion,
@@ -226,6 +242,9 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
   /** 完了後の遅延フォーカスが、後から始まった入力を奪わないようにする世代番号。 */
   const focusEpochRef = useRef(0);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [mobileToolbarTarget, setMobileToolbarTarget] = useState<
+    { target: "row"; id: string } | { target: "pending" } | null
+  >(null);
   const [focusSavedBlankId, setFocusSavedBlankId] = useState<string | null>(null);
   const [editingValue, setEditingValue] = useState("");
   type PendingRow = { parentId: string | null; index: number; value: string };
@@ -397,6 +416,38 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
   }, [collapsed, entries, nodeById, zoomId]);
   const zoom = zoomId ? nodeById.get(zoomId) ?? null : null;
   const scopeId = zoom ? zoom.id : null;
+  const mobileToolbarState = useMemo<MobileOutlineToolbarState | null>(() => {
+    if (!mobileToolbarTarget || !isMobileViewport()) return null;
+    const blocked = disabled || busy || pendingSaving;
+    if (mobileToolbarTarget.target === "pending") {
+      if (!pending) return null;
+      return {
+        target: "pending", rowId: null, editing: true, label: "新しい一文",
+        enabled: {
+          indent: !blocked && Boolean(indentTarget({ parentId: pending.parentId, index: pending.index })),
+          outdent: !blocked && pending.parentId !== null && pending.parentId !== scopeId,
+          up: false, down: false,
+        },
+      };
+    }
+    const row = nodeById.get(mobileToolbarTarget.id);
+    if (!row || !visible.some(item => item.id === row.id)) return null;
+    const siblings = entries.filter(item => item.parent_id === row.parent_id)
+      .sort((a, b) => a.sort_order - b.sort_order || a.created_at.localeCompare(b.created_at));
+    const at = siblings.findIndex(item => item.id === row.id);
+    const locked = blocked || savingRef.current;
+    return {
+      target: "row", rowId: row.id, editing: editingId === row.id,
+      label: row.content.trim().slice(0, 48) || "空行",
+      enabled: {
+        indent: !locked && at > 0,
+        outdent: !locked && row.parent_id !== null && row.parent_id !== scopeId,
+        up: !locked && at > 0,
+        down: !locked && at >= 0 && at < siblings.length - 1,
+      },
+    };
+  }, [mobileToolbarTarget, editingId, entries, visible, nodeById, pending, pendingSaving, disabled, busy, scopeId]);
+  useEffect(() => { onMobileToolbarChange?.(mobileToolbarState); }, [mobileToolbarState, onMobileToolbarChange]);
   const breadcrumbs: EntryTreeNode[] = [];
   if (zoom) {
     let current: EntryTreeNode | undefined = zoom;
