@@ -34,6 +34,7 @@ import {
   type CloudUploadTarget,
 } from "../components/CloudUploadDialog";
 import { EntryColumn } from "../components/EntryColumn";
+import type { MobileOutlineToolbarState } from "../components/OutlineList";
 import { MemoTagControl } from "../components/MemoTagControl";
 import { NoticeToast } from "../components/NoticeToast";
 import { useMemoDetail } from "../hooks/useMemos";
@@ -355,6 +356,22 @@ export function MemoEditorPage() {
     } satisfies Record<EntryKind, HTMLElement>;
   }, []);
   const outlineRef = useRef<OutlineHandle>(null);
+  const [mobileOutlineToolbar, setMobileOutlineToolbar] = useState<MobileOutlineToolbarState | null>(null);
+  // OutlineListの配列が再生成されても、同じ状態通知による親子の再描画ループを起こさない。
+  const handleMobileOutlineToolbarChange = useCallback((next: MobileOutlineToolbarState | null) => {
+    setMobileOutlineToolbar(previous => {
+      if (previous === next) return previous;
+      if (!previous || !next) return next;
+      if (previous.rowId === next.rowId && previous.target === next.target &&
+          previous.editing === next.editing && previous.label === next.label &&
+          previous.enabled.indent === next.enabled.indent &&
+          previous.enabled.outdent === next.enabled.outdent &&
+          previous.enabled.up === next.enabled.up &&
+          previous.enabled.down === next.enabled.down) return previous;
+      return next;
+    });
+  }, []);
+  useEffect(() => { setMobileOutlineToolbar(null); }, [memoId]);
   const [isMobile, setIsMobile] = useState(() => window.matchMedia("(max-width: 920px)").matches);
   useEffect(() => {
     const media = window.matchMedia("(max-width: 920px)");
@@ -1616,6 +1633,46 @@ export function MemoEditorPage() {
         <SeishoView memo={memo} title={title} sortMode={entrySortMode} includeCompleted={includeCompletedInCopy}
           paperRef={paperRef} onBack={()=>toggleSeisho(false)} onCopy={copySeisho} onPrint={()=>window.print()}/>
       ) : <>
+      {isMobile && activeKind === "sentence" && mobileOutlineToolbar ? (
+        <div className="mobile-outline-toolbar" role="toolbar"
+          aria-label={`「${mobileOutlineToolbar.label}」の構造を編集`}
+          onPointerDown={(event) => {
+            // iOS Safariでボタンにフォーカスを奪われてキーボードが閉じるのを防止。
+            if (event.target instanceof Element && event.target.closest("button")) event.preventDefault();
+          }}
+          onMouseDown={(event) => {
+            if (event.target instanceof Element && event.target.closest("button")) event.preventDefault();
+          }}>
+          <button type="button" className="mobile-outline-toolbar__done"
+            tabIndex={mobileOutlineToolbar.editing ? -1 : 0}
+            aria-label="構造操作を終了" onClick={() => outlineRef.current?.dismissMobileToolbar()}>✓</button>
+          <span className="mobile-outline-toolbar__group" role="group" aria-label="階層変更">
+            {([
+              { action: "outdent", icon: "←", label: "階層を1段上げる" },
+              { action: "indent", icon: "→", label: "階層を1段下げる" },
+            ] as const).map(command => (
+              <button key={command.action} type="button" tabIndex={mobileOutlineToolbar.editing ? -1 : 0}
+                disabled={!mobileOutlineToolbar.enabled[command.action]} aria-label={command.label}
+                onClick={() => outlineRef.current?.moveFromMobileToolbar(command.action)}>{command.icon}</button>
+            ))}
+          </span>
+          <span className="mobile-outline-toolbar__separator" aria-hidden="true" />
+          <span className="mobile-outline-toolbar__group" role="group" aria-label="同階層での移動">
+            {([
+              { action: "up", icon: "↑", label: "同じ階層で上へ移動" },
+              { action: "down", icon: "↓", label: "同じ階層で下へ移動" },
+            ] as const).map(command => (
+              <button key={command.action} type="button" tabIndex={mobileOutlineToolbar.editing ? -1 : 0}
+                disabled={!mobileOutlineToolbar.enabled[command.action]} aria-label={command.label}
+                onClick={() => outlineRef.current?.moveFromMobileToolbar(command.action)}>{command.icon}</button>
+            ))}
+          </span>
+          <button type="button" className="mobile-outline-toolbar__more"
+            tabIndex={mobileOutlineToolbar.editing ? -1 : 0}
+            disabled={mobileOutlineToolbar.target !== "row"} aria-label="この項目のその他の操作"
+            onClick={() => outlineRef.current?.openMobileToolbarDetails()}>⋯</button>
+        </div>
+      ) : (
       <div className="editor-tabs" role="tablist" aria-label="入力する粒度">
         {WORKSPACE_KINDS.map((kind) => (
           <button
@@ -1643,6 +1700,7 @@ export function MemoEditorPage() {
           </button>
         ))}
       </div>
+      )}
 
       {error ? (
         <p className="error-message" role="alert">
@@ -1699,6 +1757,7 @@ export function MemoEditorPage() {
                 onActivate={()=>moveDeskTo(kind)} />
             )}
             outlineRef={kind==='sentence'?outlineRef:undefined}
+            onMobileToolbarChange={kind==='sentence'?handleMobileOutlineToolbarChange:undefined}
             onPasteOutlineBatch={kind==='sentence'?pasteOutlineBatch:undefined}
             onUndoPasteOutlineBatch={kind==='sentence'?undoOutlinePasteBatch:undefined}
             onRedoPasteOutlineBatch={kind==='sentence'?redoOutlinePasteBatch:undefined}

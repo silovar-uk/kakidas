@@ -1,0 +1,75 @@
+/*
+ * スマホの操作バーは「単語・一文・段落」タブと置換する。
+ * 新しい下部固定UIも追加の高さも作らない。
+ */
+@media (max-width: 920px) {
+  .editor-page:not(.editor-page--seisho) .mobile-outline-toolbar {
+    position: sticky;
+    top: 0;
+    z-index: var(--z-sticky, 30);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 2px;
+    height: 44px;
+    min-height: 44px;
+    box-sizing: border-box;
+    padding: 0 max(4px, env(safe-area-inset-right)) 0 max(4px, env(safe-area-inset-left));
+    background: var(--color-sheet);
+    border-bottom: 1px solid var(--color-line);
+  }
+  .mobile-outline-toolbar__group {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+  }
+  .mobile-outline-toolbar button {
+    display: grid;
+    place-items: center;
+    flex: 0 0 44px;
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: var(--radius-s);
+    background: transparent;
+    color: var(--color-ink);
+    font: 500 21px/1 var(--font-sans);
+    cursor: pointer;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .mobile-outline-toolbar button:active:not(:disabled) {
+    background: var(--color-hover);
+  }
+  .mobile-outline-toolbar button:focus-visible {
+    outline: 2px solid var(--color-shu);
+    outline-offset: -2px;
+  }
+  .mobile-outline-toolbar button:disabled {
+    color: var(--color-ink-3);
+    opacity: 0.35;
+    cursor: default;
+  }
+  .mobile-outline-toolbar__done {
+    color: var(--color-shu-ink) !important;
+    font-size: 18px !important;
+  }
+  .mobile-outline-toolbar__more {
+    font-size: 24px !important;
+  }
+  .mobile-outline-toolbar__separator {
+    flex: 0 0 1px;
+    align-self: stretch;
+    height: 24px;
+    max-height: 24px;
+    margin-block: auto;
+    background: var(--color-line);
+  }
+}
+@media (min-width: 921px) {
+  .mobile-outline-toolbar { display: none; }
+}

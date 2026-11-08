@@ -29,6 +29,14 @@ import type { EntryCreateMetadata } from "../types/memo";
 /** 「次の一行」(書き口が入る場所)。parentId=null は範囲(全体か集中中の枝)の一番上の階層。 */
 type Caret = { parentId: string | null; index: number };
 
+export type MobileOutlineToolbarState = {
+  target: "row" | "pending";
+  rowId: string | null;
+  editing: boolean;
+  label: string;
+  enabled: Record<"indent" | "outdent" | "up" | "down", boolean>;
+};
+
 export type OutlineHandle = {
   /** 作るときの位置。親と、兄弟の中での位置。 */
   insertPosition(): Caret;
@@ -56,6 +64,10 @@ export type OutlineHandle = {
   revealRow(rowId: string): void;
   /** 項目の詳細・スマホのシートから、行を動かす・枝に集中する。 */
   moveRow(rowId: string, action: "indent" | "outdent" | "up" | "down"): void;
+  selectForMobileToolbar(rowId: string): void;
+  moveFromMobileToolbar(action: "indent" | "outdent" | "up" | "down"): void;
+  dismissMobileToolbar(): void;
+  openMobileToolbarDetails(): void;
   zoomTo(rowId: string | null): void;
   /** 保存済みの直前の本文編集・構造移動を戻す。 */
   undoLast(): void;
@@ -91,6 +103,8 @@ type OutlineListProps = {
   onRelocate: (id: string, parentId: string | null, index: number) => Promise<void>;
   /** スマホの「この項目の操作」(下からのシート)。 */
   onOpenActions?: (id: string) => void;
+  onOpenMobileDetails?: (id: string) => void;
+  onMobileToolbarChange?: (state: MobileOutlineToolbarState | null) => void;
   /** PCの「項目の詳細」(行のそばの小窓)。 */
   onOpenDetails: (id: string, anchor: HTMLElement) => void;
   onToggleCompleted?: (id: string) => Promise<OutlineCompletionChange[]>;
@@ -202,6 +216,8 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
   onToggleShowCompletedOutline,
   onRelocate,
   onOpenActions,
+  onOpenMobileDetails,
+  onMobileToolbarChange,
   onOpenDetails,
   onToggleCompleted,
   onRestoreCompletion,
@@ -226,6 +242,9 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
   /** 完了後の遅延フォーカスが、後から始まった入力を奪わないようにする世代番号。 */
   const focusEpochRef = useRef(0);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [mobileToolbarTarget, setMobileToolbarTarget] = useState<
+    { target: "row"; id: string } | { target: "pending" } | null
+  >(null);
   const [focusSavedBlankId, setFocusSavedBlankId] = useState<string | null>(null);
   const [editingValue, setEditingValue] = useState("");
   type PendingRow = { parentId: string | null; index: number; value: string };
@@ -397,6 +416,38 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
   }, [collapsed, entries, nodeById, zoomId]);
   const zoom = zoomId ? nodeById.get(zoomId) ?? null : null;
   const scopeId = zoom ? zoom.id : null;
+  const mobileToolbarState = useMemo<MobileOutlineToolbarState | null>(() => {
+    if (!mobileToolbarTarget || !isMobileViewport()) return null;
+    const blocked = disabled || busy || pendingSaving;
+    if (mobileToolbarTarget.target === "pending") {
+      if (!pending) return null;
+      return {
+        target: "pending", rowId: null, editing: true, label: "新しい一文",
+        enabled: {
+          indent: !blocked && Boolean(indentTarget({ parentId: pending.parentId, index: pending.index })),
+          outdent: !blocked && pending.parentId !== null && pending.parentId !== scopeId,
+          up: false, down: false,
+        },
+      };
+    }
+    const row = nodeById.get(mobileToolbarTarget.id);
+    if (!row || !visible.some(item => item.id === row.id)) return null;
+    const siblings = entries.filter(item => item.parent_id === row.parent_id)
+      .sort((a, b) => a.sort_order - b.sort_order || a.created_at.localeCompare(b.created_at));
+    const at = siblings.findIndex(item => item.id === row.id);
+    const locked = blocked || savingRef.current;
+    return {
+      target: "row", rowId: row.id, editing: editingId === row.id,
+      label: row.content.trim().slice(0, 48) || "空行",
+      enabled: {
+        indent: !locked && at > 0,
+        outdent: !locked && row.parent_id !== null && row.parent_id !== scopeId,
+        up: !locked && at > 0,
+        down: !locked && at >= 0 && at < siblings.length - 1,
+      },
+    };
+  }, [mobileToolbarTarget, editingId, entries, visible, nodeById, pending, pendingSaving, disabled, busy, scopeId]);
+  useEffect(() => { onMobileToolbarChange?.(mobileToolbarState); }, [mobileToolbarState, onMobileToolbarChange]);
   const breadcrumbs: EntryTreeNode[] = [];
   if (zoom) {
     let current: EntryTreeNode | undefined = zoom;
@@ -486,6 +537,7 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
     setEditingValue(row.content);
     setSelectedId(row.id);
     setEditingId(row.id);
+    if (isMobileViewport()) setMobileToolbarTarget({ target: "row", id: row.id });
     setFocusSavedBlankId(null);
   }, [focusSavedBlankId, nodeById]);
 
@@ -497,6 +549,7 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
   const beginPending = (position: Caret, value = "", immediate = false) => {
     if (disabled || creatingRef.current) return;
     focusEpochRef.current++;
+    if (isMobileViewport()) setMobileToolbarTarget({ target: "pending" });
     const render = () => {
       changePending({ ...position, value });
       setCaret(position);
@@ -749,6 +802,22 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
       const row = nodeById.get(rowId);
       if (row) move(row, action);
     },
+    selectForMobileToolbar: (rowId: string) => {
+      const row = nodeById.get(rowId);
+      if (!row) return;
+      setSelectedId(row.id);
+      setCaret(siblingAfter(row));
+      setMobileToolbarTarget({ target: "row", id: row.id });
+    },
+    moveFromMobileToolbar: (action) => { void moveMobile(action); },
+    dismissMobileToolbar: () => {
+      setMobileToolbarTarget(null);
+      if (editingId) void commitEditing();
+      else if (pendingRef.current?.value.trim()) void savePending(false);
+    },
+    openMobileToolbarDetails: () => {
+      if (mobileToolbarTarget?.target === "row") onOpenMobileDetails?.(mobileToolbarTarget.id);
+    },
     zoomTo: (rowId: string | null) => zoomTo(rowId),
     undoLast: () => { void undoLast(); },
     recordExternalEdit: (id: string, previous: string) => recordUndo({ type: "edit", id, previous }),
@@ -980,6 +1049,29 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
     }
     return Promise.resolve();
   };
+  /** 編集途中の本文を保存してから移動。既存Tabと同じ順序・カーソル復元を使用。 */
+  const moveMobile = async (action: "indent" | "outdent" | "up" | "down") => {
+    if (!mobileToolbarTarget || !mobileToolbarState?.enabled[action] ||
+        disabled || busy || savingRef.current || creatingRef.current) return;
+    if (mobileToolbarTarget.target === "pending") {
+      if (action === "indent" || action === "outdent") shiftPendingDepth(action);
+      return;
+    }
+    const row = nodeById.get(mobileToolbarTarget.id);
+    if (!row) return;
+    if (editingId !== row.id) { await move(row, action); return; }
+    const release = editorRef.current ? keepEditorFocus(row.id, editorRef.current) : () => {};
+    savingRef.current = true;
+    try {
+      const next = editingValue.trim();
+      if (next !== row.content) {
+        await onUpdate(row.id, { content: next });
+        recordUndo({ type: "edit", id: row.id, previous: row.content });
+      }
+      await move(row, action);
+    } catch (error) { showError(error); }
+    finally { savingRef.current = false; release(); }
+  };
   const startEdit = (row: EntryTreeNode, offset = row.content.length) => {
     if (disabled || creatingRef.current) return;
     focusEpochRef.current++;
@@ -990,6 +1082,7 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
     setCaret(siblingAfter(row));
     setEditingValue(row.content);
     setEditingId(row.id);
+    if (isMobileViewport()) setMobileToolbarTarget({ target: "row", id: row.id });
   };
 
   /** キー移動では編集画面を閉じずに保存。通信完了を待ってカーソルを奪わない。 */
@@ -1452,6 +1545,24 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
     });
   };
 
+  const shiftPendingDepth = (action: "indent" | "outdent") => {
+    const current = pendingRef.current;
+    if (!current) return;
+    if (action === "outdent") {
+      if (!current.parentId || current.parentId === scopeId) return;
+      const position = siblingPositionAfter(allEntries, current.parentId);
+      if (position) {
+        changePending({ ...position, value: current.value });
+        setCaret(position);
+      }
+    } else {
+      const target = indentTarget({ parentId: current.parentId, index: current.index });
+      if (!target) return;
+      setCollapsed(old => { const next = new Set(old); next.delete(target.parentId!); return next; });
+      changePending({ ...target, value: current.value });
+      setCaret(target);
+    }
+  };
   const onPendingKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.nativeEvent.isComposing || event.key === "Process" || event.nativeEvent.keyCode === 229) return;
     const blankSession = blankInsertSessionRef.current;
@@ -1509,22 +1620,7 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
       }
     } else if (event.key === "Tab") {
       event.preventDefault();
-      const current = pendingRef.current;
-      if (!current) return;
-      if (event.shiftKey && current.parentId !== scopeId && current.parentId) {
-        const position = siblingPositionAfter(allEntries, current.parentId);
-        if (position) {
-          changePending({ ...position, value: current.value });
-          setCaret(position);
-        }
-      } else if (!event.shiftKey) {
-        const target = indentTarget({ parentId: current.parentId, index: current.index });
-        if (target) {
-          setCollapsed(old => { const next = new Set(old); next.delete(target.parentId!); return next; });
-          changePending({ ...target, value: current.value });
-          setCaret(target);
-        }
-      }
+      shiftPendingDepth(event.shiftKey ? "outdent" : "indent");
     }
   };
   const onPendingPaste = (event: import("react").ClipboardEvent<HTMLTextAreaElement>) => {
@@ -1606,8 +1702,9 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
         disabled={disabled || pendingSaving}
         aria-label="新しいアウトライン項目"
         value={pending.value} onChange={event => changePending({ ...pending, value: event.target.value })}
+        onFocus={() => { if (isMobileViewport()) setMobileToolbarTarget({ target: "pending" }); }}
         onKeyDown={onPendingKeyDown} onPaste={onPendingPaste}
-        onBlur={() => { if (pasteReview || skipPendingBlurRef.current) return; if (blankInsertSessionRef.current) { blankInsertSessionRef.current.keepFocus = false; return; } if (pendingRef.current?.value.trim()) void savePending(false); else if (visible.length) changePending(null); }} />
+        onBlur={(event) => { if (!(event.relatedTarget instanceof HTMLElement && event.relatedTarget.closest(".mobile-outline-toolbar"))) setMobileToolbarTarget(null); if (pasteReview || skipPendingBlurRef.current) return; if (blankInsertSessionRef.current) { blankInsertSessionRef.current.keepFocus = false; return; } if (pendingRef.current?.value.trim()) void savePending(false); else if (visible.length) changePending(null); }} />
     </div>
   ) : null;
   const caretNode = deskNode || ghostOn || caretPreviewVisible ? (
@@ -1678,7 +1775,7 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
           aria-label="アウトラインの本文を編集" onChange={(event) => setEditingValue(event.target.value)}
           onKeyDown={(event) => onEditorKeyDown(event, row)}
           onPaste={(event) => onEditorPaste(event, row)}
-          onBlur={(event) => { if (retainedEditorFocusRef.current?.id === row.id) return; if (skipBlurRef.current) { skipBlurRef.current = false; return; } if (event.relatedTarget instanceof HTMLElement && event.relatedTarget.closest(".command-palette")) return; void commitEditing(); }}/>
+          onBlur={(event) => { if (retainedEditorFocusRef.current?.id === row.id) return; if (skipBlurRef.current) { skipBlurRef.current = false; return; } if (event.relatedTarget instanceof HTMLElement && event.relatedTarget.closest(".command-palette")) return; if (event.relatedTarget instanceof HTMLElement && event.relatedTarget.closest(".mobile-outline-toolbar")) return; setMobileToolbarTarget(null); void commitEditing(); }}/>
         : <span className="outline__content"
             onClick={(event) => {
               // クリックでもタップでも文章をその場で編集。選択専用モードは作らない。
@@ -1701,7 +1798,7 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
           {onGrowRow ? <button type="button" className="outline__grow-action" title={isBound ? "この行の段落へ" : "段落にする(この行を見出しに)"} aria-label={isBound ? "段落を開く" : "段落にする"} onClick={() => onGrowRow(row.id)}>¶</button> : null}
           <button type="button" className="outline__zoom-action" title="この枝に集中" aria-label="この枝に集中" onClick={() => zoomTo(row.id)}>⌕</button>
           <button type="button" className="outline__details-action" title="詳細と操作" aria-label="項目の詳細" onClick={(event) => onOpenDetails(row.id, event.currentTarget)}>⋯</button>
-          {onOpenActions ? <button type="button" className="outline__mobile-actions" aria-label="この項目の操作" onClick={() => onOpenActions(row.id)}>⋯</button> : null}
+          {onOpenActions ? <button type="button" className="outline__mobile-actions" aria-label="この項目の階層を操作" onClick={() => onOpenActions(row.id)}>⋯</button> : null}
         </div>
       </div>
     </div>;
