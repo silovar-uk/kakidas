@@ -537,6 +537,7 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
     setEditingValue(row.content);
     setSelectedId(row.id);
     setEditingId(row.id);
+    if (isMobileViewport()) setMobileToolbarTarget({ target: "row", id: row.id });
     setFocusSavedBlankId(null);
   }, [focusSavedBlankId, nodeById]);
 
@@ -548,6 +549,7 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
   const beginPending = (position: Caret, value = "", immediate = false) => {
     if (disabled || creatingRef.current) return;
     focusEpochRef.current++;
+    if (isMobileViewport()) setMobileToolbarTarget({ target: "pending" });
     const render = () => {
       changePending({ ...position, value });
       setCaret(position);
@@ -800,6 +802,22 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
       const row = nodeById.get(rowId);
       if (row) move(row, action);
     },
+    selectForMobileToolbar: (rowId: string) => {
+      const row = nodeById.get(rowId);
+      if (!row) return;
+      setSelectedId(row.id);
+      setCaret(siblingAfter(row));
+      setMobileToolbarTarget({ target: "row", id: row.id });
+    },
+    moveFromMobileToolbar: (action) => { void moveMobile(action); },
+    dismissMobileToolbar: () => {
+      setMobileToolbarTarget(null);
+      if (editingId) void commitEditing();
+      else if (pendingRef.current?.value.trim()) void savePending(false);
+    },
+    openMobileToolbarDetails: () => {
+      if (mobileToolbarTarget?.target === "row") onOpenMobileDetails?.(mobileToolbarTarget.id);
+    },
     zoomTo: (rowId: string | null) => zoomTo(rowId),
     undoLast: () => { void undoLast(); },
     recordExternalEdit: (id: string, previous: string) => recordUndo({ type: "edit", id, previous }),
@@ -1031,6 +1049,29 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
     }
     return Promise.resolve();
   };
+  /** 編集途中の本文を保存してから移動。既存Tabと同じ順序・カーソル復元を使用。 */
+  const moveMobile = async (action: "indent" | "outdent" | "up" | "down") => {
+    if (!mobileToolbarTarget || !mobileToolbarState?.enabled[action] ||
+        disabled || busy || savingRef.current || creatingRef.current) return;
+    if (mobileToolbarTarget.target === "pending") {
+      if (action === "indent" || action === "outdent") shiftPendingDepth(action);
+      return;
+    }
+    const row = nodeById.get(mobileToolbarTarget.id);
+    if (!row) return;
+    if (editingId !== row.id) { await move(row, action); return; }
+    const release = editorRef.current ? keepEditorFocus(row.id, editorRef.current) : () => {};
+    savingRef.current = true;
+    try {
+      const next = editingValue.trim();
+      if (next !== row.content) {
+        await onUpdate(row.id, { content: next });
+        recordUndo({ type: "edit", id: row.id, previous: row.content });
+      }
+      await move(row, action);
+    } catch (error) { showError(error); }
+    finally { savingRef.current = false; release(); }
+  };
   const startEdit = (row: EntryTreeNode, offset = row.content.length) => {
     if (disabled || creatingRef.current) return;
     focusEpochRef.current++;
@@ -1041,6 +1082,7 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
     setCaret(siblingAfter(row));
     setEditingValue(row.content);
     setEditingId(row.id);
+    if (isMobileViewport()) setMobileToolbarTarget({ target: "row", id: row.id });
   };
 
   /** キー移動では編集画面を閉じずに保存。通信完了を待ってカーソルを奪わない。 */
@@ -1503,6 +1545,24 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
     });
   };
 
+  const shiftPendingDepth = (action: "indent" | "outdent") => {
+    const current = pendingRef.current;
+    if (!current) return;
+    if (action === "outdent") {
+      if (!current.parentId || current.parentId === scopeId) return;
+      const position = siblingPositionAfter(allEntries, current.parentId);
+      if (position) {
+        changePending({ ...position, value: current.value });
+        setCaret(position);
+      }
+    } else {
+      const target = indentTarget({ parentId: current.parentId, index: current.index });
+      if (!target) return;
+      setCollapsed(old => { const next = new Set(old); next.delete(target.parentId!); return next; });
+      changePending({ ...target, value: current.value });
+      setCaret(target);
+    }
+  };
   const onPendingKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.nativeEvent.isComposing || event.key === "Process" || event.nativeEvent.keyCode === 229) return;
     const blankSession = blankInsertSessionRef.current;
@@ -1560,22 +1620,7 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
       }
     } else if (event.key === "Tab") {
       event.preventDefault();
-      const current = pendingRef.current;
-      if (!current) return;
-      if (event.shiftKey && current.parentId !== scopeId && current.parentId) {
-        const position = siblingPositionAfter(allEntries, current.parentId);
-        if (position) {
-          changePending({ ...position, value: current.value });
-          setCaret(position);
-        }
-      } else if (!event.shiftKey) {
-        const target = indentTarget({ parentId: current.parentId, index: current.index });
-        if (target) {
-          setCollapsed(old => { const next = new Set(old); next.delete(target.parentId!); return next; });
-          changePending({ ...target, value: current.value });
-          setCaret(target);
-        }
-      }
+      shiftPendingDepth(event.shiftKey ? "outdent" : "indent");
     }
   };
   const onPendingPaste = (event: import("react").ClipboardEvent<HTMLTextAreaElement>) => {
