@@ -98,7 +98,7 @@ try {
   await activeEditor.fill("");
   assert.deepEqual(await markerLabels(), ["", "", "1", ""],
     "clearing an edited row restores blank numbering without removing the row");
-  await rows.filter({ has: page.locator(".outline__content", { hasText: "Original" }) }).first().locator(".outline__content").click();
+  await page.getByRole("button", { name: "ビュレットで表示" }).click();
 
   // Backspace on text only edits characters; it never removes the row.
   await rows.filter({ has: page.locator(".outline__content", { hasText: "Original" }) }).first().locator(".outline__content").click();
