@@ -28,7 +28,7 @@
   /* 記号そのものが開閉スイッチ。可視ギャップは4pxのみとする。 */
   .outline__marker {
     box-sizing: border-box; display: inline-flex; align-items: flex-start; justify-content: flex-start;
-    flex: 0 0 auto; width: max-content; min-width: 0; max-width: min(120px, 33vw);
+    flex: 0 0 auto; width: var(--outline-marker-width, 12px); min-width: var(--outline-marker-width, 12px); max-width: min(120px, 33vw);
     height: 26px; padding: 3px 4px 0 0; border: 0; border-radius: 4px;
     overflow: hidden; text-overflow: ellipsis;
     white-space: nowrap; color: var(--color-ink-3); user-select: none;
