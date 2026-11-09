@@ -35,6 +35,9 @@
     font: 500 12px/1.4 var(--font-sans); font-variant-numeric: tabular-nums;
   }
   .outline__marker--bullet { color: var(--color-ink-2); font-size: 14px; }
+  /* An empty parent remains collapsible even though it has no number. */
+  .outline__marker--empty-toggle { color: var(--color-ink-3); font-size: 13px; }
+  .outline__marker--empty-toggle[aria-expanded="false"] { text-decoration: none; }
   .outline__marker--toggle { background:transparent; cursor:pointer; }
   .outline__marker--toggle:hover { color:var(--color-ink-2); }
   .outline__marker--toggle:focus-visible { outline:2px solid var(--color-ink); outline-offset:1px; }
