@@ -136,6 +136,10 @@ try {
     const a = marker.getBoundingClientRect();
     const b = text.getBoundingClientRect();
     return { markerTop:a.top, textTop:b.top, markerHeight:a.height, textHeight:b.height,
+      markerLeft:a.left, markerRight:a.right, textLeft:b.left, textWidth:b.width,
+      rowWidth:el.getBoundingClientRect().width, rowScrollWidth:el.scrollWidth,
+      viewportWidth:window.innerWidth, textWhiteSpace:getComputedStyle(text).whiteSpace,
+      textFlex:getComputedStyle(text).flex,
       rowAlign:getComputedStyle(el).alignItems, markerAlign:getComputedStyle(marker).alignItems,
       markerPaddingTop:parseFloat(getComputedStyle(marker).paddingTop) };
   });
