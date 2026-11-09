@@ -112,6 +112,42 @@ test("typing and clearing a formerly blank row renumbers siblings without saving
   assert.deepEqual(numberMeaningfulOutline(cleared).map(r=>r.outline_number), ["1","","2"]);
 });
 
+test("only the focused empty row receives a provisional number", () => {
+  const rows = displayRows([
+    {id:"A",content:"市場分析"}, {id:"blank1"}, {id:"blank2"}, {id:"B",content:"競合分析"},
+  ]);
+  const before = JSON.stringify(rows);
+  assert.deepEqual(numberMeaningfulOutline(rows).map(r=>r.outline_number), ["1","","","2"]);
+  assert.deepEqual(numberMeaningfulOutline(rows,{previewId:"blank1"}).map(r=>r.outline_number),
+    ["1","2","","3"]);
+  assert.deepEqual(numberMeaningfulOutline(rows,{previewId:"blank2"}).map(r=>r.outline_number),
+    ["1","","2","3"]);
+  assert.deepEqual(numberMeaningfulOutline(rows).map(r=>r.outline_number), ["1","","","2"]);
+  assert.equal(JSON.stringify(rows),before,"preview never changes saved rows");
+});
+
+test("focused empty parents gain a hierarchical number without moving descendants", () => {
+  const rows = displayRows([
+    {id:"A",content:"親"}, {id:"blank",parent_id:"A"},
+    {id:"child",parent_id:"blank",content:"子"}, {id:"sibling",parent_id:"A",content:"兄弟"},
+    {id:"B",content:"次の親"},
+  ]);
+  assert.deepEqual(numberMeaningfulOutline(rows).map(r=>r.outline_number),
+    ["1","","1.1","1.2","2"]);
+  const preview = numberMeaningfulOutline(rows,{previewId:"blank"});
+  assert.deepEqual(preview.map(r=>r.outline_number), ["1","1.1","1.1.1","1.2","2"]);
+  assert.equal(preview[2].parent_id,"blank","real parent stays unchanged");
+});
+
+test("preview on draft row at sibling insertion point renumbers only the view", () => {
+  const rows = displayRows([
+    {id:"A",content:"A"},{id:"__pending__"},{id:"B",content:"B"},
+  ]);
+  assert.deepEqual(numberMeaningfulOutline(rows,{previewId:"__pending__"}).map(r=>r.outline_number),
+    ["1","2","3"]);
+  assert.deepEqual(numberMeaningfulOutline(rows).map(r=>r.outline_number), ["1","","2"]);
+});
+
 test("completion filtering and blank rows both skip counts", () => {
   const rows = displayRows([
     {id:"A", content:"A"},
