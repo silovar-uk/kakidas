@@ -10,6 +10,8 @@
  * 階層の深さは保存せず、parent_id からUI側で導出する。
  */
 
+import { numberMeaningfulOutline } from "../lib/outlineDisplay.js";
+
 export const ENTRY_KINDS = ["word", "sentence", "paragraph"] as const;
 
 export type EntryKind = (typeof ENTRY_KINDS)[number];
@@ -859,7 +861,7 @@ export function getEntryTree(
     nextOrphanRootNumber += siblings.length;
   });
 
-  return output;
+  return numberMeaningfulOutline(output);
 }
 
 /**
