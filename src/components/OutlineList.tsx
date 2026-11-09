@@ -347,14 +347,44 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
   const lastAdvanceRef = useRef(0);
   /** 置いたばかりで、一覧にはまだ描かれていない行の位置(Tabが続けて来ても親にできるように)。 */
   const recentRef = useRef(new Map<string, { parentId: string | null; index: number; at: number }>());
-  // The number changes as soon as the first/last character is edited,
-  // without waiting for the asynchronous save (or modifying the saved tree).
-  const liveNumberById = useMemo(() => {
-    if (!editingId) return null;
-    return new Map(numberMeaningfulOutline(
-      entries.map(row => row.id === editingId ? { ...row, content: editingValue } : row)
-    ).map(row => [row.id, row.outline_number]));
-  }, [entries, editingId, editingValue]);
+  // Preview numbering while editing existing text OR composing a new row.
+  // The draft is temporary and never changes stored parent_id / sort_order.
+  const previewNumberById = useMemo(() => {
+    if (!editingId && !pending?.value.trim()) return null;
+    const rows = entries.map(row => ({
+      id: row.id, parent_id: row.parent_id,
+      content: row.id === editingId ? editingValue : row.content,
+      heading: row.heading, outline_number: row.outline_number,
+    }));
+
+    if (pending?.value.trim()) {
+      // Pending positions refer to the full, unfiltered tree (including completed
+      // rows), so locate the insertion boundary there, then project it onto the
+      // currently visible completion-filtered list.
+      const siblings = allEntries.filter(row => row.parent_id === pending.parentId)
+        .sort((a, b) => a.sort_order - b.sort_order || a.created_at.localeCompare(b.created_at));
+      const nextSibling = siblings[pending.index];
+      let fullIndex = nextSibling
+        ? allEntries.findIndex(row => row.id === nextSibling.id)
+        : allEntries.length;
+      if (!nextSibling && pending.parentId) {
+        const parentIndex = allEntries.findIndex(row => row.id === pending.parentId);
+        if (parentIndex >= 0) {
+          fullIndex = parentIndex + 1;
+          while (fullIndex < allEntries.length && allEntries[fullIndex].depth > allEntries[parentIndex].depth) {
+            fullIndex += 1;
+          }
+        }
+      }
+      const followingIds = new Set(allEntries.slice(Math.max(0, fullIndex)).map(row => row.id));
+      const nextIndex = rows.findIndex(row => followingIds.has(row.id));
+      rows.splice(nextIndex < 0 ? rows.length : nextIndex, 0, {
+        id: "__pending__", parent_id: pending.parentId, content: pending.value,
+        heading: "", outline_number: "",
+      });
+    }
+    return new Map(numberMeaningfulOutline(rows).map(row => [row.id, row.outline_number]));
+  }, [entries, allEntries, editingId, editingValue, pending?.value, pending?.parentId, pending?.index]);
   const nodeById = useMemo(() => new Map(entries.map((row) => [row.id, row])), [entries]);
   const allNodeById = useMemo(() => new Map(allEntries.map((row) => [row.id, row])), [allEntries]);
   const persistedChildrenOf = (parentId: string | null) =>
@@ -363,7 +393,7 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
   /** 表示切替で本文を動かさないよう、どちらのモードでも同じガターを確保する。 */
   const markerWidth = useMemo(() => {
     if (!numbered) return "12px";
-    const maxLength = entries.reduce((max, row) => Math.max(max, row.outline_number.length, String(entries.length).length + row.depth * 2), 1);
+    const maxLength = entries.reduce((max, row) => Math.max(max, row.outline_number.length, String(entries.length + 1).length + row.depth * 2), 1);
     return `${Math.min(120, Math.max(12, maxLength * 7 + 4))}px`;
   }, [entries, numbered]);
   /** 前の操作だけを保持する。データや既存のブラウザUndo履歴は変更しない。 */
@@ -423,12 +453,12 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
       if (!inside) continue;
       const hidden = Boolean(entry.parent_id && (invisible.has(entry.parent_id) || collapsed.has(entry.parent_id)));
       if (hidden) { invisible.add(entry.id); continue; }
-      result.push(liveNumberById
-        ? { ...entry, outline_number: liveNumberById.get(entry.id) ?? entry.outline_number }
+      result.push(previewNumberById
+        ? { ...entry, outline_number: previewNumberById.get(entry.id) ?? entry.outline_number }
         : entry);
     }
     return result;
-  }, [collapsed, entries, liveNumberById, nodeById, zoomId]);
+  }, [collapsed, entries, previewNumberById, nodeById, zoomId]);
   const zoom = zoomId ? nodeById.get(zoomId) ?? null : null;
   const scopeId = zoom ? zoom.id : null;
   const mobileToolbarState = useMemo<MobileOutlineToolbarState | null>(() => {
@@ -1737,7 +1767,9 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
       data-outline-pending="" role="treeitem"
       aria-level={spot.depth + 1}
       style={{ "--outline-depth": spot.depth } as CSSProperties}>
-      <span className="outline__marker outline__marker--bullet" aria-hidden="true">{numbered ? "" : "•"}</span>
+      <span className={`outline__marker ${numbered && pending.value.trim() ? "outline__marker--number" : "outline__marker--bullet"}`} aria-hidden="true">
+        {numbered ? (previewNumberById?.get("__pending__") ?? "") : "•"}
+      </span>
       <textarea ref={pendingEditorRef} className="outline__edit outline__edit--pending" rows={1} data-kakidas-time-input=""
         disabled={disabled || pendingSaving}
         aria-label="新しいアウトライン項目"
