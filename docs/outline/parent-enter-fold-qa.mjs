@@ -65,6 +65,27 @@ try {
   assert.equal((await item("新3.1").locator(".outline__marker").first().textContent())?.trim(), "1.1");
   assert.equal((await item("既存の子").locator(".outline__marker").first().textContent())?.trim(), "1.2");
 
+  // Marker spacing comes from its own row's text anchor; no global width.
+  const spacing = row => row.evaluate(el => {
+    const label = el.querySelector(".outline__marker").getBoundingClientRect();
+    const body = (el.querySelector(".outline__content") ?? el.querySelector(".outline__edit")).getBoundingClientRect();
+    return { gap: body.left - label.right, textLeft: body.left, markerLeft: label.left,
+      markerWidth: label.width, bodyWidth: body.width };
+  });
+  const nearFour = (value, message) => assert.ok(Math.abs(value - 4) <= 1, message + ": " + value);
+  const rootDesktop = await spacing(item("親"));
+  const childDesktop = await spacing(item("既存の子"));
+  nearFour(rootDesktop.gap, "root gap stays 4px");
+  nearFour(childDesktop.gap, "child gap stays 4px");
+  assert.ok(childDesktop.textLeft > rootDesktop.textLeft, "hierarchy still indents text");
+
+  // Switching bullets and numbers must not shift the text starting point.
+  await page.getByRole("button", { name: "ビュレットで表示" }).click();
+  const bulletDesktop = await spacing(item("既存の子"));
+  assert.ok(Math.abs(childDesktop.textLeft - bulletDesktop.textLeft) <= 1,
+    "number / bullet switch cannot shift the content");
+  await page.getByRole("button", { name: "階層番号で表示" }).click();
+
   // A collapsed parent Enter opens its children and inserts ahead of 1.1.
   await item("親").focus();
   await page.keyboard.press("Control+Alt+ArrowUp");
@@ -132,12 +153,33 @@ try {
   assert.ok(Math.abs(mobile.markerTop - mobile.textTop) <= 2, "mobile marker anchored to first line");
   assert.ok(mobile.markerHeight >= 44, "mobile marker retains 44px touch target");
   assert.ok(mobile.markerPaddingTop >= 9, "mobile text and marker top padding align");
+  const rootMobile = await spacing(item("親"));
+  const childMobile = await spacing(item("非常に長い文章"));
+  nearFour(rootMobile.gap, "mobile parent gap stays 4px");
+  nearFour(childMobile.gap, "mobile child gap stays 4px");
+  assert.ok(childMobile.textLeft > rootMobile.textLeft, "mobile hierarchy still indents text");
 
   await page.reload();
   await item("親").waitFor();
   assert.deepEqual((await contents()).filter(Boolean), ["親", "折り畳みから作成", "新3.1", long],
     "nested order and content persist after reload");
-  console.log("OK first child Enter, collapsed insertion, Ctrl+Alt folding, leading Enter, number order, long text top alignment PC/mobile");
+
+  // A third-level item must retain exactly the same marker-to-text distance.
+  await page.setViewportSize({width:1366,height:768});
+  const beforeDepth = await spacing(item("非常に長い文章"));
+  await item("非常に長い文章").focus();
+  await page.keyboard.press("Tab");
+  await page.waitForFunction(() => [...document.querySelectorAll(".entry-column--sentence .outline__item[data-outline-id]")]
+    .some(row => row.getAttribute("aria-level") === "3"));
+  const grandchild = await spacing(item("非常に長い文章"));
+  nearFour(grandchild.gap, "grandchild gap stays 4px");
+  assert.ok(Math.abs(grandchild.textLeft - beforeDepth.textLeft - 16) <= 1,
+    "deepening one level moves text by just one indent, never a label width");
+  await page.setViewportSize({width:320,height:640});
+  nearFour((await spacing(item("非常に長い文章"))).gap,"320px grandchild gap stays 4px");
+  const mobileToggle = await item("親").locator(".outline__marker--toggle").first().boundingBox();
+  assert.ok(mobileToggle && mobileToggle.width >= 44, "mobile fold target stays 44px or wider");
+  console.log("OK first child Enter, folding, hierarchy numbers and measured constant 4px marker-to-text gap (desktop/320px mobile)");
   await context.close();
 } finally {
   await browser.close();
