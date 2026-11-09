@@ -396,12 +396,8 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
   const persistedChildrenOf = (parentId: string | null) =>
     allEntries.filter((row) => row.parent_id === parentId)
       .sort((a,b)=>a.sort_order-b.sort_order||a.created_at.localeCompare(b.created_at));
-  /** 表示切替で本文を動かさないよう、どちらのモードでも同じガターを確保する。 */
-  const markerWidth = useMemo(() => {
-    if (!numbered) return "12px";
-    const maxLength = entries.reduce((max, row) => Math.max(max, row.outline_number.length, String(entries.length + 1).length + row.depth * 2), 1);
-    return `${Math.min(120, Math.max(12, maxLength * 7 + 4))}px`;
-  }, [entries, numbered]);
+  // Text starts at its own hierarchy indent. Labels are anchored immediately
+  // before that point, so deeper or longer numbers never widen every row.
   /** 前の操作だけを保持する。データや既存のブラウザUndo履歴は変更しない。 */
   const recordUndo = (action: UndoableAction) => {
     undoStackRef.current = [...undoStackRef.current.slice(-29), action];
@@ -1900,7 +1896,7 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
   if (caretNode && spot.at >= visible.length && !pendingNode) rows.push(caretNode);
   return <div className={`outline ${dense ? "outline--dense" : "outline--normal"}`}
     onKeyDownCapture={onFoldKeyDown}
-    style={{ "--outline-marker-width": markerWidth } as CSSProperties}
+    /* The marker is positioned relative to each row's own text start. */
     aria-label="アウトライン編集">
     {zoom ? <nav className="outline__breadcrumbs" aria-label="アウトラインのズーム位置">
       <button type="button" onClick={() => zoomTo(null)}>全体</button>
