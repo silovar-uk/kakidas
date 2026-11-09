@@ -247,6 +247,9 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
   /** 完了後の遅延フォーカスが、後から始まった入力を奪わないようにする世代番号。 */
   const focusEpochRef = useRef(0);
   const [editingId, setEditingId] = useState<string | null>(null);
+  // Preview a number for empty rows only while their actual text editor has focus.
+  const [focusedEditorId, setFocusedEditorId] = useState<string | null>(null);
+  const [pendingFocused, setPendingFocused] = useState(false);
   const [mobileToolbarTarget, setMobileToolbarTarget] = useState<
     { target: "row"; id: string } | { target: "pending" } | null
   >(null);
@@ -350,14 +353,14 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
   // Preview numbering while editing existing text OR composing a new row.
   // The draft is temporary and never changes stored parent_id / sort_order.
   const previewNumberById = useMemo(() => {
-    if (!editingId && !pending?.value.trim()) return null;
+    if (!editingId && !pending?.value.trim() && !pendingFocused) return null;
     const rows = entries.map(row => ({
       id: row.id, parent_id: row.parent_id,
       content: row.id === editingId ? editingValue : row.content,
       heading: row.heading, outline_number: row.outline_number,
     }));
 
-    if (pending?.value.trim()) {
+    if (pending && (pending.value.trim() || pendingFocused)) {
       // Pending positions refer to the full, unfiltered tree (including completed
       // rows), so locate the insertion boundary there, then project it onto the
       // currently visible completion-filtered list.
@@ -383,8 +386,11 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
         heading: "", outline_number: "",
       });
     }
-    return new Map(numberMeaningfulOutline(rows).map(row => [row.id, row.outline_number]));
-  }, [entries, allEntries, editingId, editingValue, pending?.value, pending?.parentId, pending?.index]);
+    const previewId = focusedEditorId === editingId && editingId
+      ? editingId
+      : pendingFocused ? "__pending__" : null;
+    return new Map(numberMeaningfulOutline(rows, { previewId }).map(row => [row.id, row.outline_number]));
+  }, [entries, allEntries, editingId, focusedEditorId, editingValue, pendingFocused, pending?.value, pending?.parentId, pending?.index]);
   const nodeById = useMemo(() => new Map(entries.map((row) => [row.id, row])), [entries]);
   const allNodeById = useMemo(() => new Map(allEntries.map((row) => [row.id, row])), [allEntries]);
   const persistedChildrenOf = (parentId: string | null) =>
@@ -1765,18 +1771,19 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
   const pendingNode = pending ? (
     <div key="pending-outline-row" className="outline__item outline__item--pending"
       data-outline-pending="" role="treeitem"
+      data-outline-preview-number={numbered && pendingFocused && !pending.value.trim() ? "true" : undefined}
       aria-level={spot.depth + 1}
       style={{ "--outline-depth": spot.depth } as CSSProperties}>
-      <span className={`outline__marker ${numbered && pending.value.trim() ? "outline__marker--number" : "outline__marker--bullet"}`} aria-hidden="true">
+      <span className={`outline__marker ${numbered ? "outline__marker--number" : "outline__marker--bullet"} ${numbered && pendingFocused && !pending.value.trim() ? "outline__marker--preview" : ""}`} aria-hidden="true">
         {numbered ? (previewNumberById?.get("__pending__") ?? "") : "•"}
       </span>
       <textarea ref={pendingEditorRef} className="outline__edit outline__edit--pending" rows={1} data-kakidas-time-input=""
         disabled={disabled || pendingSaving}
         aria-label="新しいアウトライン項目"
         value={pending.value} onChange={event => changePending({ ...pending, value: event.target.value })}
-        onFocus={() => { if (isMobileViewport()) setMobileToolbarTarget({ target: "pending" }); }}
+        onFocus={() => { setPendingFocused(true); if (isMobileViewport()) setMobileToolbarTarget({ target: "pending" }); }}
         onKeyDown={onPendingKeyDown} onPaste={onPendingPaste}
-        onBlur={(event) => { if (!(event.relatedTarget instanceof HTMLElement && event.relatedTarget.closest(".mobile-outline-toolbar"))) setMobileToolbarTarget(null); if (pasteReview || skipPendingBlurRef.current) return; if (blankInsertSessionRef.current) { blankInsertSessionRef.current.keepFocus = false; return; } if (pendingRef.current?.value.trim()) void savePending(false); else if (visible.length) changePending(null); }} />
+        onBlur={(event) => { setPendingFocused(false); if (!(event.relatedTarget instanceof HTMLElement && event.relatedTarget.closest(".mobile-outline-toolbar"))) setMobileToolbarTarget(null); if (pasteReview || skipPendingBlurRef.current) return; if (blankInsertSessionRef.current) { blankInsertSessionRef.current.keepFocus = false; return; } if (pendingRef.current?.value.trim()) void savePending(false); else if (visible.length) changePending(null); }} />
     </div>
   ) : null;
   const caretNode = deskNode || ghostOn || caretPreviewVisible ? (
@@ -1812,6 +1819,8 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
     // フラットな兄弟行は詰め、子のまとまりを抜けて大項目へ戻る箇所だけ空ける。
     const startsGroup = index > 0 && rowDepth(row) === 0 && rowDepth(visible[index - 1]) > 0;
     const isBound = (paragraphsByRowId?.get(row.id)?.length ?? 0) > 0;
+    const previewedBlank = numbered && focusedEditorId === row.id
+      && editingId === row.id && !editingValue.trim() && !row.heading?.trim();
     const markerLabel = numbered
       ? (row.outline_number || (row.has_children ? (collapsed.has(row.id) ? "▸" : "▾") : ""))
       : "•";
@@ -1821,6 +1830,7 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
         data-outline-parent-id={row.parent_id ?? ""}
         data-outline-sort-order={row.sort_order}
         data-entry-id={row.id}
+        data-outline-preview-number={previewedBlank ? "true" : undefined}
         className={`outline__item ${isSelected ? "outline__item--selected" : ""} ${row.is_completed ? "outline__item--completed" : ""} ${row.has_children && collapsed.has(row.id) ? "outline__item--folded" : ""} ${lensIds?.has(row.id) ? "outline__item--lens" : ""}`}
         role="treeitem"
         aria-level={zoom ? row.depth - zoom.depth : row.depth + 1}
@@ -1834,23 +1844,24 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
       >
         {row.has_children ? (
           <button type="button" tabIndex={-1}
-            className={`outline__marker outline__marker--toggle ${numbered ? (row.outline_number ? "outline__marker--number" : "outline__marker--empty-toggle") : "outline__marker--bullet"}`}
+            className={`outline__marker outline__marker--toggle ${numbered ? (row.outline_number ? "outline__marker--number" : "outline__marker--empty-toggle") : "outline__marker--bullet"} ${previewedBlank ? "outline__marker--preview" : ""}`}
             aria-label={`「${stripOutlineEmphasis(row.content).slice(0, 24) || "空行"}」の子項目を${collapsed.has(row.id) ? "展開" : "折りたたむ"}`}
             aria-expanded={!collapsed.has(row.id)}
             title={`${numbered ? (row.outline_number ? `${row.outline_number}：` : "") : "•："}${collapsed.has(row.id) ? "子階層を展開（Ctrl+Alt+↓）" : "子階層を折りたたむ（Ctrl+Alt+↑）"}`}
             onClick={() => toggleCollapsed(row.id)}
           >{markerLabel}</button>
         ) : (
-          <span className={`outline__marker ${numbered ? "outline__marker--number" : "outline__marker--bullet"}`}
+          <span className={`outline__marker ${numbered ? "outline__marker--number" : "outline__marker--bullet"} ${previewedBlank ? "outline__marker--preview" : ""}`}
             aria-hidden="true" title={numbered ? row.outline_number : undefined}>
             {markerLabel}
           </span>
         )}
         {editingId === row.id ? <textarea ref={editorRef} className="outline__edit" rows={1} value={editingValue} data-kakidas-time-input=""
-          aria-label="アウトラインの本文を編集" onChange={(event) => setEditingValue(event.target.value)}
+          aria-label="アウトラインの本文を編集" onFocus={() => setFocusedEditorId(row.id)}
+          onChange={(event) => setEditingValue(event.target.value)}
           onKeyDown={(event) => onEditorKeyDown(event, row)}
           onPaste={(event) => onEditorPaste(event, row)}
-          onBlur={(event) => { if (retainedEditorFocusRef.current?.id === row.id) return; if (skipBlurRef.current) { skipBlurRef.current = false; return; } if (event.relatedTarget instanceof HTMLElement && event.relatedTarget.closest(".command-palette")) return; if (event.relatedTarget instanceof HTMLElement && event.relatedTarget.closest(".mobile-outline-toolbar")) return; setMobileToolbarTarget(null); void commitEditing(); }}/>
+          onBlur={(event) => { setFocusedEditorId(previous => previous === row.id ? null : previous); if (retainedEditorFocusRef.current?.id === row.id) return; if (skipBlurRef.current) { skipBlurRef.current = false; return; } if (event.relatedTarget instanceof HTMLElement && event.relatedTarget.closest(".command-palette")) return; if (event.relatedTarget instanceof HTMLElement && event.relatedTarget.closest(".mobile-outline-toolbar")) return; setMobileToolbarTarget(null); void commitEditing(); }}/>
         : <span className="outline__content"
             onClick={(event) => {
               // クリックでもタップでも文章をその場で編集。選択専用モードは作らない。

@@ -28,6 +28,15 @@ try {
   await pending.waitFor({ state: "visible" });
   assert.equal(await pending.getAttribute("placeholder"), null, "pending has no visible placeholder");
 
+  // New empty draft displays its exact insertion number only while focused.
+  await page.getByRole("button", { name: "階層番号で表示" }).click();
+  await pending.focus();
+  assert.equal((await page.locator(".outline__item--pending .outline__marker").textContent()).trim(), "1",
+    "focused empty draft has a provisional number");
+  assert.equal(await page.locator(".outline__item--pending").getAttribute("data-outline-preview-number"), "true");
+  await page.getByRole("button", { name: "ビュレットで表示" }).click();
+  await pending.focus();
+
   // A committed blank pending row is a persisted item, even if its content is empty.
   await pending.fill("Original");
   await pending.press("Enter");
@@ -92,12 +101,19 @@ try {
     "blank rows are present but do not consume numbered positions");
   await rows.nth(1).locator(".outline__content").click();
   await activeEditor.waitFor();
+  assert.deepEqual(await markerLabels(), ["", "1", "2", ""],
+    "focused empty saved row reserves its number before typing");
+  assert.equal(await rows.nth(1).getAttribute("data-outline-preview-number"), "true");
   await activeEditor.fill("New idea");
   assert.deepEqual(await markerLabels(), ["", "1", "2", ""],
-    "numbers respond immediately to typing into an empty saved row");
+    "numbers stay stable when the first character is typed");
   await activeEditor.fill("");
+  assert.deepEqual(await markerLabels(), ["", "1", "2", ""],
+    "clearing an actively focused row keeps its provisional number");
+  await page.getByRole("button", { name: "ビュレットで表示" }).click();
+  await page.getByRole("button", { name: "階層番号で表示" }).click();
   assert.deepEqual(await markerLabels(), ["", "", "1", ""],
-    "clearing an edited row restores blank numbering without removing the row");
+    "blur removes provisional number and restores the committed sequence");
   await page.getByRole("button", { name: "ビュレットで表示" }).click();
 
   // Backspace on text only edits characters; it never removes the row.

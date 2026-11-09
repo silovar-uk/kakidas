@@ -35,6 +35,9 @@
     font: 500 12px/1.4 var(--font-sans); font-variant-numeric: tabular-nums;
   }
   .outline__marker--bullet { color: var(--color-ink-2); font-size: 14px; }
+  /* While an empty editor has the caret, its provisional number is a location cue. */
+  .outline__marker--preview { color: var(--color-shu-ink); font-weight: 750; }
+  .outline__item[data-outline-preview-number="true"] { background: var(--color-shu-wash); }
   /* An empty parent remains collapsible even though it has no number. */
   .outline__marker--empty-toggle { color: var(--color-ink-3); font-size: 13px; }
   .outline__marker--empty-toggle[aria-expanded="false"] { text-decoration: none; }

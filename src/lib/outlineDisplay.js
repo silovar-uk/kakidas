@@ -15,7 +15,7 @@ export function isNumberableEntry(row) {
  * Example: A -> 1, empty child -> "", its child B -> 1.1,
  *          next child C of A -> 1.2, next root D -> 2.
  */
-export function numberMeaningfulOutline(rows) {
+export function numberMeaningfulOutline(rows, { previewId = null } = {}) {
   const nearestNumberedAncestor = new Map();
   const numbers = new Map();
   const nextByScope = new Map();
@@ -25,7 +25,9 @@ export function numberMeaningfulOutline(rows) {
       ? nearestNumberedAncestor.get(row.parent_id)
       : null;
 
-    if (!isNumberableEntry(row)) {
+    // Only the actively focused empty editor may temporarily reserve its number.
+    // This never changes row content or the numbering used for saved/exported data.
+    if (row.id !== previewId && !isNumberableEntry(row)) {
       nearestNumberedAncestor.set(row.id, scope);
       numbers.set(row.id, "");
     } else {

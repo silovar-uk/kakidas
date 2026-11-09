@@ -7,7 +7,10 @@ export interface NumberableEntry {
 }
 
 export function isNumberableEntry(row: Pick<NumberableEntry, "content" | "heading">): boolean;
-export function numberMeaningfulOutline<T extends NumberableEntry>(rows: T[]): T[];
+export function numberMeaningfulOutline<T extends NumberableEntry>(
+  rows: T[],
+  options?: { previewId?: string | null },
+): T[];
 export function numberVisibleOutline<T extends NumberableEntry & {
   child_count: number;
   has_children: boolean;
