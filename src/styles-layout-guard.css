@@ -50,16 +50,17 @@
   box-sizing: border-box;
 }
 .outline__content { min-width: 0; max-width: 100%; }
-/* 挿入マーカーが通常行のビュレット位置を担う。余白を重複計上しない。 */
+/* Insertion guides share the same text anchor as numbered rows.
+ * The 12px caret indicator sits immediately to its left. */
 .outline__caret:has(.outline__caret-host) {
-  padding-left: calc(var(--outline-depth, 0) * 15px + 2px);
+  padding-left: calc(var(--outline-text-inset, 32px) + var(--outline-depth, 0) * var(--outline-indent-step, 16px) - 12px);
 }
 .outline__caret-marker {
-  flex: 0 0 var(--outline-marker-width, 12px);
-  width: var(--outline-marker-width, 12px);
+  flex: 0 0 12px;
+  width: 12px;
 }
 .outline__caret:has(.desk-slot__open) {
-  padding-left: calc(var(--outline-depth, 0) * 15px + 2px + var(--outline-marker-width, 12px));
+  padding-left: calc(var(--outline-text-inset, 32px) + var(--outline-depth, 0) * var(--outline-indent-step, 16px));
 }
 
 /*
@@ -87,7 +88,9 @@
   width: 100%;
   min-width: 0;
   max-width: 100%;
-  overflow: hidden;
+  /* Markers and large mobile fold targets may hang into the left gutter.
+     Text itself is still width-constrained by .outline__content. */
+  overflow: visible;
   box-sizing: border-box;
 }
 .entry-column--sentence .outline__content {
@@ -189,24 +192,23 @@
     min-width: 0;
     box-sizing: border-box;
   }
-  /* 1行の操作は一つの「⋯」。他の操作はシートの内側に収容する。 */
+  /* Mobile uses the same text-first flex layout as desktop.
+     The older max-content grid made text exceed the viewport once numbers
+     were taken out of document flow, so never restore that grid. */
   .entry-column--sentence .outline__item {
-    display: grid;
-    grid-template-columns: max-content minmax(0,1fr) auto 44px;
-    align-items: center;
+    display: flex;
+    align-items: flex-start;
     gap: 0;
     width: 100%;
     max-width: 100%;
-    padding: 0 0 0 calc(var(--outline-depth, 0) * 16px);
+    padding: 0 0 0 calc(var(--outline-text-inset, 32px) + var(--outline-depth, 0) * var(--outline-indent-step, 14px));
   }
-  /* 長文時も番号は最初の文字行に。grid全体の中央揃えはボタン類のため維持。 */
-  .entry-column--sentence .outline__item > .outline__marker { align-self: start; }
-  /* 開閉はビュレット/番号で行うため、専用の▼列は不要。 */
-  .entry-column--sentence .outline__marker { width: max-content; min-width: 0; max-width: min(120px, 33vw); }
-  /* 操作の面積は左側へ拡張し、記号→本文の4pxは維持する。 */
+  /* Number width is intrinsic; the visible glyph always ends 4px before text.
+     Buttons grow to 44px on the LEFT, not into the content. */
+  .entry-column--sentence .outline__marker { width: max-content; min-width: 0; max-width: none; }
   .entry-column--sentence .outline__marker--toggle {
-    width: max-content; min-width: 44px; max-width: min(152px, calc(33vw + 28px));
-    margin-left: -28px; padding-left: 28px; padding-right: 4px;
+    width: max-content; min-width: 44px; max-width: none;
+    margin-left: 0; padding-left: 0; padding-right: 0;
     touch-action: manipulation;
   }
   /* 挿入位置ガイドはゼロ高。末尾のsticky書き口と干渉させない。 */
