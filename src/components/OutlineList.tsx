@@ -1896,7 +1896,6 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
   if (caretNode && spot.at >= visible.length && !pendingNode) rows.push(caretNode);
   return <div className={`outline ${dense ? "outline--dense" : "outline--normal"}`}
     onKeyDownCapture={onFoldKeyDown}
-    /* The marker is positioned relative to each row's own text start. */
     aria-label="アウトライン編集">
     {zoom ? <nav className="outline__breadcrumbs" aria-label="アウトラインのズーム位置">
       <button type="button" onClick={() => zoomTo(null)}>全体</button>
