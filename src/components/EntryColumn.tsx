@@ -1,4 +1,5 @@
 import { OutlineList, type OutlineHandle, type MobileOutlineToolbarState } from "./OutlineList";
+import { isNumberableEntry } from "../lib/outlineDisplay.js";
 import type { OutlinePasteItem } from "../lib/outlinePaste.js";
 import type { OutlineJoinResult, OutlinePasteBatchResult } from "../repositories/memoRepository";
 import type { OutlineCompletionChange } from "../lib/outlineCompletion.js";
@@ -459,8 +460,10 @@ export function EntryColumn({
   const tagGroupedDisplayNumbers = useMemo(() => {
     const numberByEntryId = new Map<string, string>();
     const assignNumbers = (groupEntries: EntryTreeNode[]) => {
-      groupEntries.forEach((entry, index) => {
-        numberByEntryId.set(entry.id, String(index + 1));
+      let number = 0;
+      groupEntries.forEach(entry => {
+        if (isNumberableEntry(entry)) number += 1;
+        numberByEntryId.set(entry.id, isNumberableEntry(entry) ? String(number) : "");
       });
     };
 
