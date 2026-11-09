@@ -84,6 +84,22 @@ try {
   assert.equal(await page.getByText("空の項目", { exact: true }).count(), 0);
   assert.equal(await page.locator(".outline__empty-placeholder").count(), 0);
 
+  // Numbered mode excludes saved empty rows and renumbers during inline edits.
+  await page.getByRole("button", { name: "階層番号で表示" }).click();
+  const markerLabels = () => rows.evaluateAll(elements => elements.map(el =>
+    el.querySelector(".outline__marker")?.textContent?.trim() ?? ""));
+  assert.deepEqual(await markerLabels(), ["", "", "1", ""],
+    "blank rows are present but do not consume numbered positions");
+  await rows.nth(1).locator(".outline__content").click();
+  await activeEditor.waitFor();
+  await activeEditor.fill("New idea");
+  assert.deepEqual(await markerLabels(), ["", "1", "2", ""],
+    "numbers respond immediately to typing into an empty saved row");
+  await activeEditor.fill("");
+  assert.deepEqual(await markerLabels(), ["", "", "1", ""],
+    "clearing an edited row restores blank numbering without removing the row");
+  await page.getByRole("button", { name: "ビュレットで表示" }).click();
+
   // Backspace on text only edits characters; it never removes the row.
   await rows.filter({ has: page.locator(".outline__content", { hasText: "Original" }) }).first().locator(".outline__content").click();
   await activeEditor.press("End");

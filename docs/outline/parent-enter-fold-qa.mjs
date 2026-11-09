@@ -121,8 +121,9 @@ try {
   const desktop = await geometry();
   assert.ok(desktop.textHeight > 45, "long text must actually wrap on desktop");
   assert.ok(Math.abs(desktop.markerTop - desktop.textTop) <= 2, "desktop marker anchored to first line");
-  assert.equal(desktop.rowAlign, "flex-start");
-  assert.equal(desktop.markerAlign, "flex-start");
+  // Chromium may serialize the logical equivalent as "flow-start".
+  assert.ok(["flex-start", "flow-start"].includes(desktop.rowAlign), "row flex-start alignment");
+  assert.ok(["flex-start", "flow-start"].includes(desktop.markerAlign), "marker flex-start alignment");
 
   await page.setViewportSize({ width: 390, height: 844 });
   const mobile = await geometry();

@@ -28,13 +28,16 @@
   /* 記号そのものが開閉スイッチ。可視ギャップは4pxのみとする。 */
   .outline__marker {
     box-sizing: border-box; display: inline-flex; align-items: flex-start; justify-content: flex-start;
-    flex: 0 0 auto; width: max-content; min-width: 0; max-width: min(120px, 33vw);
+    flex: 0 0 auto; width: var(--outline-marker-width, 12px); min-width: var(--outline-marker-width, 12px); max-width: min(120px, 33vw);
     height: 26px; padding: 3px 4px 0 0; border: 0; border-radius: 4px;
     overflow: hidden; text-overflow: ellipsis;
     white-space: nowrap; color: var(--color-ink-3); user-select: none;
     font: 500 12px/1.4 var(--font-sans); font-variant-numeric: tabular-nums;
   }
   .outline__marker--bullet { color: var(--color-ink-2); font-size: 14px; }
+  /* An empty parent remains collapsible even though it has no number. */
+  .outline__marker--empty-toggle { color: var(--color-ink-3); font-size: 13px; }
+  .outline__marker--empty-toggle[aria-expanded="false"] { text-decoration: none; }
   .outline__marker--toggle { background:transparent; cursor:pointer; }
   .outline__marker--toggle:hover { color:var(--color-ink-2); }
   .outline__marker--toggle:focus-visible { outline:2px solid var(--color-ink); outline-offset:1px; }

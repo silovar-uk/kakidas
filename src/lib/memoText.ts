@@ -55,7 +55,7 @@ export function formatMemoText(
         ? "  ".repeat(entry.depth)
         : "";
       const prefix = (kind === "sentence" ? includeOutlineNumbers : includeEntryNumbers)
-        ? `${entry.outline_number} `
+        ? (entry.outline_number ? `${entry.outline_number} ` : "")
         : kind === "paragraph"
           ? ""
           : "- ";
