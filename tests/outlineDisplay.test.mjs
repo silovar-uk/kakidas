@@ -1,10 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { numberVisibleOutline } from "../src/lib/outlineDisplay.js";
+import { isNumberableEntry, numberMeaningfulOutline, numberVisibleOutline } from "../src/lib/outlineDisplay.js";
 import { visibleOutlineWithAncestors } from "../src/lib/outlineCompletion.js";
 
 const row = (id, parent_id, number, completed = false, child_count = 0) =>
-  ({id, parent_id, outline_number:number, is_completed:completed, child_count,
+  ({id, parent_id, content:id, heading:"", outline_number:number, is_completed:completed, child_count,
     has_children:child_count>0, sort_order:Number(number.split(".").at(-1))-1});
 
 test("hidden completed root no longer occupies a display number",()=>{
