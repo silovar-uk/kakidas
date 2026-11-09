@@ -18,6 +18,7 @@ import type { OutlineCompletionChange } from "../lib/outlineCompletion.js";
 import { siblingPositionAfter, visibleInsertionIndex, indentPositionAt } from "../lib/outlineInsert.js";
 import { siblingMoveIndex } from "../lib/outlineMove.js";
 import { positionForBlankEnter, canBackspaceDeleteBlank, isTrulyEmptyEditor } from "../lib/outlineBlank.js";
+import { numberMeaningfulOutline } from "../lib/outlineDisplay.js";
 import { foldableBranchesAtLevel, toggleFoldedLevel, parseFoldedIds } from "../lib/outlineFold.js";
 import { outlineEmphasisSegments, toggleOutlineEmphasis, stripOutlineEmphasis } from "../lib/outlineEmphasis.js";
 import { useDraftPersistence } from "../hooks/useDraftPersistence";
@@ -346,6 +347,14 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
   const lastAdvanceRef = useRef(0);
   /** 置いたばかりで、一覧にはまだ描かれていない行の位置(Tabが続けて来ても親にできるように)。 */
   const recentRef = useRef(new Map<string, { parentId: string | null; index: number; at: number }>());
+  // The number changes as soon as the first/last character is edited,
+  // without waiting for the asynchronous save (or modifying the saved tree).
+  const liveNumberById = useMemo(() => {
+    if (!editingId) return null;
+    return new Map(numberMeaningfulOutline(
+      entries.map(row => row.id === editingId ? { ...row, content: editingValue } : row)
+    ).map(row => [row.id, row.outline_number]));
+  }, [entries, editingId, editingValue]);
   const nodeById = useMemo(() => new Map(entries.map((row) => [row.id, row])), [entries]);
   const allNodeById = useMemo(() => new Map(allEntries.map((row) => [row.id, row])), [allEntries]);
   const persistedChildrenOf = (parentId: string | null) =>
@@ -354,7 +363,7 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
   /** 表示切替で本文を動かさないよう、どちらのモードでも同じガターを確保する。 */
   const markerWidth = useMemo(() => {
     if (!numbered) return "12px";
-    const maxLength = entries.reduce((max, row) => Math.max(max, row.outline_number.length), 1);
+    const maxLength = entries.reduce((max, row) => Math.max(max, row.outline_number.length, String(entries.length).length + row.depth * 2), 1);
     return `${Math.min(120, Math.max(12, maxLength * 7 + 4))}px`;
   }, [entries, numbered]);
   /** 前の操作だけを保持する。データや既存のブラウザUndo履歴は変更しない。 */
@@ -414,10 +423,12 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
       if (!inside) continue;
       const hidden = Boolean(entry.parent_id && (invisible.has(entry.parent_id) || collapsed.has(entry.parent_id)));
       if (hidden) { invisible.add(entry.id); continue; }
-      result.push(entry);
+      result.push(liveNumberById
+        ? { ...entry, outline_number: liveNumberById.get(entry.id) ?? entry.outline_number }
+        : entry);
     }
     return result;
-  }, [collapsed, entries, nodeById, zoomId]);
+  }, [collapsed, entries, liveNumberById, nodeById, zoomId]);
   const zoom = zoomId ? nodeById.get(zoomId) ?? null : null;
   const scopeId = zoom ? zoom.id : null;
   const mobileToolbarState = useMemo<MobileOutlineToolbarState | null>(() => {
@@ -1726,7 +1737,7 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
       data-outline-pending="" role="treeitem"
       aria-level={spot.depth + 1}
       style={{ "--outline-depth": spot.depth } as CSSProperties}>
-      <span className="outline__marker outline__marker--bullet" aria-hidden="true">•</span>
+      <span className="outline__marker outline__marker--bullet" aria-hidden="true">{numbered ? "" : "•"}</span>
       <textarea ref={pendingEditorRef} className="outline__edit outline__edit--pending" rows={1} data-kakidas-time-input=""
         disabled={disabled || pendingSaving}
         aria-label="新しいアウトライン項目"
@@ -1769,6 +1780,9 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
     // フラットな兄弟行は詰め、子のまとまりを抜けて大項目へ戻る箇所だけ空ける。
     const startsGroup = index > 0 && rowDepth(row) === 0 && rowDepth(visible[index - 1]) > 0;
     const isBound = (paragraphsByRowId?.get(row.id)?.length ?? 0) > 0;
+    const markerLabel = numbered
+      ? (row.outline_number || (row.has_children ? (collapsed.has(row.id) ? "▸" : "▾") : ""))
+      : "•";
     return <div key={row.id} className={`outline__item-wrap ${startsGroup ? "outline__item-wrap--group-start" : ""}`}>
       <div
         data-outline-id={row.id}
@@ -1788,16 +1802,16 @@ export const OutlineList = forwardRef<OutlineHandle, OutlineListProps>(function 
       >
         {row.has_children ? (
           <button type="button" tabIndex={-1}
-            className={`outline__marker outline__marker--toggle ${numbered ? "outline__marker--number" : "outline__marker--bullet"}`}
+            className={`outline__marker outline__marker--toggle ${numbered ? (row.outline_number ? "outline__marker--number" : "outline__marker--empty-toggle") : "outline__marker--bullet"}`}
             aria-label={`「${stripOutlineEmphasis(row.content).slice(0, 24) || "空行"}」の子項目を${collapsed.has(row.id) ? "展開" : "折りたたむ"}`}
             aria-expanded={!collapsed.has(row.id)}
-            title={`${numbered ? row.outline_number : "•"}：${collapsed.has(row.id) ? "子階層を展開（Ctrl+Alt+↓）" : "子階層を折りたたむ（Ctrl+Alt+↑）"}`}
+            title={`${numbered ? (row.outline_number ? `${row.outline_number}：` : "") : "•："}${collapsed.has(row.id) ? "子階層を展開（Ctrl+Alt+↓）" : "子階層を折りたたむ（Ctrl+Alt+↑）"}`}
             onClick={() => toggleCollapsed(row.id)}
-          >{numbered ? row.outline_number : "•"}</button>
+          >{markerLabel}</button>
         ) : (
           <span className={`outline__marker ${numbered ? "outline__marker--number" : "outline__marker--bullet"}`}
             aria-hidden="true" title={numbered ? row.outline_number : undefined}>
-            {numbered ? row.outline_number : "•"}
+            {markerLabel}
           </span>
         )}
         {editingId === row.id ? <textarea ref={editorRef} className="outline__edit" rows={1} value={editingValue} data-kakidas-time-input=""
