@@ -13,7 +13,7 @@
     color: var(--color-ink);
     /* Sentence text defines the anchor. Numbers grow left, not toward the text. */
     --outline-text-inset: 32px;
-    --outline-indent-step: 16px;
+    --outline-indent-step: 20px;
     --outline-marker-gap: 4px;
   }
   .outline__toolbar { display:flex; gap:8px; align-items:center; justify-content:space-between; padding:0 0 8px; }
@@ -93,7 +93,7 @@
   }
   .entry-composer__outline-paste-status { color: var(--color-shu-ink); }
   .outline__placement-indicator {
-    position: absolute; left: calc(var(--outline-depth, 0) * 15px + 2px);
+    position: absolute; left: calc(var(--outline-depth, 0) * var(--outline-indent-step) + 2px);
     right: 8px; top: 0; height: 0; z-index: 3;
     border-top: 1px dashed var(--color-shu); pointer-events: none;
   }
@@ -197,7 +197,7 @@
   .outline__details .entry-item__content { display:none; }
   .outline__structure-actions { display:flex; flex-wrap:wrap; gap:5px; margin-bottom:6px; }
   .outline__structure-actions button { border:1px solid var(--color-line); border-radius:4px; padding:4px 6px; background:var(--color-sheet); color:var(--color-ink-2); cursor:pointer; font-size:12px; }
-  .outline__new { display:flex; align-items:center; gap:4px; margin:4px 0 4px calc(var(--outline-depth,0) * 15px + 19px); }
+  .outline__new { display:flex; align-items:center; gap:4px; margin:4px 0 4px calc(var(--outline-depth,0) * var(--outline-indent-step) + 19px); }
   .outline__new > span { color:var(--color-ink-3); }
   .outline__new button { border:0; background:var(--color-shu-wash); border-radius:4px; padding:7px; font-size:12px; color:var(--color-shu-ink); cursor:pointer; }
   /* 完了済みの表示切替はアウトライン末尾に控えめに置き、本文の操作を邪魔しない。 */
@@ -260,7 +260,7 @@
     .entry-column--sentence .entry-list > .outline { min-width:0; }
     .outline {
       box-sizing:border-box; width:100%; min-width:0; max-width:100vw; padding-inline:16px;
-      --outline-indent-step: 14px;
+      --outline-indent-step: 18px;
     }
     .outline__item { box-sizing:border-box; width:100%; min-width:0; max-width:calc(100vw - 32px); }
     .outline__actions { min-width:0; }
