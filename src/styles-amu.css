@@ -22,6 +22,11 @@
     overflow-y: auto; min-height: 0; padding: 6px 0 24px; align-content: start;
     scrollbar-gutter: stable; scrollbar-width: thin; overscroll-behavior: contain;
   }
+  /* 末尾の行も下端に張りつけず、前後の文脈を見ながら編集できる余白。 */
+  .editor-page:not(.editor-page--seisho) .editor-grid .entry-column--sentence .entry-list {
+    padding-bottom: clamp(140px, 30dvh, 320px);
+    scroll-padding-bottom: 64px;
+  }
   /* 欄の見出しは、帯の下で静かに */
   .editor-page:not(.editor-page--seisho) .editor-grid .entry-column__header { min-height: 36px; }
   /* 書き口はスマホの棚の下にだけある。PCは欄の中にいる */
@@ -276,6 +281,10 @@ a.outline__mark:hover { background: var(--color-shu-wash); color: var(--color-sh
    7. スマホ:棚の下の書き口(流れの中に置く。キーボードを追いかけない)
    -------------------------------------------------------------------------- */
 @media (max-width: 920px) {
+  /* スマホはページ全体をスクロールするため、アウトライン末尾に余白を確保。 */
+  .editor-page:not(.editor-page--seisho) .entry-column--sentence .entry-list {
+    padding-bottom: calc(clamp(120px, 25svh, 240px) + env(safe-area-inset-bottom, 0px));
+  }
   .editor-mobile-desk .desk-host { padding: 0; }
   .editor-mobile-desk .entry-composer--desk > form.entry-composer {
     display: grid; align-items: end; gap: 0 4px;
