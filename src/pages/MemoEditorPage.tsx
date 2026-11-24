@@ -1,3 +1,4 @@
+import { resolveParagraphInsertionIndex } from "../lib/paragraphInsertion.js";
 import { visibleOutlineWithAncestors } from "../lib/outlineCompletion.js";
 import { numberVisibleOutline } from "../lib/outlineDisplay.js";
 import {SeishoView} from "../components/SeishoView";
@@ -383,8 +384,14 @@ export function MemoEditorPage() {
   }, []);
   /** 書き口がいる欄(PC)。スマホでは棚(activeKind)が書き口の欄になる。 */
   const [deskSlot, setDeskSlot] = useState<EntryKind>("sentence");
-  /** 段落の書き口は、この段落の後ろに入る。null=末尾、"^"=先頭。 */
-  const [paragraphAfterId, setParagraphAfterId] = useState<string | null>(null);
+  /** 通常は末尾。アウトラインから明示的に段落を作る時だけ、一度だけ挿入位置を指定する。 */
+  const [paragraphAfterId, setParagraphAfterIdState] = useState<string | null>(null);
+  const paragraphAfterRef = useRef<string | null>(null);
+  const setParagraphAfterId = useCallback((id: string | null) => {
+    paragraphAfterRef.current = id;
+    setParagraphAfterIdState(id);
+  }, []);
+  useEffect(() => { setParagraphAfterId(null); }, [memoId, setParagraphAfterId]);
   const [draftsByKind, setDraftsByKind] = useState<Record<EntryKind, boolean>>({
     sentence: false, paragraph: false, word: false,
   });
@@ -1238,16 +1245,10 @@ export function MemoEditorPage() {
       if(result)return updateEntry(entryId,{content:result});
     }).catch(()=>{});
   };
-  /** 画面の順ではなく、保存する順(手動の順)で、段落の挿入位置を求める。 */
-  const paragraphInsertIndex=()=>{
-    const list=getEntryTree(memo?.entries??[],"paragraph","manual");
-    if(paragraphAfterId==="^")return 0;
-    if(paragraphAfterId){
-      const at=list.findIndex(entry=>entry.id===paragraphAfterId);
-      if(at>=0)return at+1;
-    }
-    return list.length;
-  };
+  /** 通常の追加では index を渡さず、保存トランザクション内で本当の末尾を求める。 */
+  const paragraphInsertIndex=()=>resolveParagraphInsertionIndex(
+    getEntryTree(memo?.entries??[],"paragraph","manual"), paragraphAfterRef.current,
+  );
   /** 続けて打ってEnterを重ねても、置く順番と位置(次の一行)が前後しないよう、ひとつずつ置く。 */
   const deskQueueRef=useRef<Promise<unknown>>(Promise.resolve());
   const handleDeskCreate=(content:string,metadata:import('../types/memo').EntryCreateMetadata,draftId:string,kind:EntryKind='sentence',entryId?:string)=>{
@@ -1264,9 +1265,10 @@ export function MemoEditorPage() {
       outlineRef.current?.advance(created.id);
       outlineRef.current?.recordExternalCreate(created.id);
     }else if(kind==='paragraph'){
-      // 段落は文書の順。選んだ段落の後ろ(なければ末尾)へ置き、続けて次の段落をその後ろへ。
+      // 通常は必ず末尾。明示的な途中挿入は成功したら解除し、次の新段落は末尾に戻す。
+      const anchor = paragraphAfterRef.current;
       created=await createEntry('paragraph',content,metadata,null,'bottom',draftId,entryId,paragraphInsertIndex());
-      setParagraphAfterId(created.id);
+      if (paragraphAfterRef.current === anchor) setParagraphAfterId(null);
     }else{
       created=await createEntry(kind,content,metadata,null,addEntriesAtBottom?'bottom':'top',draftId,entryId);
       if(metadata.link_url)enrichReferenceTitle(created.id,metadata.link_url);
@@ -1485,6 +1487,7 @@ export function MemoEditorPage() {
     }
     // 先に段落の編集面へコピーして移る。旧下書きは新下書きの保存成功まで保持。
     to.loadTransferredDraft(snapshot);
+    setParagraphAfterId(null);
     moveDeskTo("paragraph");
     try {
       await draftRepository.save({
@@ -1782,8 +1785,7 @@ export function MemoEditorPage() {
             onRowSelected={()=>undefined}
             onFocusDesk={()=>outlineRef.current?.focusInline()}
             paragraphAfterId={paragraphAfterId}
-            onSelectParagraph={setParagraphAfterId}
-            manualOrder={entrySortMode==='manual'}
+            manualOrder={kind==='paragraph' || entrySortMode==='manual'}
             bindings={bindings}
             rowNumberById={rowNumberById}
             lensIds={lensIds}

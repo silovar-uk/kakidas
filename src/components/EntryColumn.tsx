@@ -105,7 +105,6 @@ type EntryColumnProps = {
   onFocusDesk?: () => void;
   /** 段落の書き口は、この段落の後ろに入る。null=末尾、"^"=先頭。 */
   paragraphAfterId?: string | null;
-  onSelectParagraph?: (entryId: string) => void;
   /** 並びが手動のときだけ、段落を上・下へ移せる。 */
   manualOrder?: boolean;
   /** 結び目(段落の見出し=アウトラインの行の文)。行の「¶」・段落の「↖ 2.2」に使う。 */
@@ -229,7 +228,6 @@ export function EntryColumn({
   onCaretDescribed,
   onFocusDesk,
   paragraphAfterId = null,
-  onSelectParagraph,
   manualOrder = false,
   bindings,
   rowNumberById,
@@ -652,7 +650,7 @@ export function EntryColumn({
       content,
       { ...metadata, tag },
       null,
-      addAtBottom ? "bottom" : "top",
+      kind === "paragraph" || addAtBottom ? "bottom" : "top",
       draftId,
     );
 
@@ -872,7 +870,7 @@ export function EntryColumn({
         onPull={kind === "word" ? onPullToOutline : undefined}
         citationCount={citationRowIds?.get(entry.id)?.length ?? 0}
         onJumpToCitation={onJumpToCitation}
-        onSelect={kind === "paragraph" ? onSelectParagraph : undefined}
+        // 閲覧・原文切替・編集では新段落の挿入先を変更しない。
         onMove={kind === "paragraph" && manualOrder ? moveParagraph : undefined}
         canMoveUp={index > 0}
         canMoveDown={index >= 0 && index < primaryEntries.length - 1}
@@ -1450,8 +1448,8 @@ export function EntryColumn({
                 : primaryEntries.map((entry) => renderEntry(entry))
             ) : isTagGrouped ? (
               <>
-                {kind === "paragraph" ? <div className="entry-list__desk-slot">{deskNode}</div> : null}
                 {renderTagGroupedEntries(primaryEntries, "grouped")}
+                {kind === "paragraph" ? <div className="entry-list__desk-slot">{deskNode}</div> : null}
               </>
             ) : (
               <>

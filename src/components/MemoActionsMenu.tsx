@@ -30,7 +30,7 @@ export function MemoActionsMenu(props:Props){
   <button role="menuitem" onClick={action(props.onChat)}>ChatGPTで続きを考える</button>
   <button role="menuitem" onClick={action(props.onCopy)}>メモをコピー</button>
   <button role="menuitem" onClick={action(props.onDownload)}>.txtで書き出す</button>
-  <p className="memo-actions__caption">並び順</p>
+  <p className="memo-actions__caption">参考URLの並び順</p>
   {ENTRY_SORT_MODES.map(mode=><button key={mode} role="menuitemradio" aria-checked={mode===props.sortMode} onClick={()=>{props.onSort(mode);close()}}>{ENTRY_SORT_MODE_LABEL[mode]}</button>)}
   <p className="memo-actions__caption">表示</p>
   {props.options.map(option=><button role="menuitemcheckbox" key={option.label} aria-checked={option.value} onClick={()=>option.onChange(!option.value)}>{option.label}</button>)}

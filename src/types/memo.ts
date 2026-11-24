@@ -740,7 +740,8 @@ export function getEntryTree(
   kind: EntryKind,
   sortMode: EntrySortMode = "created_desc",
 ): EntryTreeNode[] {
-  const effectiveSortMode = kind === "sentence" ? "manual" : sortMode;
+  // アウトラインと段落は文書の構造順。参考URLだけ表示設定で並べ替える。
+  const effectiveSortMode = kind === "sentence" || kind === "paragraph" ? "manual" : sortMode;
   const activeEntries = entries
     .filter((entry) => entry.kind === kind && entry.deleted_at === null)
     .map(normalizeEntryRow)
