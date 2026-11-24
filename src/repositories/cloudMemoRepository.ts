@@ -1,3 +1,4 @@
+import { isMissingHeadingColorColumn, prepareHeadingColorUpload } from "../lib/headingColor.js";
 import type {
   CloudMemoListItem,
   CloudState,
@@ -212,6 +213,10 @@ export async function uploadMemoToCloud(
   }
 
   try {
+    // 旧DBは色なしのメモを従来通り送信できる。色付きの場合は本文の書き込み前に停止し、色の消失を防ぐ。
+    const probe = await client.from("entries").select("heading_color").limit(0);
+    if (probe.error && !isMissingHeadingColorColumn(probe.error)) throw probe.error;
+    const entries = prepareHeadingColorUpload(toCloudEntries(snapshot.entries, userId), !probe.error);
     const { data: memoData, error: memoError } = await client
       .from("memos")
       .upsert(toCloudMemo(snapshot.memo, userId), { onConflict: "id" })
@@ -219,8 +224,6 @@ export async function uploadMemoToCloud(
       .single();
 
     if (memoError) throw memoError;
-
-    const entries = toCloudEntries(snapshot.entries, userId);
 
     if (entries.length > 0) {
       const { error: entriesError } = await client

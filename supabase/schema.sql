@@ -27,6 +27,7 @@ create table if not exists public.entries (
   content text not null,
   -- 段落だけが持つ任意の小見出し。空文字なら表示しない。
   heading text not null default '',
+  heading_color text check (heading_color in ('red','orange','ochre','green','blue','purple')),
   -- 項目に付けるタグは0または1つ。タグ表示の折りたたみグループに使う。
   tag text,
   -- 任意の気持ち・備考。空文字ならアプリ画面には表示しない。
@@ -76,6 +77,10 @@ alter table public.entries
 -- v0.5.73: 段落だけが任意タイトルを持てるようにする。
 alter table public.entries
   add column if not exists heading text not null default '';
+
+-- 任意の見出し色。標準はNULL。
+alter table public.entries add column if not exists heading_color text
+  check (heading_color in ('red','orange','ochre','green','blue','purple'));
 
 create index if not exists entries_memo_kind_tag_idx
   on public.entries (memo_id, kind, tag)

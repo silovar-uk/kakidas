@@ -1,3 +1,4 @@
+import { headingColorHex, sharedHeadingColor } from "../lib/headingColor.js";
 import { ParagraphMarkdown } from "./ParagraphMarkdown";
 import type {RefObject} from "react";
 import {getOutlineBindings} from "../lib/outlineBinding";
@@ -17,7 +18,7 @@ function Entries({items,knit}:{items:EntryTreeNode[];knit:Map<string,EntryRow[]>
  // 行に結ばれた段落は、その行のすぐ後に編み込む(行頭の点なし・一字下げ)。
  let ordinal=0;
  return <ul className="seisho__list">{items.flatMap(item=>{
-  const row=<li key={item.id} style={{paddingInlineStart:`${item.depth*1.25}em`,viewTransitionName:nameOf(item.id,ordinal++)}}>{item.content}</li>;
+  const row=<li key={item.id} style={{paddingInlineStart:`${item.depth*1.25}em`,viewTransitionName:nameOf(item.id,ordinal++)}}><span style={{color:headingColorHex(sharedHeadingColor(knit.get(item.id)??[]))}}>{item.content}</span></li>;
   const woven=(knit.get(item.id)??[]).map(paragraph=><li key={`knit-${paragraph.id}`} className="seisho__knit"
    style={{paddingInlineStart:`${item.depth*1.25}em`,viewTransitionName:nameOf(paragraph.id,ordinal++)}}><ParagraphMarkdown source={paragraph.content}/></li>);
   return [row,...woven];
@@ -50,7 +51,7 @@ export function SeishoView({memo,title,sortMode,includeCompleted,onBack,onCopy,o
     <h1 style={{viewTransitionName:'memo-title'}}>{heading.headline}</h1>
     {sentences.length>0?<section><h2>要点</h2><Entries items={sentences} knit={knit}/></section>:null}
     {loose.length>0?<section><h2>本文</h2>{loose.map(entry=><div className="seisho-paragraph" key={entry.id} style={{viewTransitionName:nameOf(entry.id,ordinal++)}}>
-      {entry.heading?<h3>{entry.heading}</h3>:null}<ParagraphMarkdown source={entry.content}/></div>)}</section>:null}
+      {entry.heading?<h3 style={{color:headingColorHex(entry.heading_color)}}>{entry.heading}</h3>:null}<ParagraphMarkdown source={entry.content}/></div>)}</section>:null}
     {words.length>0?<section><h2>参考</h2><ul className="seisho-references">{words.map(entry=><li key={entry.id} style={{viewTransitionName:nameOf(entry.id,ordinal++)}}>
       <a href={entry.link_url} target="_blank" rel="noreferrer">{entry.content}</a>
       <small>{getLinkHostname(entry.link_url)}</small>{entry.note?<p>{entry.note}</p>:null}

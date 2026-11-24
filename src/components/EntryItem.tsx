@@ -1,3 +1,5 @@
+import { HeadingColorPicker } from "./HeadingColorPicker";
+import { headingColorHex } from "../lib/headingColor.js";
 import { ParagraphMarkdown, ParagraphMarkdownPreview } from "./ParagraphMarkdown";
 import { NoteIcon, LinkIcon, MoreIcon, UpIcon, DownIcon, PullIcon } from "./icons";
 import {
@@ -509,7 +511,7 @@ export function EntryItem({
       >
         <div className="entry-item__compact-content" title={entry.heading ? `${entry.heading}：${entry.content}` : entry.content}>
           {entry.heading && kind === "paragraph" ? (
-            <strong className="entry-item__compact-heading">{entry.heading}</strong>
+            <strong className="entry-item__compact-heading" style={{color:headingColorHex(entry.heading_color)}}>{entry.heading}</strong>
           ) : null}
           <span>{entry.content}</span>
         </div>
@@ -547,7 +549,9 @@ export function EntryItem({
               {editMode === "content" ? (
                 isParagraph ? (
                   <div className="entry-item__paragraph-editor-stack">
+                    <div className="heading-color-editor-row">
                     <input
+                      style={{color:headingColorHex(entry.heading_color)}}
                       className="entry-item__paragraph-heading-input"
                       value={headingValue}
                       disabled={disabled || isSaving}
@@ -555,6 +559,8 @@ export function EntryItem({
                       placeholder="段落タイトル（任意）"
                       aria-label="段落タイトルを編集"
                     />
+                    <HeadingColorPicker value={entry.heading_color} disabled={disabled || isSaving} onChange={color => onUpdate(entry.id,{heading_color:color})}/>
+                    </div>
                     <textarea
                     ref={(element) => {
                       contentInputRef.current = element;
@@ -596,7 +602,7 @@ export function EntryItem({
               ) : (
                 <div className="entry-item__editing-static-content">
                   {isParagraph && entry.heading ? (
-                    <strong className="entry-item__heading entry-item__heading--static">{entry.heading}</strong>
+                    <strong className="entry-item__heading entry-item__heading--static" style={{color:headingColorHex(entry.heading_color)}}>{entry.heading}</strong>
                   ) : null}
                   {isParagraph ? <ParagraphMarkdown source={entry.content} /> : <p className="entry-item__editing-content">{entry.content}</p>}
                 </div>
@@ -788,11 +794,13 @@ export function EntryItem({
               {/* 見出しを押しても、本文と同じ編集欄が開く。キーボードでは本文のボタンから入れるので、見出しは操作の数に入れない。 */}
               <h3
                 className="entry-item__heading entry-item__heading--click"
+                style={{color:headingColorHex(entry.heading_color)}}
                 onClick={disabled ? undefined : beginHeadingEdit}
                 title="見出しを編集"
               >
                 {entry.heading}
               </h3>
+              <HeadingColorPicker value={entry.heading_color} disabled={disabled || isSaving} onChange={color => onUpdate(entry.id,{heading_color:color})}/>
             </div>
           ) : null}
 

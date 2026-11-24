@@ -1,3 +1,5 @@
+import { HeadingColorPicker } from "./HeadingColorPicker";
+import { headingColorHex } from "../lib/headingColor.js";
 import { ParagraphMarkdownPreview } from "./ParagraphMarkdown";
 import {
   type ChangeEvent,
@@ -325,7 +327,7 @@ export function MobileParagraphEditorSheet({
 
           <div className="mobile-paragraph-editor__heading">
             <p>段落を編集</p>
-            <h2 id="mobile-paragraph-editor-title">
+            <h2 id="mobile-paragraph-editor-title" style={{color:headingColorHex(entry.heading_color)}}>
               {entry.heading || `${showEntryNumbers ? `${visibleNumber} ` : ""}全文を見ながら書く`}
             </h2>
           </div>
@@ -350,10 +352,12 @@ export function MobileParagraphEditorSheet({
             ) : null}
           </div>
 
+          <div className="heading-color-editor-row">
           <label className="mobile-paragraph-editor__title-field">
             <span>段落タイトル（任意）</span>
             <input
               ref={headingRef}
+              style={{color:headingColorHex(entry.heading_color)}}
               type="text"
               value={heading}
               disabled={disabled || isSaving}
@@ -362,6 +366,8 @@ export function MobileParagraphEditorSheet({
               aria-label="段落タイトルを編集"
             />
           </label>
+          <HeadingColorPicker value={entry.heading_color} disabled={disabled || isSaving} onChange={color => onSave(entry.id,{heading_color:color})}/>
+          </div>
 
           <textarea
             ref={contentRef}

@@ -1,3 +1,4 @@
+import { normalizeHeadingColor, type HeadingColor } from "../lib/headingColor.js";
 /**
  * Supabase移行時にそのままテーブル定義へ対応できるよう、
  * DBのカラム名は snake_case のまま扱う。
@@ -102,6 +103,8 @@ export type EntryRow = {
   content: string;
   /** 段落だけが持つ任意の小見出し。空文字なら表示しない。 */
   heading: string;
+  /** 見出しだけの色。旧データでは未定義、標準色はnull。 */
+  heading_color?: HeadingColor;
   /** 項目に付ける自由入力のタグ。タグは0または1つだけ。 */
   tag: string | null;
   /** 任意の補足。空文字なら画面に余白を作らない。 */
@@ -149,6 +152,7 @@ export type EntryInsert = {
   parent_id?: string | null;
   content: string;
   heading?: string;
+  heading_color?: HeadingColor;
   tag?: string | null;
   note?: string;
   link_url?: string;
@@ -169,7 +173,7 @@ export type EntryCreateMetadata = Pick<EntryInsert, "heading" | "tag" | "note" |
 export type EntryUpdate = Partial<
   Pick<
     EntryRow,
-    "content" | "heading" | "tag" | "note" | "link_url" | "satisfaction" | "is_completed" | "sort_order" | "updated_at" | "deleted_at" | "user_id"
+    "content" | "heading" | "heading_color" | "tag" | "note" | "link_url" | "satisfaction" | "is_completed" | "sort_order" | "updated_at" | "deleted_at" | "user_id"
   >
 >;
 
@@ -515,6 +519,7 @@ export function normalizeEntryRow(entry: LegacyEntryRow): EntryRow {
     ...entry,
     parent_id: entry.parent_id ?? null,
     heading: typeof entry.heading === "string" ? entry.heading.trim() : "",
+    heading_color: entry.heading_color === undefined ? undefined : entry.kind === "paragraph" ? normalizeHeadingColor(entry.heading_color) : null,
     tag: normalizeEntryTag(entry.tag),
     note: typeof entry.note === "string" ? entry.note : "",
     link_url: typeof entry.link_url === "string" ? entry.link_url.trim() : "",

@@ -1,0 +1,19 @@
+/* 既存の文書の流れを変えない、小さな見出し色の入口。 */
+.entry-item__heading-row, .heading-color-editor-row { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.entry-item__heading-row > .entry-item__heading, .heading-color-editor-row > input, .heading-color-editor-row > label { flex: 1; min-width: 0; }
+.heading-color-picker { position: relative; flex: none; align-self: flex-start; margin-left: auto; z-index: 2; }
+.heading-color-picker:focus-within { z-index: 8; }
+.heading-color-picker__trigger { display: grid; place-items: center; width: 30px; height: 30px; padding: 0; border: 0; border-radius: 5px; background: transparent; color: var(--color-ink-2); cursor: pointer; }
+.heading-color-picker__trigger:hover, .heading-color-picker__trigger:focus-visible { background: var(--color-line); }
+.heading-color-picker__dot { width: 13px; height: 13px; border: 1px solid currentColor; border-radius: 50%; display: block; }
+.heading-color-picker__panel { position: absolute; right: 0; top: calc(100% + 3px); z-index: 12; width: min(252px, 72vw); padding: 9px; border: 1px solid var(--color-line-strong); border-radius: 8px; background: var(--color-sheet); color: var(--color-ink); box-shadow: 0 5px 18px #23211d20; text-align: left; }
+.heading-color-picker__caption { display: block; font-size: 11px; margin: 0 0 5px 3px; color: var(--color-ink-2); }
+.heading-color-picker__swatches { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 3px; }
+.heading-color-picker__swatch { min-height: 44px; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 3px; background: transparent; border: 1px solid transparent; border-radius: 5px; color: inherit; cursor: pointer; padding: 3px; }
+.heading-color-picker__swatch[aria-pressed=true] { border-color: var(--color-line-strong); background: var(--color-paper); }
+.heading-color-picker__swatch:hover, .heading-color-picker__swatch:focus-visible { outline: 2px solid var(--color-ink-2); outline-offset: -2px; }
+.heading-color-picker__swatch > span { display: grid; place-items: center; border-radius: 50%; width: 21px; height: 21px; color: white; font-size: 14px; font-weight: bold; }
+.heading-color-picker__swatch small { font-size: 10px; }
+.heading-color-picker__panel p[role=alert] { font-size: 11px; color: var(--color-danger); margin: 5px 0 0; }
+@media(max-width:920px) { .heading-color-picker__trigger { width: 40px; height: 40px; } .heading-color-picker__panel { width: min(252px, 76vw); } }
+@media print { .heading-color-picker { display: none; } }

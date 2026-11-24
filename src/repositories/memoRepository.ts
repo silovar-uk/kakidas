@@ -1,3 +1,4 @@
+import { normalizeHeadingColor, legacyCloudWouldLoseHeadingColor } from "../lib/headingColor.js";
 import {
   type BackupPayload,
   type CloudImportMode,
@@ -414,6 +415,10 @@ class IndexedDbMemoRepository implements MemoRepository {
         entryStore,
         sourceMemo.id,
       );
+      if (legacyCloudWouldLoseHeadingColor(existingEntries, sourceEntries)) {
+        transaction.abort();
+        throw new Error("この端末に見出し色があります。旧クラウド版で上書きすると色が失われるため中止しました。クラウド版を複製するか、SQL更新後に同期してください。");
+      }
       const sourceEntryIds = new Set(sourceEntries.map((entry) => entry.id));
 
       for (const entry of existingEntries) {
@@ -538,6 +543,7 @@ class IndexedDbMemoRepository implements MemoRepository {
       parent_id: null,
       content: sourceEntry.content,
       heading: sourceEntry.kind === "paragraph" ? sourceEntry.heading : "",
+      heading_color: sourceEntry.kind === "paragraph" ? sourceEntry.heading_color : undefined,
       tag: sourceEntry.tag,
       note: sourceEntry.note,
       link_url: sourceEntry.link_url,
@@ -992,6 +998,7 @@ class IndexedDbMemoRepository implements MemoRepository {
       parent_id: parentId,
       content,
       heading: input.kind === "paragraph" ? input.heading?.trim() ?? "" : "",
+      heading_color: input.kind === "paragraph" && input.heading_color !== undefined ? normalizeHeadingColor(input.heading_color) : undefined,
       tag: normalizeEntryTag(input.tag),
       note: input.note?.trim() ?? "",
       link_url: normalizeLinkUrlForSave(input.link_url),
@@ -1348,6 +1355,7 @@ class IndexedDbMemoRepository implements MemoRepository {
       ...patch,
       content,
       heading,
+      heading_color: current.kind !== "paragraph" ? undefined : patch.heading_color === undefined ? current.heading_color : normalizeHeadingColor(patch.heading_color),
       tag,
       note,
       link_url: linkUrl,
@@ -1986,6 +1994,7 @@ class IndexedDbMemoRepository implements MemoRepository {
       kind: targetKind,
       parent_id: null,
       heading: targetKind === "paragraph" ? current.heading : "",
+      heading_color: targetKind === "paragraph" ? current.heading_color : undefined,
       updated_at: timestamp,
     };
     this.writeOrderedEntries(entryStore, [moved, ...targetSiblings], timestamp);
