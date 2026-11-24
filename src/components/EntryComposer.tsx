@@ -1,3 +1,4 @@
+import { ParagraphMarkdownPreview } from "./ParagraphMarkdown";
 import {withViewTransition, waitForCreatedEntry} from "../lib/viewTransition";
 import {flushSync} from "react-dom";
 import { NoteIcon, LinkIcon, TagIcon } from "./icons";
@@ -1167,6 +1168,10 @@ export const EntryComposer = forwardRef<EntryComposerHandle, EntryComposerProps>
             {isDesk ? "置く" : isReferenceUrl ? "保存" : "置く"}
           </button>
         </div>
+
+        {(isDesk ? slot === "paragraph" : isParagraph) && Boolean(value.trim()) ? (
+          <ParagraphMarkdownPreview source={value} />
+        ) : null}
 
         {isDesk && slot === "sentence" && Boolean(value.trim() || headingValue.trim()) && onConvertToParagraph ? (
           <div className="entry-composer__route entry-composer__route--convert">

@@ -1,0 +1,36 @@
+/* 段落の書式は本文の構造だけに使い、アプリの操作階層とは区別する。 */
+.entry-item__content.paragraph-markdown-card { display: block; width: 100%; min-width: 0; }
+.paragraph-markdown-card__body { min-width: 0; cursor: text; }
+.paragraph-markdown-card__body--folded { max-height: 60vh; overflow: hidden; }
+.paragraph-markdown-card__actions { display: flex; justify-content: flex-end; gap: 12px; margin-top: 4px; }
+.paragraph-markdown__action { border: 0; background: transparent; color: inherit; opacity: .72; font: inherit; font-size: 12px; padding: 5px 3px; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+.paragraph-markdown__action:hover, .paragraph-markdown__action:focus-visible { opacity: 1; }
+.paragraph-markdown { display: block; min-width: 0; max-width: 100%; overflow-wrap: anywhere; line-height: inherit; text-align: start; white-space: normal; }
+.paragraph-markdown--raw { white-space: pre-wrap; }
+.paragraph-markdown > :first-child { margin-top: 0; }
+.paragraph-markdown > :last-child { margin-bottom: 0; }
+.paragraph-markdown p { margin: .55em 0; white-space: normal; }
+.paragraph-markdown h1, .paragraph-markdown h2, .paragraph-markdown h3, .paragraph-markdown h4, .paragraph-markdown h5, .paragraph-markdown h6 { margin: .9em 0 .3em; line-height: 1.45; font-weight: 650; letter-spacing: normal; }
+.paragraph-markdown h1 { font-size: 1.24em; }
+.paragraph-markdown h2 { font-size: 1.15em; }
+.paragraph-markdown h3 { font-size: 1.08em; }
+.paragraph-markdown h4, .paragraph-markdown h5, .paragraph-markdown h6 { font-size: 1em; }
+.paragraph-markdown ul, .paragraph-markdown ol { margin: .4em 0; padding-inline-start: 1.5em; }
+.paragraph-markdown ul { list-style: disc; }
+.paragraph-markdown ol { list-style: decimal; }
+.paragraph-markdown li { margin: .15em 0; display: list-item; }
+.paragraph-markdown blockquote { margin: .65em 0; padding-inline-start: .8em; border-inline-start: 2px solid currentColor; opacity: .85; }
+.paragraph-markdown hr { margin: .9em 0; border: 0; border-top: 1px solid currentColor; opacity: .22; }
+.paragraph-markdown a { text-decoration: underline; text-underline-offset: 2px; }
+.paragraph-markdown code { font-family: ui-monospace, monospace; font-size: .9em; background: #88888815; border-radius: 3px; padding: .08em .2em; }
+.paragraph-markdown pre { white-space: pre; overflow-x: auto; max-width: 100%; background: #88888810; border-radius: 5px; padding: .6em; margin: .65em 0; }
+.paragraph-markdown pre code { padding: 0; background: none; white-space: inherit; }
+.paragraph-markdown__table { max-width: 100%; overflow-x: auto; margin: .6em 0; }
+.paragraph-markdown table { border-collapse: collapse; width: max-content; min-width: 100%; font-size: .92em; }
+.paragraph-markdown th, .paragraph-markdown td { border: 1px solid #88888855; padding: .35em .6em; min-width: 4em; max-width: 28em; }
+.paragraph-markdown th { background: #88888812; font-weight: 650; }
+.paragraph-markdown input[type=checkbox] { margin-inline-end: .35em; pointer-events: none; }
+.paragraph-markdown-preview { min-width: 0; width: 100%; }
+.paragraph-markdown-preview__paper { border: 1px solid #88888844; padding: .75em; margin-block: .3em .7em; border-radius: 5px; max-height: 42vh; overflow: auto; }
+@media (max-width: 920px) { .paragraph-markdown__action { min-height: 34px; padding-inline: 8px; } }
+@media print { .paragraph-markdown__table, .paragraph-markdown pre { overflow: visible; } .paragraph-markdown pre { white-space: pre-wrap; } .paragraph-markdown table { width: 100%; min-width: 0; } }

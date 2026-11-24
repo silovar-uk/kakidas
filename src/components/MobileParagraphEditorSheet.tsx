@@ -1,3 +1,4 @@
+import { ParagraphMarkdownPreview } from "./ParagraphMarkdown";
 import {
   type ChangeEvent,
   type KeyboardEvent as ReactKeyboardEvent,
@@ -382,6 +383,7 @@ export function MobileParagraphEditorSheet({
             }}
             aria-label="段落を編集"
           />
+          <ParagraphMarkdownPreview source={content} />
 
           <div className="mobile-paragraph-editor__meta-actions" aria-label="補助情報">
             <button

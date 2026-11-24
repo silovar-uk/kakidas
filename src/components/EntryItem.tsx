@@ -1,3 +1,4 @@
+import { ParagraphMarkdown, ParagraphMarkdownPreview } from "./ParagraphMarkdown";
 import { NoteIcon, LinkIcon, MoreIcon, UpIcon, DownIcon, PullIcon } from "./icons";
 import {
   type ChangeEvent,
@@ -124,8 +125,9 @@ export function EntryItem({
   const linkInputRef = useRef<HTMLInputElement | null>(null);
   const paragraphResizeFrameRef = useRef<number | null>(null);
   const paragraphCompositionRef = useRef(false);
-  const paragraphPreviewRef = useRef<HTMLSpanElement | null>(null);
-  const paragraphPreviewButtonRef = useRef<HTMLButtonElement | null>(null);
+  const paragraphPreviewRef = useRef<HTMLDivElement | null>(null);
+  const paragraphPreviewButtonRef = useRef<HTMLDivElement | null>(null);
+  const [paragraphRaw, setParagraphRaw] = useState(false);
   const [paragraphNeedsFold, setParagraphNeedsFold] = useState(false);
   const [paragraphExpanded, setParagraphExpanded] = useState(false);
 
@@ -205,7 +207,7 @@ export function EntryItem({
       observer?.disconnect();
       window.removeEventListener("resize", measure);
     };
-  }, [entry.content, isParagraph, compactView, isEditing]);
+  }, [entry.content, isParagraph, compactView, isEditing, paragraphRaw, paragraphExpanded]);
 
   useEffect(() => {
     // 本文を更新した場合は、新しい内容の既定（省略）表示へ戻す。
@@ -575,6 +577,7 @@ export function EntryItem({
                     rows={6}
                     aria-label="段落を編集"
                     />
+                    <ParagraphMarkdownPreview source={value} />
                   </div>
                 ) : (
                   <input
@@ -595,7 +598,7 @@ export function EntryItem({
                   {isParagraph && entry.heading ? (
                     <strong className="entry-item__heading entry-item__heading--static">{entry.heading}</strong>
                   ) : null}
-                  <p className="entry-item__editing-content">{entry.content}</p>
+                  {isParagraph ? <ParagraphMarkdown source={entry.content} /> : <p className="entry-item__editing-content">{entry.content}</p>}
                 </div>
               )}
             </div>
@@ -847,26 +850,29 @@ export function EntryItem({
                 </div>
               </div>
             </div>
-          ) : (
-            <button
-              type="button"
-              className="entry-item__content"
-              ref={isParagraph ? paragraphPreviewButtonRef : undefined}
-              onClick={beginContentEdit}
-              disabled={disabled}
-              aria-label={
-                showEntryNumbers
-                  ? `${visibleNumber} ${entry.heading ? `${entry.heading} ` : ""}${entry.content}を編集`
-                  : "編集する"
-              }
-            >
-              <span
-                ref={isParagraph ? paragraphPreviewRef : undefined}
-                id={isParagraph ? `paragraph-preview-${entry.id}` : undefined}
-                className={`entry-item__content-text${isParagraph && paragraphNeedsFold && !paragraphExpanded ? " entry-item__content-text--folded" : ""}`}
+          ) : isParagraph ? (
+            <div className="entry-item__content paragraph-markdown-card" ref={paragraphPreviewButtonRef}>
+              <div
+                ref={paragraphPreviewRef}
+                id={`paragraph-preview-${entry.id}`}
+                className={`paragraph-markdown-card__body${paragraphNeedsFold && !paragraphExpanded ? " paragraph-markdown-card__body--folded" : ""}`}
+                onClick={(event) => {
+                  if ((event.target as HTMLElement).closest("a, button, input, [tabindex]") || window.getSelection()?.toString()) return;
+                  beginContentEdit();
+                }}
               >
-                {entry.content}
-              </span>
+                <ParagraphMarkdown source={entry.content} raw={paragraphRaw} />
+              </div>
+              <div className="paragraph-markdown-card__actions">
+                <button type="button" className="paragraph-markdown__action" onClick={beginContentEdit} disabled={disabled}>編集</button>
+                <button type="button" className="paragraph-markdown__action" aria-pressed={paragraphRaw} onClick={() => setParagraphRaw(v => !v)}>
+                  {paragraphRaw ? "整形表示" : "原文"}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button type="button" className="entry-item__content" onClick={beginContentEdit} disabled={disabled} aria-label={showEntryNumbers ? `${visibleNumber} ${entry.content}を編集` : "編集する"}>
+              <span className="entry-item__content-text">{entry.content}</span>
             </button>
           )}
 
