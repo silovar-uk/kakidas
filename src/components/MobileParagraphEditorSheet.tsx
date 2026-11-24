@@ -366,7 +366,7 @@ export function MobileParagraphEditorSheet({
               aria-label="段落タイトルを編集"
             />
           </label>
-          <HeadingColorPicker value={entry.heading_color} disabled={disabled || isSaving} onChange={color => onSave(entry.id,{heading_color:color})}/>
+          <HeadingColorPicker value={entry.heading_color} disabled={disabled || isSaving} onChange={async color => { await onSave(entry.id,{heading_color:color}); }}/>
           </div>
 
           <textarea
